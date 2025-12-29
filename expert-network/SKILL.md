@@ -1,11 +1,18 @@
 ---
 name: expert-network
-description: Directory of local CC experts that can be queried for domain-specific knowledge. Use this skill to find which expert to ask when you need deep knowledge about a specific system (Control4, SignalK, homelab, etc.). Each expert has full codebase access and can provide implementation details that PM doesn't have.
+description: Directory of local CC experts that can be queried for domain-specific knowledge. Use this skill to find which expert to ask when you need deep knowledge about a specific system (Control4, SignalK, homelab, etc.). Each expert has full codebase access and can provide implementation details that PM doesn't have. Experts self-register via the /register command.
 ---
 
 # Expert Network
 
-A registry of local CC experts available for domain-specific queries. Each expert is a CC instance with deep access to a specific codebase or system.
+A self-maintaining registry of local CC experts available for domain-specific queries. Each expert is a CC instance with deep access to a specific codebase or system.
+
+## Quick Reference
+
+| Resource | Path |
+|----------|------|
+| **Expert Registry** | [registry.md](registry.md) - searchable by domain keywords |
+| **Registration Template** | [templates/register.md](templates/register.md) - for new experts |
 
 ## How It Works
 
@@ -18,22 +25,28 @@ A registry of local CC experts available for domain-specific queries. Each exper
         ┌─────────────┼─────────────┬─────────────┐
         ▼             ▼             ▼             ▼
    ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌──────────┐
-   │snowmelt │  │ homelab  │  │ anchor  │  │   c4     │
-   │ expert  │  │  expert  │  │  expert │  │  expert  │
+   │snowmelt │  │ homelab  │  │ anchor  │  │  more... │
+   │ expert  │  │  expert  │  │  expert │  │          │
    └────┬────┘  └────┬─────┘  └────┬────┘  └────┬─────┘
         │            │             │            │
-   [codebase]   [infra docs]  [codebase]   [system docs]
+   [codebase]   [infra docs]  [codebase]   [self-register]
 ```
 
-**Benefits:**
-- Experts have **full codebase context** (CC can read all files)
-- PM stays lightweight, queries experts on-demand
-- Knowledge gets **extracted into skills** for reuse
-- Experts can answer implementation questions PM can't
+**Key Features:**
+- **Self-maintaining** - CCs register themselves via `/register` command
+- **Searchable** - Registry has domain keywords for PM to find experts
+- **Full codebase context** - Each expert can read all files in their repo
+- **Knowledge extraction** - Good answers become reusable skill references
 
-## Querying an Expert
+## For PM: Finding & Querying Experts
 
-### 1. Create a task in their handoff queue
+### 1. Search the Registry
+
+Check [registry.md](registry.md) for domain keywords matching your question.
+
+Example: Need "C4 TCP protocol" → search for "C4" or "TCP" → find snowmelt expert
+
+### 2. Queue a Task
 
 ```markdown
 # TASK-XXX: [Brief title]
@@ -52,23 +65,21 @@ A registry of local CC experts available for domain-specific queries. Each exper
 [What format you want the response in]
 ```
 
-### 2. Push to their repo's handoff/todo/
-
-PM uses GitHub MCP:
+Push to expert's handoff:
 ```
 github:create_or_update_file
-  repo: [expert-repo]
+  repo: [expert-repo from registry]
   path: .claude/handoff/todo/TASK-XXX.md
 ```
 
-### 3. Have user run CC against that repo
+### 3. User Runs CC
 
 ```bash
 cd ~/path/to/expert-repo && claude
 > msg  # CC checks for tasks
 ```
 
-### 4. Fetch response from handoff/complete/
+### 4. Fetch Response
 
 ```
 github:get_file_contents
@@ -76,69 +87,64 @@ github:get_file_contents
   path: .claude/handoff/complete/TASK-XXX/RESPONSE.md
 ```
 
-## Available Experts
+### 5. Extract to Skills
 
-| Expert | Repo | Domain | Handoff Path |
-|--------|------|--------|--------------|
-| **snowmelt** | dougkimmerly/signalk-snowmelt | Weather automation, C4 TCP integration, thermostat control | `.claude/handoff/` |
-| **anchor-alarm** | dougkimmerly/signalk-anchorAlarmConnector | SignalK anchor monitoring, GPS calculations | `.claude/handoff/` |
-| **chain-counter** | dougkimmerly/SensESP-chain-counter | ESP32/SensESP, chain counting, hardware integration | `.claude/handoff/` |
-| **homelab** | dougkimmerly/homelab | Infrastructure, Docker, network topology, deployment | `.claude/handoff/` |
+Good responses should become permanent skill references - don't let knowledge stay buried in handoff archives.
 
-## Adding New Experts
+## For CC: Registering as an Expert
 
-Any repo with the v2 handoff structure can become an expert:
+### Prerequisites
 
+Your repo needs v2 handoff structure:
 ```
 .claude/
 └── handoff/
     ├── todo/           # PM writes tasks here
-    ├── complete/       # CC writes responses here
+    ├── complete/       # You write responses here
     └── archive/        # Old tasks
 ```
 
-Add the repo to this index when:
-1. The repo has handoff infrastructure
-2. CC has been used successfully against it
-3. It contains domain knowledge worth querying
+### Registration
 
-## Example: Querying Snowmelt Expert
+1. Copy [templates/register.md](templates/register.md) to your `.claude/commands/register.md`
+2. Run `/register` in your CC session
+3. Your entry appears in [registry.md](registry.md)
 
-**Task queued:**
-```markdown
-# TASK-001: Control4 TCP Integration Documentation
+### When to Re-register
 
-## Questions
-1. What is the TCP command format?
-2. What commands exist?
-3. How is C4 configured to receive them?
-
-## Deliverable
-Document protocol for c4-expert skill
-```
-
-**Response received:**
-- Full protocol documentation
-- Code examples with line numbers
-- Gotchas and limitations
-- Integration examples for n8n, Home Assistant
-
-**Outcome:**
-- Created `c4-expert/references/tcp-protocol.md`
-- Knowledge now available to all future sessions
+- After adding significant new features
+- When integrations change
+- When your domain expertise expands
 
 ## Best Practices
 
-1. **Be specific** - Ask concrete questions, not "tell me about X"
-2. **Request deliverables** - Specify format (markdown, code, etc.)
-3. **Provide context** - Explain why you need the info
-4. **Extract to skills** - Good responses should become skill references
-5. **One topic per task** - Don't overload with unrelated questions
+### For PM (querying):
+- **Be specific** - Ask concrete questions, not "tell me about X"
+- **Request deliverables** - Specify format (markdown, code, etc.)
+- **Provide context** - Explain why you need the info
+- **Extract to skills** - Good responses should become skill references
+- **One topic per task** - Don't overload with unrelated questions
 
-## Future Experts (Planned)
+### For CC (responding):
+- **Include code locations** - Line numbers, function names
+- **Document gotchas** - What will trip people up?
+- **Give examples** - Show, don't just tell
+- **Keep keywords updated** - Re-register when capabilities change
 
-| Expert | Repo | Domain |
-|--------|------|--------|
-| music-library | TBD | Music organization, Last.fm integration, playlists |
-| boat-systems | signalk55 (orchestrator) | Full boat SignalK setup, all marine integrations |
-| automation | TBD | Custom automation system (replacing n8n) |
+## Example Flow
+
+**PM needs:** Control4 TCP protocol details
+
+1. **Search registry** → "C4 TCP" matches snowmelt expert
+2. **Queue task** → signalk-snowmelt handoff/todo/
+3. **CC responds** → 16KB protocol documentation with code locations
+4. **Extract** → Created c4-expert/references/tcp-protocol.md
+5. **Result** → Knowledge now available to all future sessions
+
+## Architecture Notes
+
+The expert network is **decentralized by design**:
+- No central controller - each expert is autonomous
+- Registry is self-maintained - CCs update their own entries
+- Knowledge flows outward - responses → skills → shared access
+- PM is synthesizer - finds experts, extracts patterns, builds skills
