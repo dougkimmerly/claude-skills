@@ -10,8 +10,8 @@ This repository contains modular skills that any Claude instance (PM or CC) can 
 
 | Skill | Description | Used By |
 |-------|-------------|--------|
-| `signalk-expert` | SignalK plugin development, paths, APIs | signalk55, signalkDS, powernet, navnet |
-| `sensesp-expert` | SensESP sensor development (C++) | Coming soon |
+| `signalk-expert` | SignalK plugin development (JS), paths, APIs, data models | signalk55, signalkDS, powernet, navnet |
+| `sensesp-expert` | SensESP sensor development (C++), ESP32, PlatformIO | SensESP-chain-counter, rebootRelay01 |
 | `victron-expert` | Victron energy systems | Coming soon |
 
 ## Usage
@@ -21,6 +21,7 @@ This repository contains modular skills that any Claude instance (PM or CC) can 
 Fetch skill files directly from GitHub when working on tasks:
 ```
 github:get_file_contents owner:dougkimmerly repo:claude-skills path:signalk-expert/SKILL.md
+github:get_file_contents owner:dougkimmerly repo:claude-skills path:sensesp-expert/SKILL.md
 ```
 
 ### For CC (Claude Code)
@@ -32,6 +33,7 @@ git clone git@github.com:dougkimmerly/claude-skills.git
 
 # Reference when needed
 cat ~/dkSRC/claude-skills/signalk-expert/SKILL.md
+cat ~/dkSRC/claude-skills/sensesp-expert/SKILL.md
 ```
 
 ## Contributing
@@ -49,16 +51,46 @@ All orchestrators benefit from accumulated knowledge.
 Follows Anthropic's skill format:
 ```
 skill-name/
-├── SKILL.md              # Core instructions (lean)
+├── SKILL.md              # Core instructions (lean, triggers on keywords)
 └── references/           # Detailed reference material
     ├── paths.md          # Data paths, schemas
     ├── patterns.md       # Code patterns, examples
     └── api.md            # API documentation
 ```
 
-## Orchestrators Using This Repo
+## Current Skill Contents
 
-- **signalk55** - House SignalK server
-- **signalkDS** - Distant Shores II main SignalK (future)
-- **powernet** - Boat power monitoring (future)
-- **navnet** - Boat navigation SignalK (future)
+### signalk-expert
+```
+signalk-expert/
+├── SKILL.md
+└── references/
+    ├── paths.md          # SignalK data paths (navigation, environment, etc.)
+    ├── data-models.md    # Delta vs Full models
+    ├── api.md            # REST & WebSocket APIs
+    └── mcp-tools.md      # SignalK MCP server tools
+```
+
+### sensesp-expert
+```
+sensesp-expert/
+├── SKILL.md
+└── references/
+    ├── producers.md      # Sensor input types (analog, digital, 1-wire)
+    ├── transforms.md     # Data processing (linear, average, filter)
+    ├── patterns.md       # C++ patterns for embedded
+    ├── platformio.md     # Build config, GPIO reference
+    └── debugging.md      # Serial monitor, common issues
+```
+
+## Orchestrators & Projects Using This Repo
+
+| Project | Type | Skills Used |
+|---------|------|-------------|
+| signalk55 | Orchestrator | signalk-expert |
+| signalk-anchorAlarmConnector | Plugin | signalk-expert |
+| signalk-snowmelt | Plugin | signalk-expert |
+| SensESP-chain-counter | Firmware | sensesp-expert, signalk-expert |
+| signalkDS | Orchestrator (future) | signalk-expert |
+| powernet | Orchestrator (future) | signalk-expert, victron-expert |
+| navnet | Orchestrator (future) | signalk-expert |
