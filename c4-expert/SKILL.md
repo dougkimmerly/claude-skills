@@ -1,6 +1,6 @@
 ---
 name: c4-expert
-description: Control4 home automation expertise for homeowner-level system management. Use when working with Control4 programming (Composer HE, When>>Then), lighting scenes, scheduling, multi-room audio, amplifier configuration, Zigbee troubleshooting, or integrating C4 with other systems (Home Assistant, MQTT). Covers the dealer-locked ecosystem from a homeowner perspective, finding workarounds, and maximizing system capabilities without Composer Pro access.
+description: Control4 home automation expertise for homeowner-level system management. Use when working with Control4 programming (Composer HE, When>>Then), lighting scenes, scheduling, multi-room audio, amplifier configuration, Zigbee troubleshooting, or integrating C4 with other systems (Home Assistant, MQTT, SignalK). Covers the dealer-locked ecosystem from a homeowner perspective, finding workarounds, and maximizing system capabilities without Composer Pro access.
 ---
 
 # Control4 Expert
@@ -85,6 +85,7 @@ See [references/dougs-system.md](references/dougs-system.md) for:
 - **[references/agents-programming.md](references/agents-programming.md)** - Scheduler, Advanced Lighting, Macros
 - **[references/hardware.md](references/hardware.md)** - Controllers, amplifiers, Zigbee mesh
 - **[references/integrations.md](references/integrations.md)** - Home Assistant, MQTT, third-party drivers
+- **[references/tcp-protocol.md](references/tcp-protocol.md)** - HTTP/TCP protocol for external control (SignalK, n8n, HA)
 - **[references/troubleshooting.md](references/troubleshooting.md)** - Common issues and solutions
 
 ## Key Resources
