@@ -1,7 +1,7 @@
 # Doug's Control4 System
 
 > **System Age:** ~20 years (one of the longest-running C4 installations)
-> **Last Updated:** [Pending user input]
+> **Last Updated:** 2025-12-29
 
 ## Network Inventory
 
@@ -12,7 +12,7 @@ From homelab network scan (192.168.20.0/24):
 | .41 | 8-Channel Amp | C4-8AMP1-B | 03.24.45 | 4-zone matrix, telnet debug console |
 | .42 | 16-Channel Amp | C4-16AMP3-B | 03.26.52 | 8-zone matrix, telnet debug console |
 | .43 | Main Controller | TBD | TBD | Primary brain, most ports |
-| .44 | Unknown | WattBox? | — | Telnet login (dealer creds) |
+| .44 | WattBox | TBD | — | Telnet login (dealer creds), UPS integration potential |
 | .45 | Control4 Device | TBD | — | No open ports |
 | .181 | Control4 Device | TBD | — | TBD |
 | .190 | I/O Extender | TBD | — | SSH (Dropbear), SMB |
@@ -35,44 +35,129 @@ From homelab network scan (192.168.20.0/24):
 - **Features:** Full matrix switching, parametric EQ, volume limiting
 - **Debug:** Telnet passive console
 
-## Audio Zones
+## Audio Zones with Playlist Support
 
-| Zone | Amplifier | Room | Notes |
-|------|-----------|------|-------|
-| TBD | TBD | TBD | [Awaiting user input] |
+Rooms configured with playlist cycling variables:
 
-## Lighting
+| Room | Variable Name | Keypad Location |
+|------|---------------|-----------------|
+| Basement Office | officePreset | Kitchen Keypad |
+| Theater | theaterPreset | TBD |
+| Wine Cellar | winecellarPreset | TBD |
+| Front Porch | frontporchPreset | TBD |
+| Living Room | livingroomPreset | TBD |
+| Bathroom | bathroomPreset | TBD |
+| Spare Room | spareroomPreset | TBD |
+| Bedroom | bedroomPreset | TBD |
+| Patio | patioPreset | TBD |
 
-| Location | Device Type | Notes |
-|----------|-------------|-------|
-| TBD | TBD | [Awaiting user input] |
+### Playlists Available
 
-## Keypads
+| Playlist | Genre/Mood |
+|----------|------------|
+| Quiet Music 01 | Ambient/Soft |
+| Classical 01 | Classical |
+| Christmas 01/02/03 | Holiday |
+| Quiet Jazz 01 | Jazz |
+| Evening Music 01 | Evening |
+| Buffett 01 | Jimmy Buffett |
+| Miles and Friends 01 | Jazz (Miles Davis) |
+| Spa Only 01 | Spa/Relaxation |
+| Sailing 01 | Sailing theme |
+| Dinner Music 01 | Dinner party |
 
-| Location | Model | Buttons | Programming |
-|----------|-------|---------|-------------|
-| TBD | TBD | TBD | [Awaiting user input] |
+### Playlist Button Programming Pattern
 
-## Scenes
+Single tap cycles through playlists with LED color feedback:
+```
+IF officePreset = 0 → Red LED → "Buffett 01" → increment
+IF officePreset = 1 → Lime LED → "Dinner Music 01" → increment  
+IF officePreset = 2 → Blue LED → "Evening Music 01" → increment
+IF officePreset = 3 → Silver LED → "Quiet Music 01" → increment
+```
 
-| Scene Name | Trigger | Actions |
-|------------|---------|----------|
-| TBD | TBD | [Awaiting user input] |
+Double tap: Room off + reset variable to 0 + LED off
 
-## Integrations
+## Completed Projects
+
+Based on historical todo list:
+
+- [x] Fireplace switch/fan control
+- [x] Awning setup
+- [x] Projector door setup
+- [x] Attic lift programming
+- [x] Wall button playlist control (pattern documented above)
+- [x] Various faceplate installs
+
+## Active/Pending Projects
+
+### High Priority
+- Fresh air switch integration
+- Attic fan switch + control
+- Garage attic fan switches
+- Basement cabinet fan replacement
+- Furnace room fan replacement
+- Sump pump Meross plug integration
+- Water valve batteries + installation
+- Pond speakers reconnection
+
+### Medium Priority
+- Chowmain weather driver
+- Fire TV control (current driver slow)
+- Motion detection → video capture when unoccupied
+- Door unlock → video capture when unoccupied
+- Water valve flood notification
+- High water sump email alert
+- Power outage/restore email notifications
+- TuneIn fix (not working)
+- Attic temp display in Navigator
+
+### Future/Research
+- NVR control learning
+- WattBox control + UPS integration
+- Car detection for parking spot availability
+- Snow melt timer display (experience buttons)
+- Weather-triggered snow melt scheduling
+- HDMI audio from projector for internet outage
+- Motor controller for beds
+- Door locks integration
+- Occupancy change from phone location
+
+## Hardware Notes
+
+### Snow Melt System
+- Timer display desired via experience buttons
+- Potential driver: Enhanced Countdown Timer by Domosapiens (DriverCentral)
+- Schedule consideration: Start at 4am?
+- Future: Weather-based triggering
+
+### NVR
+- IP: 10.0.0.129:10129
+- Learning to control via C4 pending
+
+### WattBox Integration Goals
+- Hook to UPS for data
+- Email notifications
+- Safe shutdown sequence for power conservation
+
+## Integration Points
 
 ### Current
+- NVR at 10.0.0.129
+- Meross plugs (sump pump planned)
+- Water valves with sensors
 
-- TBD
+### Planned
+- Home Assistant integration
+- Weather driver (Chowmain)
+- Enhanced timer drivers
 
-### Planned/Potential
+## System Quirks & Notes
 
-- Home Assistant integration (native C4 component or Chowmain driver)
-- MQTT bridge via Berto drivers
-
-## System Notes
-
-[Space for user documentation about system behavior, quirks, dealer info, etc.]
+- Front door switch activation unclear - not in keypad programming
+- Maggie's cable stopped working (historical)
+- Fire TV control extremely slow
+- TuneIn not working
 
 ## Dealer Information
 
@@ -81,3 +166,7 @@ From homelab network scan (192.168.20.0/24):
 - **OS Version:** TBD
 - **4Sight Status:** TBD
 - **Composer HE License:** TBD
+
+## Document Sources
+
+Additional documentation may exist in Doug's documents folder - CC task queued to search.
