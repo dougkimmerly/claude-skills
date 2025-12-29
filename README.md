@@ -10,6 +10,7 @@ This repository contains modular skills that any Claude instance (PM or CC) can 
 
 | Skill | Description | Used By |
 |-------|-------------|--------|
+| `framework-expert` | Claude project framework, standards, PM↔CC coordination, broker | All framework-based projects |
 | `signalk-expert` | SignalK plugin development (JS), paths, APIs, data models | signalk55, signalkDS, powernet, navnet |
 | `sensesp-expert` | SensESP sensor development (C++), ESP32, PlatformIO | SensESP-chain-counter, rebootRelay01 |
 | `skipper-expert` | SKipper app UI design, controls, layouts, SignalK integration | All SignalK projects |
@@ -21,6 +22,7 @@ This repository contains modular skills that any Claude instance (PM or CC) can 
 
 Fetch skill files directly from GitHub when working on tasks:
 ```
+github:get_file_contents owner:dougkimmerly repo:claude-skills path:framework-expert/SKILL.md
 github:get_file_contents owner:dougkimmerly repo:claude-skills path:signalk-expert/SKILL.md
 github:get_file_contents owner:dougkimmerly repo:claude-skills path:sensesp-expert/SKILL.md
 github:get_file_contents owner:dougkimmerly repo:claude-skills path:skipper-expert/SKILL.md
@@ -34,6 +36,7 @@ cd ~/dkSRC
 git clone git@github.com:dougkimmerly/claude-skills.git
 
 # Reference when needed
+cat ~/dkSRC/claude-skills/framework-expert/SKILL.md
 cat ~/dkSRC/claude-skills/signalk-expert/SKILL.md
 cat ~/dkSRC/claude-skills/skipper-expert/SKILL.md
 ```
@@ -61,6 +64,17 @@ skill-name/
 ```
 
 ## Current Skill Contents
+
+### framework-expert
+```
+framework-expert/
+├── SKILL.md
+└── references/
+    ├── standards.md      # PROJECT-STANDARDS.md compliance, audit checklists
+    ├── handoff.md        # PM↔CC coordination protocol, task/response formats
+    ├── broker.md         # Broker API, registration, task routing
+    └── templates.md      # Project templates, scaffolding, customization
+```
 
 ### signalk-expert
 ```
