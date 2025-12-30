@@ -7,7 +7,7 @@ Auto-maintained by CC experts. Each expert updates their own entry.
 | Expert | Repo | Domain Keywords | Capabilities | Handoff |
 |--------|------|-----------------|--------------|---------|
 | claude-broker | dougkimmerly/claude-broker | messaging, orchestration, multi-agent | Message routing, session spawning, dashboard API | `.claude/handoff/` |
-| CC-framework | dougkimmerly/claude-project-framework | templates, standards, multi-agent, project setup | Framework templates, PM/CC coordination, project standards | `.claude/handoff/` |
+| CC-framework | dougkimmerly/claude-project-framework | templates, standards, multi-agent, project setup | Framework templates, PM/CC coordination, project standards | .claude/handoff/ |
 | snowmelt | dougkimmerly/signalk-snowmelt | weather, snow melt, thermostat, C4 TCP, temperature control | TCP protocol to C4, weather-based automation, zone control | `.claude/handoff/` |
 | anchor-alarm | dougkimmerly/signalk-anchorAlarmConnector | anchor, GPS, SignalK, geofence, alarm | Anchor monitoring, GPS calculations, SignalK deltas | `.claude/handoff/` |
 | chain-counter | dougkimmerly/SensESP-chain-counter | ESP32, SensESP, chain, windlass, hardware | Embedded C++, pulse counting, calibration | `.claude/handoff/` |
