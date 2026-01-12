@@ -1,0 +1,352 @@
+#!/usr/bin/env python3
+"""
+Control4 Database Query Tool
+
+Query the Control4 project database for devices, events, commands, and programming.
+
+Usage:
+    c4query --device <device_id>          Show device details and all programming
+    c4query --device-name <name>          Search devices by name
+    c4query --tcp-commands                List all TCP commands
+    c4query --tcp-type <type>             Find TCP commands by type (snowStart, pumpStart, etc.)
+    c4query --tcp-location <loc>          Find TCP commands by location
+    c4query --event <device_id> <event_id> Show specific event details
+    c4query --command-name <name>         Find all code items using a command
+    c4query --list-devices                List all devices
+    c4query --stats                       Show database statistics
+
+Examples:
+    c4query --device 1108                 # Show Generic TCP Device programming
+    c4query --tcp-commands                # List all TCP commands
+    c4query --tcp-type snowStart          # Find snowStart commands
+    c4query --device-name "Thermostat"    # Find thermostat devices
+    c4query --stats                       # Show database summary
+"""
+
+import sqlite3
+import sys
+import os
+import argparse
+from pathlib import Path
+
+# Default database location
+DEFAULT_DB = Path(__file__).parent / "c4_project.db"
+
+def get_connection(db_file):
+    """Get database connection"""
+    if not os.path.exists(db_file):
+        print(f"Error: Database file not found: {db_file}")
+        print(f"\nRun c4_xml_to_db.py first to create the database.")
+        sys.exit(1)
+    return sqlite3.connect(db_file)
+
+def show_stats(conn):
+    """Show database statistics"""
+    cursor = conn.cursor()
+
+    print("=" * 60)
+    print("Control4 Project Database Statistics")
+    print("=" * 60)
+
+    cursor.execute('SELECT COUNT(*) FROM devices')
+    print(f"Total Devices: {cursor.fetchone()[0]}")
+
+    cursor.execute('SELECT COUNT(*) FROM events')
+    print(f"Total Events: {cursor.fetchone()[0]}")
+
+    cursor.execute('SELECT COUNT(*) FROM code_items')
+    print(f"Total Code Items: {cursor.fetchone()[0]}")
+
+    cursor.execute('SELECT COUNT(*) FROM tcp_commands')
+    print(f"Total TCP Commands: {cursor.fetchone()[0]}")
+
+    print("\nDevice Types:")
+    cursor.execute('SELECT type, COUNT(*) as count FROM devices GROUP BY type ORDER BY count DESC LIMIT 10')
+    for row in cursor.fetchall():
+        print(f"  Type {row[0]}: {row[1]} devices")
+
+    print("\nTop Devices by Programming Events:")
+    cursor.execute('''
+        SELECT d.id, d.name, COUNT(e.event_id) as event_count
+        FROM devices d
+        LEFT JOIN events e ON d.id = e.device_id
+        GROUP BY d.id
+        HAVING event_count > 0
+        ORDER BY event_count DESC
+        LIMIT 10
+    ''')
+    for row in cursor.fetchall():
+        print(f"  Device {row[0]} ({row[1]}): {row[2]} events")
+
+def list_devices(conn, device_type=None):
+    """List all devices"""
+    cursor = conn.cursor()
+
+    if device_type:
+        cursor.execute('SELECT id, name, type, config_file FROM devices WHERE type = ? ORDER BY name', (device_type,))
+    else:
+        cursor.execute('SELECT id, name, type, config_file FROM devices ORDER BY name')
+
+    print("=" * 80)
+    print(f"{'ID':<8} {'Type':<6} {'Name':<40} {'Config File':<30}")
+    print("=" * 80)
+
+    for row in cursor.fetchall():
+        dev_id, name, dev_type, config = row
+        print(f"{dev_id:<8} {dev_type:<6} {name:<40} {config:<30}")
+
+def show_device(conn, device_id):
+    """Show device details and all programming"""
+    cursor = conn.cursor()
+
+    # Get device details
+    cursor.execute('SELECT * FROM devices WHERE id = ?', (device_id,))
+    device = cursor.fetchone()
+
+    if not device:
+        print(f"Device {device_id} not found")
+        return
+
+    print("=" * 80)
+    print(f"Device {device[0]}: {device[1]}")
+    print("=" * 80)
+    print(f"Type: {device[2]}")
+    print(f"Config File: {device[4]}")
+    print(f"Created: {device[3]}")
+
+    # Get events for this device
+    cursor.execute('SELECT event_id FROM events WHERE device_id = ? ORDER BY event_id', (device_id,))
+    events = cursor.fetchall()
+
+    if events:
+        print(f"\nEvents: {len(events)} programming events")
+        for event in events:
+            event_id = event[0]
+            print(f"\n  Event {event_id}:")
+
+            # Get code items for this event
+            cursor.execute('''
+                SELECT id, codeitem_id, target_device, display_text, command_name, enabled
+                FROM code_items
+                WHERE event_device_id = ? AND event_id = ? AND parent_id IS NULL
+                ORDER BY codeitem_id
+            ''', (device_id, event_id))
+
+            for item in cursor.fetchall():
+                item_id, codeitem_id, target, display, cmd, enabled = item
+                enabled_str = "✓" if enabled else "✗"
+                print(f"    [{enabled_str}] {display}")
+                if cmd:
+                    print(f"        Command: {cmd} (device {target})")
+
+                # Check if this is a TCP command
+                cursor.execute('SELECT * FROM tcp_commands WHERE code_item_id = ?', (item_id,))
+                tcp_cmd = cursor.fetchone()
+                if tcp_cmd:
+                    print(f"        TCP: {tcp_cmd[2]} @ {tcp_cmd[3]}")
+                    print(f"        Target: {tcp_cmd[5]}:{tcp_cmd[6]}")
+                    print(f"        JSON: {tcp_cmd[8]}")
+
+                # Show child items
+                cursor.execute('''
+                    SELECT id, display_text, command_name, target_device
+                    FROM code_items
+                    WHERE parent_id = ?
+                ''', (item_id,))
+                children = cursor.fetchall()
+                for child in children:
+                    print(f"      └─ {child[1]}")
+
+def search_device_by_name(conn, name):
+    """Search devices by name"""
+    cursor = conn.cursor()
+    cursor.execute('SELECT id, name, type, config_file FROM devices WHERE name LIKE ? ORDER BY name',
+                   (f'%{name}%',))
+
+    results = cursor.fetchall()
+    if not results:
+        print(f"No devices found matching '{name}'")
+        return
+
+    print("=" * 80)
+    print(f"Found {len(results)} device(s) matching '{name}':")
+    print("=" * 80)
+    print(f"{'ID':<8} {'Type':<6} {'Name':<40} {'Config File':<30}")
+    print("=" * 80)
+
+    for row in results:
+        dev_id, dev_name, dev_type, config = row
+        print(f"{dev_id:<8} {dev_type:<6} {dev_name:<40} {config:<30}")
+
+def list_tcp_commands(conn):
+    """List all TCP commands"""
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT t.id, t.command_type, t.location, t.ip_address, t.port,
+               c.display_text, c.event_device_id, c.event_id
+        FROM tcp_commands t
+        JOIN code_items c ON t.code_item_id = c.id
+        ORDER BY t.command_type, t.location
+    ''')
+
+    results = cursor.fetchall()
+
+    print("=" * 80)
+    print(f"Found {len(results)} TCP commands:")
+    print("=" * 80)
+
+    current_type = None
+    for row in results:
+        cmd_id, cmd_type, location, ip, port, display, dev_id, evt_id = row
+
+        if cmd_type != current_type:
+            print(f"\n{cmd_type}:")
+            current_type = cmd_type
+
+        print(f"  Location: {location}")
+        print(f"  Device Event: {dev_id}/{evt_id}")
+        print(f"  Target: {ip}:{port}")
+        print(f"  Display: {display}")
+        print()
+
+def find_tcp_by_type(conn, cmd_type):
+    """Find TCP commands by type"""
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT t.command_type, t.location, t.full_command_json,
+               c.event_device_id, c.event_id, c.display_text, d.name
+        FROM tcp_commands t
+        JOIN code_items c ON t.code_item_id = c.id
+        JOIN events e ON c.event_device_id = e.device_id AND c.event_id = e.event_id
+        JOIN devices d ON e.device_id = d.id
+        WHERE t.command_type = ?
+        ORDER BY t.location
+    ''', (cmd_type,))
+
+    results = cursor.fetchall()
+
+    if not results:
+        print(f"No TCP commands found for type '{cmd_type}'")
+        return
+
+    print("=" * 80)
+    print(f"Found {len(results)} TCP command(s) of type '{cmd_type}':")
+    print("=" * 80)
+
+    for row in results:
+        cmd_type, location, json_cmd, dev_id, evt_id, display, dev_name = row
+        print(f"\nLocation: {location}")
+        print(f"Device: {dev_name} (ID: {dev_id})")
+        print(f"Event: {evt_id}")
+        print(f"Display: {display}")
+        print(f"Command JSON: {json_cmd}")
+
+def find_tcp_by_location(conn, location):
+    """Find TCP commands by location"""
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT t.command_type, t.location, t.full_command_json,
+               c.event_device_id, c.event_id, c.display_text, d.name
+        FROM tcp_commands t
+        JOIN code_items c ON t.code_item_id = c.id
+        JOIN events e ON c.event_device_id = e.device_id AND c.event_id = e.event_id
+        JOIN devices d ON e.device_id = d.id
+        WHERE t.location LIKE ?
+        ORDER BY t.command_type
+    ''', (f'%{location}%',))
+
+    results = cursor.fetchall()
+
+    if not results:
+        print(f"No TCP commands found for location '{location}'")
+        return
+
+    print("=" * 80)
+    print(f"Found {len(results)} TCP command(s) for location '{location}':")
+    print("=" * 80)
+
+    for row in results:
+        cmd_type, loc, json_cmd, dev_id, evt_id, display, dev_name = row
+        print(f"\nType: {cmd_type}")
+        print(f"Device: {dev_name} (ID: {dev_id})")
+        print(f"Event: {evt_id}")
+        print(f"Display: {display}")
+        print(f"Command JSON: {json_cmd}")
+
+def find_command_by_name(conn, cmd_name):
+    """Find all code items using a specific command"""
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT c.id, c.event_device_id, c.event_id, c.target_device,
+               c.display_text, c.command_name, d.name
+        FROM code_items c
+        JOIN events e ON c.event_device_id = e.device_id AND c.event_id = e.event_id
+        JOIN devices d ON e.device_id = d.id
+        WHERE c.command_name LIKE ?
+        ORDER BY d.name, c.event_id
+    ''', (f'%{cmd_name}%',))
+
+    results = cursor.fetchall()
+
+    if not results:
+        print(f"No commands found matching '{cmd_name}'")
+        return
+
+    print("=" * 80)
+    print(f"Found {len(results)} code item(s) using command '{cmd_name}':")
+    print("=" * 80)
+
+    for row in results:
+        item_id, dev_id, evt_id, target, display, cmd, dev_name = row
+        print(f"\nDevice: {dev_name} (ID: {dev_id})")
+        print(f"Event: {evt_id}")
+        print(f"Target Device: {target}")
+        print(f"Display: {display}")
+        print(f"Command: {cmd}")
+
+def main():
+    parser = argparse.ArgumentParser(description='Query Control4 project database')
+    parser.add_argument('--db', default=str(DEFAULT_DB), help='Database file path')
+    parser.add_argument('--device', type=int, help='Show device details')
+    parser.add_argument('--device-name', help='Search devices by name')
+    parser.add_argument('--tcp-commands', action='store_true', help='List all TCP commands')
+    parser.add_argument('--tcp-type', help='Find TCP commands by type')
+    parser.add_argument('--tcp-location', help='Find TCP commands by location')
+    parser.add_argument('--command-name', help='Find code items by command name')
+    parser.add_argument('--list-devices', action='store_true', help='List all devices')
+    parser.add_argument('--stats', action='store_true', help='Show database statistics')
+
+    args = parser.parse_args()
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(0)
+
+    conn = get_connection(args.db)
+
+    try:
+        if args.stats:
+            show_stats(conn)
+        elif args.device is not None:
+            show_device(conn, args.device)
+        elif args.device_name:
+            search_device_by_name(conn, args.device_name)
+        elif args.tcp_commands:
+            list_tcp_commands(conn)
+        elif args.tcp_type:
+            find_tcp_by_type(conn, args.tcp_type)
+        elif args.tcp_location:
+            find_tcp_by_location(conn, args.tcp_location)
+        elif args.command_name:
+            find_command_by_name(conn, args.command_name)
+        elif args.list_devices:
+            list_devices(conn)
+    finally:
+        conn.close()
+
+if __name__ == '__main__':
+    main()
