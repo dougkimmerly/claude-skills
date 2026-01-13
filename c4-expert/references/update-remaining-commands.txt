@@ -1,0 +1,202 @@
+Control4 Commands to Update - Step-by-Step Guide
+================================================
+
+ALL COMMANDS NEED:
+- IP Address: homesk.kbl55.com (or 192.168.20.19)
+- Port: 50261
+- Encoding: ASCII
+
+==========================================
+DEVICE: Master Thermostat (Device ID: 783)
+==========================================
+
+1. Open device: Master Thermostat
+2. Go to Programming tab → Event: 103
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "overRideSnowEvent", "loc":"Outside","data": "Override snow melt on for 6 hours"}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+
+===========================================
+DEVICE: Driveway North (Device ID: 367)
+===========================================
+
+EVENT 1 (OFF):
+1. Open device: Driveway North
+2. Go to Programming tab → Event: 1
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "snowStop", "loc":"drivewayNorth","data": PARAM{781,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+EVENT 2 (ON):
+1. Still in device: Driveway North
+2. Go to Programming tab → Event: 2
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "snowStart", "loc":"drivewayNorth","data": PARAM{781,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+
+=================================================
+DEVICE: Driveway South & Stairs (Device ID: 368)
+=================================================
+
+EVENT 1 (OFF):
+1. Open device: Driveway South & Stairs
+2. Go to Programming tab → Event: 1
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "snowStop", "loc":"drivewaySouth","data": PARAM{781,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+EVENT 2 (ON):
+1. Still in device: Driveway South & Stairs
+2. Go to Programming tab → Event: 2
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "snowStart", "loc":"drivewaySouth","data": PARAM{781,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+
+=============================
+DEVICE: Tent (Device ID: 369)
+=============================
+
+EVENT 1 (OFF):
+1. Open device: Tent
+2. Go to Programming tab → Event: 1
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "snowStop", "loc":"tent","data": PARAM{781,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+EVENT 2 (ON):
+1. Still in device: Tent
+2. Go to Programming tab → Event: 2
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "snowStart", "loc":"tent","data": PARAM{781,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+
+==========================================
+DEVICE: Basement Thermostat (Device ID: 781)
+==========================================
+
+1. Open device: Basement Thermostat
+2. Go to Programming tab → Event: 101
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "tempChange", "loc":"basement","data": PARAM{781,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+
+==========================================
+DEVICE: Master Thermostat (Device ID: 783)
+==========================================
+
+1. Open device: Master Thermostat
+2. Go to Programming tab → Event: 101
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "tempChange", "loc":"Master","data": PARAM{783,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+
+===============================================
+DEVICE: Spare Room Thermostat (Device ID: 785)
+===============================================
+
+1. Open device: Spare Room Thermostat
+2. Go to Programming tab → Event: 101
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "tempChange", "loc":"Spare","data": PARAM{785,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+
+==========================================
+DEVICE: Living Thermostat (Device ID: 787)
+==========================================
+
+1. Open device: Living Thermostat
+2. Go to Programming tab → Event: 101
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "tempChange", "loc":"Living","data": PARAM{787,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+
+==========================================
+DEVICE: Kitchen Thermostat (Device ID: 791)
+==========================================
+
+1. Open device: Kitchen Thermostat
+2. Go to Programming tab → Event: 101
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "tempChange", "loc":"Kitchen","data": PARAM{791,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+
+==========================================
+DEVICE: Garage Thermostat (Device ID: 793)
+==========================================
+
+1. Open device: Garage Thermostat
+2. Go to Programming tab → Event: 101
+3. Find: "Send generic TCP command" action
+4. Update Command field to:
+{"type": "tempChange", "loc":"Garage","data": PARAM{793,1133}}
+
+5. Update IP Address to: homesk.kbl55.com
+6. Update Port to: 50261
+
+
+==========================================
+SUMMARY
+==========================================
+
+Total commands to update: 16
+
+By device:
+- Master Thermostat: 2 commands (Event 101, Event 103)
+- Driveway North: 2 commands (Event 1, Event 2)
+- Driveway South & Stairs: 2 commands (Event 1, Event 2)
+- Tent: 2 commands (Event 1, Event 2)
+- Basement Thermostat: 1 command (Event 101)
+- Spare Room Thermostat: 1 command (Event 101)
+- Living Thermostat: 1 command (Event 101)
+- Kitchen Thermostat: 1 command (Event 101)
+- Garage Thermostat: 1 command (Event 101)
+
+All commands need:
+- IP Address changed to: homesk.kbl55.com
+- Port: 50261
+- Encoding: ASCII
