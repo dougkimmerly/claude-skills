@@ -13,9 +13,41 @@ This system converts Control4 project.xml backup files into a queryable SQLite d
 - **Structured Data**: All project data organized in relational tables
 - **Easy Updates**: Rebuild the database from a new backup in seconds
 
+## Quick Start
+
+### Update Database from Latest NAS Backup
+
+The easiest way to update the database:
+
+```bash
+cd ~/Programming/dkSRC/infrastructure/claude-skills/c4-expert/tools
+./update_c4_database.sh
+```
+
+This script automatically:
+- Finds the latest backup on the NAS
+- Downloads and extracts it
+- Rebuilds the SQLite database
+- Backs up the old database
+
+**NAS Backup Location:**
+- Host: `doug@192.168.20.16`
+- Path: `/volume1/Home Files/Data/Documents/House Documents/Control4/Projects`
+- Format: `55Tenth<YYYYMMDD>.c4p` (most recent file)
+
 ## Components
 
-### 1. c4_xml_to_db.py - XML to SQLite Parser
+### 1. update_c4_database.sh - Automated Update Script
+
+Automates the entire process of downloading and updating from the NAS.
+
+**Usage:**
+```bash
+cd ~/Programming/dkSRC/infrastructure/claude-skills/c4-expert/tools
+./update_c4_database.sh
+```
+
+### 2. c4_xml_to_db.py - XML to SQLite Parser
 
 Converts a Control4 project.xml file to a SQLite database.
 
