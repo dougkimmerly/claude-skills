@@ -1,0 +1,31 @@
+Complete fullTempResponse Commands for Control4
+=================================================
+
+Copy these exact commands into Control4 Composer device 1108, Event 11
+
+MASTER THERMOSTAT (Device 783):
+{"type":"fullTempResponse","loc":"Master","data":{"hotSet":PARAM{783,1133},"coolSet":PARAM{783,1135},"temp":PARAM{783,1131},"humidity":PARAM{783,1138},"outside":PARAM{783,1137}}}
+
+SPARE THERMOSTAT (Device 785):
+{"type":"fullTempResponse","loc":"Spare","data":{"hotSet":PARAM{785,1133},"coolSet":PARAM{785,1135},"temp":PARAM{785,1131},"humidity":PARAM{785,1138},"outside":PARAM{785,1137}}}
+
+LIVING THERMOSTAT (Device 787):
+{"type":"fullTempResponse","loc":"Living","data":{"hotSet":PARAM{787,1133},"coolSet":PARAM{787,1135},"temp":PARAM{787,1131},"humidity":PARAM{787,1138},"outside":PARAM{787,1137}}}
+
+KITCHEN THERMOSTAT (Device 791):
+{"type":"fullTempResponse","loc":"Kitchen","data":{"hotSet":PARAM{791,1133},"coolSet":PARAM{791,1135},"temp":PARAM{791,1131},"humidity":PARAM{791,1138},"outside":PARAM{791,1137}}}
+
+BASEMENT THERMOSTAT (Device 781):
+{"type":"fullTempResponse","loc":"Basement","data":{"hotSet":PARAM{781,1133},"coolSet":PARAM{781,1135},"temp":PARAM{781,1131},"humidity":PARAM{781,1138}}}
+
+GARAGE THERMOSTAT (Device 793):
+{"type":"fullTempResponse","loc":"Garage","data":{"hotSet":PARAM{793,1133},"coolSet":PARAM{793,1135},"temp":PARAM{793,1131},"humidity":PARAM{793,1138},"outside":PARAM{793,1137}}}
+
+OUTSIDE SENSOR (Device 1106) - ALREADY CORRECT:
+{"type":"fullTempResponse","loc":"Outside","data":{"temp":PARAM{1106,1001},"humidity":PARAM{1106,1002}}}
+
+Notes:
+- All commands should use IP: homesk.kbl55.com
+- All commands should use Port: 50261
+- Basement doesn't have the "outside" parameter
+- These are ONE LINE each - no line breaks in the actual command
