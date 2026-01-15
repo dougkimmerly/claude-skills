@@ -172,10 +172,41 @@ curl http://192.168.22.16/signalk/v1/api/vessels/self/environment/wind
 /mnt/usb/src/
 ├── envirolog/
 ├── fueluse/
-├── openweather-signalk/
+├── signalk-openweather-plugin/  (symlinked as openweather-signalk)
 ├── sheetslog/
 └── solarlogging/
 ```
+
+### Custom Plugin Symlinks
+
+Custom plugins are symlinked into node_modules to survive npm updates:
+
+```bash
+# Current symlinks
+/home/doug/.signalk/node_modules/openweather-signalk -> /mnt/usb/src/signalk-openweather-plugin
+```
+
+### Restore Script
+
+After npm install/update operations, run the restore script:
+
+```bash
+/home/doug/.signalk/restore-plugin-symlinks.sh && sudo systemctl restart signalk
+```
+
+### Preventing "Update Available" for Custom Plugins
+
+To prevent SignalK UI showing custom plugins as needing updates, bump the version in the plugin's `package.json` higher than the npm version:
+
+```bash
+# Check npm version
+npm view openweather-signalk version
+
+# Edit custom plugin's package.json to be higher (e.g., 1.1.0-custom)
+# The "-custom" suffix indicates it's a modified fork
+```
+
+See **[references/custom-plugins.md](references/custom-plugins.md)** for full details.
 
 ## Detailed References
 
@@ -183,6 +214,7 @@ curl http://192.168.22.16/signalk/v1/api/vessels/self/environment/wind
 - **[references/electrical-monitoring.md](references/electrical-monitoring.md)** - Victron battery/solar details
 - **[references/autopilot-integration.md](references/autopilot-integration.md)** - Raymarine autopilot control
 - **[references/environmental-sensors.md](references/environmental-sensors.md)** - BT sensors, weather, depth
+- **[references/custom-plugins.md](references/custom-plugins.md)** - Custom plugin symlinks, versioning, restore script
 
 ## Key Documentation
 
