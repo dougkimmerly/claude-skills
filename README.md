@@ -11,9 +11,10 @@ This repository contains modular skills that any Claude instance (PM or CC) can 
 | Skill | Description | Used By |
 |-------|-------------|--------|
 | `framework-expert` | Claude project framework, standards, PM↔CC coordination, broker | All framework-based projects |
-| `signalk-expert` | SignalK plugin development (JS), paths, APIs, data models | signalk55, signalkDS, powernet, navnet |
+| `signalk-expert` | SignalK plugin development (JS), paths, APIs, data models, server admin | signalk55, signalkDS, powernet, navnet |
 | `sensesp-expert` | SensESP sensor development (C++), ESP32, PlatformIO | SensESP-chain-counter, rebootRelay01 |
 | `skipper-expert` | SKipper app UI design, controls, layouts, SignalK integration | All SignalK projects |
+| `powernet-expert` | Maretron MPower digital switching, CLMD12/16, CKM12, PGNs | powernet, any MPower installation |
 | `victron-expert` | Victron energy systems | Coming soon |
 
 ## Usage
@@ -84,7 +85,20 @@ signalk-expert/
     ├── paths.md          # SignalK data paths (navigation, environment, etc.)
     ├── data-models.md    # Delta vs Full models
     ├── api.md            # REST & WebSocket APIs
-    └── mcp-tools.md      # SignalK MCP server tools
+    ├── mcp-tools.md      # SignalK MCP server tools
+    └── server-admin.md   # Systemd, troubleshooting, CAN bus, plugins
+```
+
+### powernet-expert
+```
+powernet-expert/
+├── SKILL.md
+└── references/
+    ├── devices.md        # CLMD12/16, CKM12, VMM6, CBMD12 specs
+    ├── pgns.md           # PGN 127500-127502, 127751 details
+    ├── switch-mapping.md # Instance/channel conventions, planning
+    ├── plugins.md        # switchbank, signalk-to-nmea2000
+    └── programming.md    # N2KAnalyzer workflow, configuration
 ```
 
 ### sensesp-expert

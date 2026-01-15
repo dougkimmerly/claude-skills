@@ -1,11 +1,11 @@
 ---
 name: signalk-expert
-description: SignalK plugin development expertise for marine data systems. Use when developing SignalK plugins (JavaScript), working with SignalK paths and data models, subscribing to or publishing SignalK data, implementing PUT handlers, or integrating with SignalK servers. Covers delta/full models, SI units, WebSocket/REST APIs, and plugin lifecycle.
+description: SignalK plugin development and server administration expertise for marine data systems. Use when developing SignalK plugins (JavaScript), working with SignalK paths and data models, subscribing to or publishing SignalK data, implementing PUT handlers, integrating with SignalK servers, or troubleshooting SignalK server issues. Covers delta/full models, SI units, WebSocket/REST APIs, plugin lifecycle, systemd service management, and common server problems.
 ---
 
 # SignalK Expert
 
-Expertise for developing SignalK plugins and working with SignalK data.
+Expertise for developing SignalK plugins, working with SignalK data, and administering SignalK servers.
 
 ## Quick Reference
 
@@ -119,12 +119,34 @@ app.registerPutHandler('vessels.self', 'navigation.anchor.setAnchor',
 );
 ```
 
+## Server Administration Quick Reference
+
+### Essential Commands
+
+```bash
+systemctl status signalk          # Check service status
+journalctl -u signalk -n 50       # View recent logs
+sudo systemctl restart signalk    # Restart service
+```
+
+### Common Fixes
+
+| Problem | Quick Fix |
+|---------|-----------|
+| Port 80 denied | `sudo setcap 'cap_net_bind_service=+ep' $(which node)` |
+| Multiple instances | `ps aux \| grep signalk` then kill rogue PIDs |
+| Permission denied on files | `sudo chown -R user:user /path/to/dir` |
+| Plugin symlinks gone | Run restore script after App Store updates |
+
+See [references/server-admin.md](references/server-admin.md) for detailed troubleshooting.
+
 ## Detailed References
 
 - **[references/paths.md](references/paths.md)** - Common SignalK paths (navigation, environment, electrical, propulsion, tanks)
 - **[references/data-models.md](references/data-models.md)** - Full vs Delta models, source handling
 - **[references/api.md](references/api.md)** - WebSocket subscriptions, REST endpoints
 - **[references/mcp-tools.md](references/mcp-tools.md)** - SignalK MCP server tools for live debugging
+- **[references/server-admin.md](references/server-admin.md)** - Systemd management, troubleshooting, CAN bus, plugin management
 
 ## Key Documentation
 
