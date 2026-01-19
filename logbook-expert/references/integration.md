@@ -103,45 +103,48 @@ for entry in entries:
 
 ## Backup Strategies
 
-### DSIInav → CentralSK Backup (Active)
+### GitHub Backup (Active)
 
-**Current Setup on DSIInav (192.168.22.16):**
+**Repository:** `dougkimmerly/signalk-logbook-data` (private)
+
+**Setup on DSIInav (192.168.22.16):**
 
 | Item | Value |
 |------|-------|
+| Git repo | `/home/doug/.signalk/plugin-config-data/signalk-logbook/` |
 | Script | `/home/doug/.signalk/backup-logbook.sh` |
 | Cron | Hourly (`0 * * * *`) |
-| Source | `/home/doug/.signalk/plugin-config-data/signalk-logbook/*.yml` |
-| Destination | `doug@192.168.20.19:/home/doug/backups/signalk-logbook/` |
-| Behavior | Syncs only when 192.168.20.19 is reachable |
+| Remote | `git@github.com:dougkimmerly/signalk-logbook-data.git` |
 
-**Script:**
+**Backup Script:**
 ```bash
 #!/bin/bash
-# Backup logbook YAML files to 192.168.20.19
-# Runs via cron - only syncs when .19 is reachable
+# Backup logbook YAML files to GitHub
+# Runs via cron - commits and pushes any new/changed files
 
 LOGBOOK_DIR="/home/doug/.signalk/plugin-config-data/signalk-logbook"
-BACKUP_HOST="192.168.20.19"
-BACKUP_USER="doug"
-BACKUP_DIR="/home/doug/backups/signalk-logbook"
+cd $LOGBOOK_DIR || exit 1
 
-# Check if backup host is reachable
-if ! ping -c 1 -W 2 $BACKUP_HOST > /dev/null 2>&1; then
-    exit 0  # Silent exit if not reachable
+# Check for changes
+if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard)" ]; then
+    exit 0  # No changes
 fi
 
-# Ensure backup directory exists on remote
-ssh -o ConnectTimeout=5 -o BatchMode=yes $BACKUP_USER@$BACKUP_HOST "mkdir -p $BACKUP_DIR" 2>/dev/null || exit 0
-
-# Sync YAML files (only newer/missing)
-rsync -az --ignore-existing $LOGBOOK_DIR/*.yml $BACKUP_USER@$BACKUP_HOST:$BACKUP_DIR/ 2>/dev/null
+# Add, commit, and push
+git add *.yml 2>/dev/null
+git commit -m "Logbook update $(date +%Y-%m-%d_%H:%M)" --quiet
+git push --quiet 2>/dev/null || true
 ```
 
+**Local Clone:**
+- Location: `navNet/logbook-data/` (in navNet project folder)
+- Pull updates: `cd logbook-data && git pull`
+
 **Notes:**
-- Uses `--ignore-existing` so historical logs are never overwritten
-- Silent failure when backup host unreachable (different network segment)
-- SSH key auth required between hosts (BatchMode=yes)
+- SSH key auth configured on DSIInav for GitHub
+- Hourly cron pushes any new/changed YAML files
+- Silent no-op if no changes detected
+- Full history preserved in git
 
 ### Git-based Backup
 
