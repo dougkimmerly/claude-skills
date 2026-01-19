@@ -103,6 +103,46 @@ for entry in entries:
 
 ## Backup Strategies
 
+### DSIInav → CentralSK Backup (Active)
+
+**Current Setup on DSIInav (192.168.22.16):**
+
+| Item | Value |
+|------|-------|
+| Script | `/home/doug/.signalk/backup-logbook.sh` |
+| Cron | Hourly (`0 * * * *`) |
+| Source | `/home/doug/.signalk/plugin-config-data/signalk-logbook/*.yml` |
+| Destination | `doug@192.168.20.19:/home/doug/backups/signalk-logbook/` |
+| Behavior | Syncs only when 192.168.20.19 is reachable |
+
+**Script:**
+```bash
+#!/bin/bash
+# Backup logbook YAML files to 192.168.20.19
+# Runs via cron - only syncs when .19 is reachable
+
+LOGBOOK_DIR="/home/doug/.signalk/plugin-config-data/signalk-logbook"
+BACKUP_HOST="192.168.20.19"
+BACKUP_USER="doug"
+BACKUP_DIR="/home/doug/backups/signalk-logbook"
+
+# Check if backup host is reachable
+if ! ping -c 1 -W 2 $BACKUP_HOST > /dev/null 2>&1; then
+    exit 0  # Silent exit if not reachable
+fi
+
+# Ensure backup directory exists on remote
+ssh -o ConnectTimeout=5 -o BatchMode=yes $BACKUP_USER@$BACKUP_HOST "mkdir -p $BACKUP_DIR" 2>/dev/null || exit 0
+
+# Sync YAML files (only newer/missing)
+rsync -az --ignore-existing $LOGBOOK_DIR/*.yml $BACKUP_USER@$BACKUP_HOST:$BACKUP_DIR/ 2>/dev/null
+```
+
+**Notes:**
+- Uses `--ignore-existing` so historical logs are never overwritten
+- Silent failure when backup host unreachable (different network segment)
+- SSH key auth required between hosts (BatchMode=yes)
+
 ### Git-based Backup
 
 The YAML format is ideal for version control:
