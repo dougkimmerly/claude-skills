@@ -179,3 +179,64 @@ The plugin maintains a circular buffer of state data, allowing entries to be bac
 - **signalk-autostate** - Required for trip start/end detection
 - **sailsconfiguration** - Optional sail inventory integration
 - **signalk-autopilot** - Optional autopilot state tracking
+
+## Boat Log App (Custom PWA)
+
+### Repository
+
+| Property | Value |
+|----------|-------|
+| **Repo** | https://github.com/dougkimmerly/boat-log-app (private) |
+| **Local** | `navNet/boat-log-app/` |
+| **Deployed** | `http://192.168.22.16/boat-log-app/` |
+| **Server Path** | `~/.signalk/node_modules/boat-log-app/public/` |
+
+### Features
+
+- **Voice Diary** - Web Speech API transcription for hands-free logging
+- **Sail Configuration** - 3-column layout:
+  - **Main**: 4 buttons (Full, Reef 1, Reef 2, Down) - single select
+  - **Jib**: Vertical slider (0-100%) - furler position
+  - **Staysail**: Vertical slider (0-100%) - furler position
+- **Auto-captured Data** (from SignalK, updated every 5 seconds):
+  - **Tack**: Port/Starboard (from apparent wind angle)
+  - **Point of Sail**: Close Hauled, Close Reach, Beam Reach, Broad Reach, Running
+  - **Heel**: Degrees with side indicator (from `navigation.attitude.roll`)
+- **Quick Entries**: Weather, Event, Watch change buttons
+- **Offline Queue**: Entries stored in localStorage, synced when connected
+- **PWA Support**: Installable, service worker caching
+
+### Deployment
+
+```bash
+# Deploy updated files to SignalK server
+scp boat-log-app/*.html doug@192.168.22.16:~/.signalk/node_modules/boat-log-app/public/
+
+# Hard refresh browser to clear service worker cache (Cmd+Shift+R)
+```
+
+### SignalK Paths Used
+
+```
+environment.wind.angleApparent     → Tack & Point of Sail calculation
+navigation.attitude.roll           → Heel angle
+navigation.headingTrue             → Heading (fallback: headingMagnetic)
+```
+
+### Sail Config Log Entry Format
+
+```
+Sail config: Main: Reef 1, Jib: 75%, Staysail: 0%, Tack: starboard, Point: Close Reach, Heel: 12° starboard
+```
+
+### Other Pages
+
+- **Passage Planner** - `passage-planner.html` - PredictWind departure analysis
+- **Siri Setup** - `siri-setup.html` - Instructions for Siri shortcut configuration
+
+## GitHub Repositories
+
+| Repo | Purpose |
+|------|---------|
+| `dougkimmerly/boat-log-app` | PWA code, issues, feature tracking |
+| `dougkimmerly/signalk-logbook-data` | YAML data backup only (no issues) |

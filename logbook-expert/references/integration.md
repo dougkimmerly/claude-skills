@@ -105,7 +105,9 @@ for entry in entries:
 
 ### GitHub Backup (Active)
 
-**Repository:** `dougkimmerly/signalk-logbook-data` (private)
+**Repository:** `dougkimmerly/signalk-logbook-data` (private) - Data backup only, no issues
+
+**Code & Issues:** `dougkimmerly/boat-log-app` (private) - PWA code + all feature tracking
 
 **Setup on DSIInav (192.168.22.16):**
 
@@ -145,6 +147,33 @@ git push --quiet 2>/dev/null || true
 - Hourly cron pushes any new/changed YAML files
 - Silent no-op if no changes detected
 - Full history preserved in git
+
+### Boat Log App Deployment
+
+**Repository:** `dougkimmerly/boat-log-app` (private)
+
+**Local Development:** `navNet/boat-log-app/`
+
+**Deploy to SignalK Server:**
+```bash
+# Copy updated files
+scp boat-log-app/*.html doug@192.168.22.16:~/.signalk/node_modules/boat-log-app/public/
+scp boat-log-app/*.json doug@192.168.22.16:~/.signalk/node_modules/boat-log-app/public/
+scp boat-log-app/sw.js doug@192.168.22.16:~/.signalk/node_modules/boat-log-app/public/
+
+# Or deploy all at once
+scp boat-log-app/* doug@192.168.22.16:~/.signalk/node_modules/boat-log-app/public/
+```
+
+**After Deployment:**
+- Hard refresh browser (Cmd+Shift+R / Ctrl+Shift+R) to clear service worker cache
+- If PWA installed, may need to close and reopen
+
+**Server Locations:**
+| File | Path |
+|------|------|
+| App files | `~/.signalk/node_modules/boat-log-app/public/` |
+| URL | `http://192.168.22.16/boat-log-app/` |
 
 ### Git-based Backup
 
