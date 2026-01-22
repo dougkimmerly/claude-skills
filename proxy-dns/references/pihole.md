@@ -141,34 +141,26 @@ ssh doug@192.168.20.19 "nslookup domain.kbl55.com"
 
 **IMPORTANT:** Primary and secondary Pi-hole are NOT automatically synced. DNS records must be manually added to both for redundancy.
 
-### Secondary Config Locations
+### Secondary Config Location
 
 ```
-/etc/pihole/custom.list           # A records (legacy format: "IP domain")
-/etc/dnsmasq.d/                   # Custom dnsmasq configs (empty by default)
+/etc/pihole/pihole.toml           # All config including DNS records
 ```
 
-### Secondary Uses Legacy Format
+### Adding Records to Secondary (Pi-hole v6)
 
-Secondary uses old-style `custom.list` format:
-```
-192.168.20.19 npm.kbl55.com
-192.168.20.16 docs.kbl55.com
-```
-
-NOT the dnsmasq `address=` format used on primary.
-
-### Adding Records to Secondary
+Edit the `[dns]` section's `hosts` array in pihole.toml:
 
 ```bash
-# A record (legacy format)
-ssh doug@192.168.20.3 "echo '192.168.20.XX SERVICE.kbl55.com' | sudo tee -a /etc/pihole/custom.list"
-sudo pihole restartdns
+# View current DNS hosts
+ssh doug@192.168.20.3 "sudo grep -A20 'hosts = \[' /etc/pihole/pihole.toml | head -25"
 
-# CNAME record (needs dnsmasq.d file)
-ssh doug@192.168.20.3 "echo 'cname=SERVICE.kbl55.com,npm.kbl55.com' | sudo tee -a /etc/dnsmasq.d/05-custom-cname.conf"
-sudo pihole restartdns
+# Add entry (manual edit required for toml array)
+# Then restart:
+ssh doug@192.168.20.3 "sudo systemctl restart pihole-FTL"
 ```
+
+**Note:** Secondary uses pihole.toml `hosts` array, NOT custom.list or dnsmasq.d files.
 
 ### Sync Checklist
 
@@ -186,11 +178,24 @@ nslookup domain.kbl55.com 192.168.20.16
 nslookup domain.kbl55.com 192.168.20.3
 ```
 
-### Known Issue: Secondary REFUSED
+### Pi-hole v6 Configuration Notes
 
-As of 2026-01-22, secondary Pi-hole returns REFUSED for all queries.
-Needs investigation - may be a v6 config issue. Primary is working and is
-the main DNS for the network.
+In Pi-hole v6, DNS records are configured in `/etc/pihole/pihole.toml`:
+
+```toml
+[dns]
+  upstreams = ["8.8.8.8", "8.8.4.4"]  # REQUIRED - empty = REFUSED
+  hosts = [
+    "192.168.20.19 npm.kbl55.com",
+    "192.168.20.19 docs.kbl55.com"
+  ]
+```
+
+**IMPORTANT:** The `hosts = []` array appears TWICE in pihole.toml:
+1. `[dns]` section (line ~129) - for DNS records
+2. `[dhcp]` section (line ~670) - for DHCP static leases (different format)
+
+Do NOT put DNS entries in the DHCP hosts array.
 
 ## Troubleshooting
 
