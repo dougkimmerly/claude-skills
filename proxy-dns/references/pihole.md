@@ -134,8 +134,63 @@ ssh doug@192.168.20.19 "nslookup domain.kbl55.com"
 |------|-------|
 | Host | Raspberry Pi (192.168.20.3) |
 | Purpose | DNS failover |
+| Version | v6.x (native install, not Docker) |
+| Admin UI | http://192.168.20.3/admin |
 
-**Note:** Secondary Pi-hole config is separate. For critical records, add to both.
+### No Automatic Sync
+
+**IMPORTANT:** Primary and secondary Pi-hole are NOT automatically synced. DNS records must be manually added to both for redundancy.
+
+### Secondary Config Locations
+
+```
+/etc/pihole/custom.list           # A records (legacy format: "IP domain")
+/etc/dnsmasq.d/                   # Custom dnsmasq configs (empty by default)
+```
+
+### Secondary Uses Legacy Format
+
+Secondary uses old-style `custom.list` format:
+```
+192.168.20.19 npm.kbl55.com
+192.168.20.16 docs.kbl55.com
+```
+
+NOT the dnsmasq `address=` format used on primary.
+
+### Adding Records to Secondary
+
+```bash
+# A record (legacy format)
+ssh doug@192.168.20.3 "echo '192.168.20.XX SERVICE.kbl55.com' | sudo tee -a /etc/pihole/custom.list"
+sudo pihole restartdns
+
+# CNAME record (needs dnsmasq.d file)
+ssh doug@192.168.20.3 "echo 'cname=SERVICE.kbl55.com,npm.kbl55.com' | sudo tee -a /etc/dnsmasq.d/05-custom-cname.conf"
+sudo pihole restartdns
+```
+
+### Sync Checklist
+
+When adding DNS records, update BOTH:
+1. Primary (Synology .16) - dnsmasq format
+2. Secondary (Pi .3) - legacy format or create dnsmasq.d file
+
+### Verify Both
+
+```bash
+# Check primary
+nslookup domain.kbl55.com 192.168.20.16
+
+# Check secondary
+nslookup domain.kbl55.com 192.168.20.3
+```
+
+### Known Issue: Secondary REFUSED
+
+As of 2026-01-22, secondary Pi-hole returns REFUSED for all queries.
+Needs investigation - may be a v6 config issue. Primary is working and is
+the main DNS for the network.
 
 ## Troubleshooting
 

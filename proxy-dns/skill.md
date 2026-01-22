@@ -8,8 +8,11 @@ Manage DNS records (Pi-hole) and reverse proxy hosts (Nginx Proxy Manager) for t
 
 | Component | Location | Access |
 |-----------|----------|--------|
-| Pi-hole | 192.168.20.16 (Synology) | SSH + Docker |
+| Pi-hole (Primary) | 192.168.20.16 (Synology) | SSH + Docker |
+| Pi-hole (Secondary) | 192.168.20.3 (Raspberry Pi) | SSH |
 | NPM | 192.168.20.19:81 | REST API |
+
+**IMPORTANT:** Primary and secondary Pi-hole are NOT synced automatically. Add records to both for redundancy. See `references/pihole.md` for secondary Pi-hole commands.
 
 ---
 
