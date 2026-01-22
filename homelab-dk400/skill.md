@@ -4,6 +4,8 @@ This skill covers the specific deployment of DK/400 at Doug's homelab. For gener
 
 **Always load both skills when working on this instance.**
 
+**Central Skills Repo:** `infrastructure/claude-skills/homelab-dk400/skill.md`
+
 ---
 
 ## Instance Overview
