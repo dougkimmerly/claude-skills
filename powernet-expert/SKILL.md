@@ -74,6 +74,7 @@ curl -X PUT -H "Content-Type: application/json" \
 - **[references/switch-mapping.md](references/switch-mapping.md)** - Instance/channel conventions and planning
 - **[references/plugins.md](references/plugins.md)** - SignalK plugin configuration for MPower
 - **[references/programming.md](references/programming.md)** - N2KAnalyzer workflow and device setup
+- **[references/waveshare-sensesp.md](references/waveshare-sensesp.md)** - ESP32 relay controllers with SensESP
 
 ## Network Architecture
 
@@ -93,6 +94,47 @@ PowerNet (digital switching) should be physically separated from NavNet (navigat
   AIS, Radar              CKM12, VMM6
 ```
 
+## Auxiliary Switching (SensESP/ESP32)
+
+For network infrastructure and auxiliary loads not on NMEA 2000, ESP32-based relay controllers using SensESP provide SignalK integration.
+
+### Waveshare ESP32-S3-Relay-6CH
+
+| Spec | Value |
+|------|-------|
+| Relays | 6 (NO/NC configurable) |
+| Framework | SensESP 3.x |
+| Connection | WiFi → SignalK WebSocket |
+| Control | PUT requests + value listeners |
+
+### SignalK Paths (SensESP)
+
+```
+electrical.{group}.{relay}.state           # Relay state (true/false)
+electrical.commands.switch.{relay}         # Value listener for on/off
+electrical.commands.reboot.{relay}         # Value listener for reboot
+```
+
+### Control via REST API
+
+```bash
+# Turn on relay (with auth)
+curl -X PUT -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"value": "on"}' \
+  http://signalk-host/signalk/v1/api/vessels/self/electrical/{group}/{relay}/state
+
+# Reboot sequence (power cycle)
+curl -X PUT -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"value": "reboot"}' \
+  http://signalk-host/signalk/v1/api/vessels/self/electrical/{group}/{relay}/state
+```
+
+### Web Control Page
+
+A SignalK webapp at `/waveshare-control/` provides browser-based relay control.
+
 ## Key Documentation
 
 | Resource | URL |
@@ -101,3 +143,5 @@ PowerNet (digital switching) should be physically separated from NavNet (navigat
 | CLMD16 Manual | https://www.maretron.com/support/manuals/CLMD16UM_1.0.html |
 | MPower Overview | https://www.maretron.com/products/digital-switching-mpower/ |
 | switchbank Plugin | https://github.com/pdjr-signalk/pdjr-skplugin-switchbank |
+| Waveshare Relay Board | https://www.waveshare.com/wiki/ESP32-S3-Relay-6CH |
+| SensESP Docs | https://signalk.org/SensESP/ |
