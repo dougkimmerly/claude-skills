@@ -259,3 +259,46 @@ Reference in systemd override:
 ```ini
 Environment="NODE_OPTIONS=--require /home/user/.signalk/maxListeners.js"
 ```
+
+## Performance Monitoring
+
+### Check CPU and Load
+
+```bash
+# Real-time CPU usage
+top -bn1 | head -15
+
+# Load average (1/5/15 min)
+uptime
+
+# Node process specifically
+ps aux | grep signalk-server | awk '{print "CPU:", $3"%", "MEM:", $4"%"}'
+```
+
+### NMEA 2000 Message Rate
+
+```bash
+# Count messages per second on CAN bus
+timeout 10 candump can0 2>/dev/null | wc -l
+# Divide result by 10 for msg/sec
+```
+
+### Performance Limits
+
+| Hardware | Max N2K msg/sec | Notes |
+|----------|-----------------|-------|
+| Pi 4 (4GB) | ~100-150 | With multiple active plugins |
+| Pi 5 (8GB) | ~300+ | Much better for high-traffic networks |
+| x86 (Docker) | ~500+ | Depends on host resources |
+
+**Symptoms of overloaded server:**
+- Command response delays (>5 seconds for switch actuation)
+- WebSocket updates lagging behind actual state
+- Load average consistently >1.5 on single-core equivalent
+- Node process using 100%+ CPU (multi-threaded)
+
+**Mitigations:**
+1. Disable unused plugins (Settings → Plugin Config → toggle enabled:false)
+2. Reduce subscription periods where possible
+3. Separate high-traffic networks onto dedicated servers
+4. Upgrade hardware for production deployments

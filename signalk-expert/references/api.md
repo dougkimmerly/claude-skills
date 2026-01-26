@@ -141,3 +141,42 @@ WebSocket:
 ```javascript
 const ws = new WebSocket('ws://localhost:3000/signalk/v1/stream?token=<token>');
 ```
+
+**Important:** WebSocket subscriptions may not receive updates without authentication, even for paths that are readable via unauthenticated REST API. Always include the token in the WebSocket URL for reliable subscriptions.
+
+## Web App Best Practices
+
+### Reliable State Updates
+
+WebSocket subscriptions can be unreliable. Recommended pattern:
+
+```javascript
+// 1. Connect with auth token
+const ws = new WebSocket(`ws://${host}/signalk/v1/stream?subscribe=none&token=${token}`);
+
+// 2. Subscribe to paths
+ws.onopen = () => {
+  ws.send(JSON.stringify({
+    context: 'vessels.self',
+    subscribe: [{ path: 'electrical.switches.bank.*', period: 1000 }]
+  }));
+
+  // 3. Polling fallback (WebSocket may miss updates)
+  setInterval(fetchCurrentState, 5000);
+};
+
+// 4. Track pending commands to avoid UI flicker from stale poll data
+const pendingCommands = new Map(); // path -> {targetValue, timestamp}
+```
+
+### PUT Response States
+
+PUT handlers can return these states:
+
+| State | Meaning |
+|-------|---------|
+| `COMPLETED` | Command finished successfully |
+| `PENDING` | Command accepted, result will arrive via delta |
+| `FAILURE` | Command failed (check `message` field) |
+
+For `PENDING` responses, monitor the path via WebSocket/polling to detect when the state changes to the commanded value.

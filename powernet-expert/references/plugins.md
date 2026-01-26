@@ -159,6 +159,32 @@ Creates virtual switches that respond to PGN 127502.
                                              └─────────────────┘
 ```
 
+## signalk-n2k-switching (CLMD Support)
+
+Direct control of Maretron CLMD12/CLMD16 load controllers.
+
+### Key Feature: Maretron Compatibility Mode
+
+CLMD devices (manufactured by Carling Technologies for Maretron) respond to **PGN 126208** (NMEA Command Group Function), not PGN 127502 alone. The plugin's "Maretron Compatibility" option sends both:
+
+1. **PGN 127502** - Standard switch control (for other devices)
+2. **PGN 126208** - Command to update PGN 127501 status (required for CLMD)
+
+### canName to Address Mapping
+
+PGN 126208 requires the device's numeric N2K address, but SignalK `$source` contains the canName (e.g., `powerNet.c03c8c2d16178147`). The plugin builds a mapping from `/sources` to resolve addresses.
+
+### Device-Specific Value Format
+
+| Manufacturer | Command Value |
+|--------------|---------------|
+| Carling (CLMD12/16) | Binary: `0` or `1` |
+| Maretron (DCR100) | String: `'Off'` or `'On'` |
+
+### GitHub
+
+https://github.com/sbender9/signalk-n2k-switching
+
 ## Common Plugin Issues
 
 ### PUT Returns 404
@@ -172,12 +198,14 @@ Creates virtual switches that respond to PGN 127502.
 - signalk-to-nmea2000 not installed
 - CAN interface not configured
 - CLMD not configured to accept network commands
+- **For CLMD devices**: Enable "Maretron Compatibility" in signalk-n2k-switching
 
 ### State Doesn't Update After Command
 
 - n2k-signalk not parsing PGN 127501
 - Network connectivity issue
 - Check `candump can0` for traffic
+- **For CLMD**: Verify PGN 126208 is being sent (check plugin debug logs)
 
 ## Recommended Plugin Stack
 
