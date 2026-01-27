@@ -137,6 +137,7 @@ sudo systemctl restart signalk    # Restart service
 | Multiple instances | `ps aux \| grep signalk` then kill rogue PIDs |
 | Permission denied on files | `sudo chown -R user:user /path/to/dir` |
 | Plugin symlinks gone | Run restore script after App Store updates |
+| Device "needs auth" despite token | Set `"acls": []` in security.json |
 
 See [references/server-admin.md](references/server-admin.md) for detailed troubleshooting.
 
@@ -145,6 +146,7 @@ See [references/server-admin.md](references/server-admin.md) for detailed troubl
 - **[references/paths.md](references/paths.md)** - Common SignalK paths (navigation, environment, electrical, propulsion, tanks)
 - **[references/data-models.md](references/data-models.md)** - Full vs Delta models, source handling
 - **[references/api.md](references/api.md)** - WebSocket subscriptions, REST endpoints
+- **[references/authentication.md](references/authentication.md)** - Device tokens, ACLs, troubleshooting auth failures
 - **[references/mcp-tools.md](references/mcp-tools.md)** - SignalK MCP server tools for live debugging
 - **[references/server-admin.md](references/server-admin.md)** - Systemd management, troubleshooting, CAN bus, plugin management
 
