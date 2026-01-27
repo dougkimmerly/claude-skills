@@ -135,6 +135,57 @@ curl -X PUT -H "Content-Type: application/json" \
 
 A SignalK webapp at `/waveshare-control/` provides browser-based relay control.
 
+## Caframo Fan Controllers (SensESP)
+
+ESP32-based controllers for Caframo 12V fans with variable speed control via simulated button presses.
+
+### Fan Controller Inventory
+
+| Fan | Hostname | SignalK Path | Location |
+|-----|----------|--------------|----------|
+| Starboard Cabin | stbCabinFanControl.local | sensors.stbCabinfan/power | Starboard cabin |
+| Port Cabin | prtCabinFanControl.local | sensors.prtCabinfan/power | Port cabin |
+| Saloon | saloonFanControl.local | sensors.saloonfan/power | Saloon |
+| Galley | galleyFanControl.local | sensors.galleyfan.power | Galley |
+| Maggie | maggieFanControl.local | sensors.maggiefan/power | Maggie's cabin |
+
+### Control API
+
+All fan controllers expose an HTTP API on port 8081:
+
+```bash
+# Set fan speed (0=off, 1=low, 2=medium, 3=high)
+curl -X PUT -H "Content-Type: application/json" \
+  -d '1' \
+  http://galleyFanControl.local:8081/setFanSpeed
+
+# Simulate button press (cycles through speeds)
+curl -X PUT -H "Content-Type: application/json" \
+  -d '4' \
+  http://galleyFanControl.local:8081/setFanSpeed
+```
+
+### How It Works
+
+1. ESP32 monitors power draw via INA260 sensor
+2. Determines current fan speed from power consumption
+3. Calculates number of button presses needed to reach target speed
+4. Simulates button presses via GPIO (momentary contact)
+5. Reports power to SignalK for monitoring
+
+### Power Thresholds (Speed Detection)
+
+| Power Range | Detected Speed |
+|-------------|----------------|
+| < 2.3W | Off (0) |
+| 2.3W - 4W | Low (1) |
+| 4W - 5.5W | Medium (2) |
+| > 5.5W | High (3) |
+
+### Source Code
+
+Fan controller firmware: `/Users/doug/Programming/dkSRC/boat/SenseESP/caframo/`
+
 ## Key Documentation
 
 | Resource | URL |
