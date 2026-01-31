@@ -10,16 +10,16 @@ DK/400 is split into two repositories:
 - **URL:** https://github.com/dougkimmerly/dk400
 - **Purpose:** Portable AS/400 simulation anyone can use
 - **Contains:** 5250 terminal, all AS/400 commands, generic qsys schema
-- **Local Path:** `/Users/doug/Programming/dkSRC/infrastructure/homelab-dk400/dk400/`
+- **Local Path:** `/Users/doug/Programming/dkSRC/infrastructure/dk400-homelab/dk400/`
 
-### Private Repository: `homelab-dk400`
-- **URL:** https://github.com/dougkimmerly/homelab-dk400
+### Private Repository: `dk400-homelab`
+- **URL:** https://github.com/dougkimmerly/dk400-homelab
 - **Purpose:** Homelab-specific deployment on .19
 - **Contains:** dk400 as git submodule + private Celery tasks + docker-compose
-- **Local Path:** `/Users/doug/Programming/dkSRC/infrastructure/homelab-dk400/`
+- **Local Path:** `/Users/doug/Programming/dkSRC/infrastructure/dk400-homelab/`
 - **Structure:**
   ```
-  homelab-dk400/
+  dk400-homelab/
   ├── dk400/              # Public repo (git submodule)
   ├── tasks/              # Private Celery tasks
   │   ├── viarail.py      # Via Rail calendar/fare checks
@@ -35,13 +35,13 @@ DK/400 is split into two repositories:
 
 ```bash
 # Update public dk400 (when discovered changes needed):
-cd /Users/doug/Programming/dkSRC/infrastructure/homelab-dk400/dk400
+cd /Users/doug/Programming/dkSRC/infrastructure/dk400-homelab/dk400
 # Make changes to dk400 code
 git commit -am "Description"
 git push origin main        # Push to public repo
 
-# Update private homelab-dk400:
-cd /Users/doug/Programming/dkSRC/infrastructure/homelab-dk400
+# Update private dk400-homelab:
+cd /Users/doug/Programming/dkSRC/infrastructure/dk400-homelab
 git add dk400               # Update submodule reference (if dk400 changed)
 git commit -m "Update dk400 submodule / your changes"
 git push
@@ -52,11 +52,11 @@ git push
 ### Deployment
 
 ```bash
-# Standard deploy (on Ubuntu server .19 - uses homelab-dk400)
-ssh doug@192.168.20.19 "cd /home/doug/dkSRC/infrastructure/homelab-dk400 && git pull --recurse-submodules && docker compose up -d --build"
+# Standard deploy (on Ubuntu server .19 - uses dk400-homelab)
+ssh doug@192.168.20.19 "cd /home/doug/dkSRC/infrastructure/dk400-homelab && git pull --recurse-submodules && docker compose up -d --build"
 
 # FORCE REBUILD (use when cached layers cause issues)
-ssh doug@192.168.20.19 "cd /home/doug/dkSRC/infrastructure/homelab-dk400 && git pull --recurse-submodules && docker compose build --no-cache && docker compose up -d"
+ssh doug@192.168.20.19 "cd /home/doug/dkSRC/infrastructure/dk400-homelab && git pull --recurse-submodules && docker compose build --no-cache && docker compose up -d"
 
 # Check logs
 ssh doug@192.168.20.19 "docker logs dk400-web --tail 50"
@@ -84,9 +84,9 @@ ssh doug@192.168.20.19 "docker exec dk400-web python3 -c 'from src.dk400.web.dat
 
 ## Project Structure
 
-### Private Deployment (homelab-dk400)
+### Private Deployment (dk400-homelab)
 ```
-/Users/doug/Programming/dkSRC/infrastructure/homelab-dk400/
+/Users/doug/Programming/dkSRC/infrastructure/dk400-homelab/
 ├── dk400/                   # Public repo (git submodule)
 │   └── src/dk400/...        # All AS/400 simulation code
 ├── tasks/                   # Private Celery tasks (homelab-specific)
@@ -105,7 +105,7 @@ ssh doug@192.168.20.19 "docker exec dk400-web python3 -c 'from src.dk400.web.dat
 
 ### Public Simulation (dk400 submodule)
 ```
-/Users/doug/Programming/dkSRC/infrastructure/homelab-dk400/dk400/
+/Users/doug/Programming/dkSRC/infrastructure/dk400-homelab/dk400/
 ├── compose.yaml              # Docker services (for standalone use)
 ├── Dockerfile               # Celery workers
 ├── Dockerfile.tui           # SSH terminal
@@ -792,7 +792,7 @@ for r in rows: print(r)
 ### Updating Public dk400 (AS/400 simulation code)
 ```bash
 # Local development (in submodule)
-cd /Users/doug/Programming/dkSRC/infrastructure/homelab-dk400/dk400
+cd /Users/doug/Programming/dkSRC/infrastructure/dk400-homelab/dk400
 # Make changes to screens.py, database.py, etc...
 python3 -m py_compile src/dk400/web/screens.py  # Syntax check
 python3 -m py_compile src/dk400/web/database.py
@@ -803,15 +803,15 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 git push origin main  # Push to PUBLIC dk400 repo
 
 # Update submodule reference in private repo
-cd /Users/doug/Programming/dkSRC/infrastructure/homelab-dk400
+cd /Users/doug/Programming/dkSRC/infrastructure/dk400-homelab
 git add dk400
 git commit -m "Update dk400 submodule"
-git push  # Push to PRIVATE homelab-dk400 repo
+git push  # Push to PRIVATE dk400-homelab repo
 ```
 
-### Updating Private homelab-dk400 (tasks, config)
+### Updating Private dk400-homelab (tasks, config)
 ```bash
-cd /Users/doug/Programming/dkSRC/infrastructure/homelab-dk400
+cd /Users/doug/Programming/dkSRC/infrastructure/dk400-homelab
 # Make changes to tasks/, celery_app.py, etc...
 git add -A
 git commit -m "Description
@@ -823,10 +823,10 @@ git push
 ### Deploying to .19
 ```bash
 # Standard deploy
-ssh doug@192.168.20.19 "cd /home/doug/dkSRC/infrastructure/homelab-dk400 && git pull --recurse-submodules && docker compose up -d --build"
+ssh doug@192.168.20.19 "cd /home/doug/dkSRC/infrastructure/dk400-homelab && git pull --recurse-submodules && docker compose up -d --build"
 
 # Force rebuild (when cached layers cause issues)
-ssh doug@192.168.20.19 "cd /home/doug/dkSRC/infrastructure/homelab-dk400 && git pull --recurse-submodules && docker compose build --no-cache && docker compose up -d"
+ssh doug@192.168.20.19 "cd /home/doug/dkSRC/infrastructure/dk400-homelab && git pull --recurse-submodules && docker compose build --no-cache && docker compose up -d"
 ```
 
 ---
@@ -2005,7 +2005,7 @@ Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
 git push
 
 # 4. Deploy to .19
-ssh doug@192.168.20.19 "cd /home/doug/dkSRC/infrastructure/homelab-dk400 && git pull --recurse-submodules && docker compose down && docker compose up -d --build"
+ssh doug@192.168.20.19 "cd /home/doug/dkSRC/infrastructure/dk400-homelab && git pull --recurse-submodules && docker compose down && docker compose up -d --build"
 
 # 5. Wait for containers
 sleep 10
