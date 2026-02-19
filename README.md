@@ -15,6 +15,7 @@ This repository contains modular skills that any Claude instance (PM or CC) can 
 | `sensesp-expert` | SensESP sensor development (C++), ESP32, PlatformIO | SensESP-chain-counter, rebootRelay01 |
 | `skipper-expert` | SKipper app UI design, controls, layouts, SignalK integration | All SignalK projects |
 | `powernet-expert` | Maretron MPower digital switching, CLMD12/16, CKM12, PGNs | powernet, any MPower installation |
+| `galley-expert` | Galley Meal Planner PWA — recipe management, meal planning, inventory sync, offline-first patterns | galley-meal-planner |
 | `victron-expert` | Victron energy systems | Coming soon |
 
 ## Usage
@@ -126,6 +127,19 @@ skipper-expert/
     └── tips.md           # Best practices and troubleshooting
 ```
 
+### galley-expert
+```
+galley-expert/
+├── SKILL.md
+└── references/
+    ├── database.md       # PostgreSQL schema, 11 tables, JSON field formats
+    ├── api.md            # Full REST API endpoints with params/responses
+    ├── frontend.md       # Vanilla JS SPA, views, components, styling, PWA
+    ├── patterns.md       # Model/route/service/frontend code conventions
+    ├── deployment.md     # Docker, two-repo architecture, env config
+    └── domain.md         # Boat galley context, substitutions, storage locations
+```
+
 ## Orchestrators & Projects Using This Repo
 
 | Project | Type | Skills Used |
@@ -137,6 +151,7 @@ skipper-expert/
 | signalkDS | Orchestrator (future) | signalk-expert, skipper-expert |
 | powernet | Orchestrator (future) | signalk-expert, victron-expert |
 | navnet | Orchestrator (future) | signalk-expert, skipper-expert |
+| galley-meal-planner | PWA | galley-expert |
 
 ## Support Links
 
