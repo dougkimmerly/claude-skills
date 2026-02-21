@@ -2,26 +2,47 @@
 
 Working integration between SignalK and Control4 from the signalk-snowmelt plugin.
 
+**Last Updated:** 2026-02-21
+
 ## Protocol Overview
 
 | Direction | Protocol | Port | Format | Purpose |
 |-----------|----------|------|--------|---------|
-| External → C4 | HTTP GET | configurable | URL commands | Control devices |
+| External → C4 | HTTP GET | 50260 | URL commands | Control devices |
 | C4 → External | TCP | 50261 | JSON | Status updates |
 
 ## Sending Commands to C4 (HTTP GET)
 
-**Format:** `GET http://{c4-ip}:{port}/command/{commandName}`
+**Format:** `GET http://{c4-ip}:{port}/{commandName}`
+
+**Base URL:** `http://192.168.20.181:50260/`
 
 No payload, no authentication - simple URL triggers the action.
 
-### Snow Melt Commands
+**Important:** The URL path is `/{commandName}` directly — no `/command/` prefix.
+
+### Snow Melt Commands - Per Zone
 
 | Command | Purpose |
 |---------|---------|
-| `startSnow` | Turn on all snow melt zones |
-| `stopSnow` | Turn off all snow melt zones |
+| `startSouth` | Turn on driveway south zone |
+| `stopSouth` | Turn off driveway south zone |
+| `startNorth` | Turn on driveway north zone |
+| `stopNorth` | Turn off driveway north zone |
+| `startTent` | Turn on tent zone |
+| `stopTent` | Turn off tent zone |
 | `snowMeltStatus` | Request current status of all zones |
+
+**Stagger logic:** The plugin starts south immediately, then schedules north 25 minutes later to avoid power surge. This stagger is handled in the plugin (`startSnowMelt()` in index.js), not in C4.
+
+### Snow Melt Commands - Legacy (deprecated)
+
+| Command | Purpose | Notes |
+|---------|---------|-------|
+| `startSnow` | Turn on all snow melt zones | Had 25-min inline delay in C4 that blocked re-entry |
+| `stopSnow` | Turn off all snow melt zones | Did not cancel pending delay timers |
+
+**Note:** These legacy commands still exist in C4 but are no longer used by the plugin as of 2026-02-21. The inline delay in `startSnow` caused subsequent calls to be ignored while the delay was running.
 
 ### Temperature Commands
 
@@ -92,8 +113,8 @@ Zones: Outside, Master, Spare, Living, Kitchen, Basement, Garage
 
 **Zone state change:**
 ```json
-{ "type": "snowStart", "loc": "drivewayNorth", "data": null }
-{ "type": "snowStop", "loc": "drivewaySouth", "data": null }
+{ "type": "snowStart", "loc": "drivewayNorth", "data": 24 }
+{ "type": "snowStop", "loc": "drivewaySouth", "data": 24 }
 ```
 
 Zones: drivewayNorth, drivewaySouth, tent
@@ -102,51 +123,78 @@ Zones: drivewayNorth, drivewaySouth, tent
 ```json
 {
   "type": "snowMeltStatus",
+  "loc": "Outside",
   "data": {
-    "drivewayNorth": true,
-    "drivewaySouth": false,
-    "tent": true
+    "drivewayNorth": 0,
+    "drivewaySouth": 0,
+    "tent": 0
   }
 }
 ```
 
-## C4 Configuration Required
+## C4 Configuration
+
+### Device: Generic TCP Command (Chowmain) - ID 1108
+
+**IP:** 192.168.20.181
+**HTTP Port:** 50260
+**TCP Target:** homesk.kbl55.com:50261 (192.168.20.19)
 
 ### For Receiving Commands (HTTP)
-- Generic TCP Command driver (Chowmain) or similar
-- Configured to listen on HTTP port
-- Programming to map URLs to device actions
+- Generic TCP Command driver (Chowmain)
+- Listens on port 50260
+- Each command name maps to a driver event
+- Events contain programming to control relays and send TCP status
 
 ### For Sending Status (TCP)
-- Generic TCP/IP Client driver
-- Points to external system IP:50261
-- Sends JSON messages on state changes
+- Generic TCP/IP Client driver (binding 6001)
+- Points to homesk.kbl55.com:50261
+- Sends JSON messages on state changes and in response to status queries
 
 ## Example Integrations
 
 ### curl
 ```bash
-# Turn on snow melt
-curl http://192.168.20.43:8080/command/startSnow
+# Turn on driveway south
+curl http://192.168.20.181:50260/startSouth
+
+# Turn on driveway north
+curl http://192.168.20.181:50260/startNorth
+
+# Stop all zones
+curl http://192.168.20.181:50260/stopSouth
+curl http://192.168.20.181:50260/stopNorth
+
+# Query status
+curl http://192.168.20.181:50260/snowMeltStatus
 
 # Increase heat
-curl http://192.168.20.43:8080/command/increaseHeat
+curl http://192.168.20.181:50260/increaseHeat
 ```
 
 ### n8n HTTP Request
 ```
 Method: GET
-URL: http://192.168.20.43:8080/command/startSnow
+URL: http://192.168.20.181:50260/startSouth
 ```
 
 ### Home Assistant rest_command
 ```yaml
 rest_command:
-  c4_start_snow:
-    url: http://192.168.20.43:8080/command/startSnow
+  c4_start_south:
+    url: http://192.168.20.181:50260/startSouth
+    method: GET
+  c4_stop_south:
+    url: http://192.168.20.181:50260/stopSouth
+    method: GET
+  c4_start_north:
+    url: http://192.168.20.181:50260/startNorth
+    method: GET
+  c4_stop_north:
+    url: http://192.168.20.181:50260/stopNorth
     method: GET
   c4_increase_heat:
-    url: http://192.168.20.43:8080/command/increaseHeat
+    url: http://192.168.20.181:50260/increaseHeat
     method: GET
 ```
 
@@ -172,18 +220,22 @@ while True:
 1. **No acknowledgment** - HTTP commands are fire-and-forget
 2. **No retry logic** - failed commands aren't retried
 3. **No encryption** - relies on local network security
-4. **Hard-coded zones** - zone names are fixed in code
+4. **URL path** - commands are at root path (`/startSouth`), NOT `/command/startSouth`
 5. **Single-zone control** - temperature commands only affect basement
+6. **C4 inline delays** - avoid delays in C4 event programming; they block re-entry. Handle timing in the external system instead.
 
 ## Communication Flow Example
 
 ```
-1. External system detects snow forecast
-2. External → C4: GET http://c4-ip:8080/command/startSnow
-3. C4 activates snow melt relays
-4. C4 → External: TCP {"type":"snowStart","loc":"drivewayNorth"}
-5. C4 → External: TCP {"type":"snowStart","loc":"drivewaySouth"}
-6. External updates dashboard/state
+1. Plugin detects snow forecast
+2. Plugin → C4: GET http://192.168.20.181:50260/startSouth
+3. C4 activates driveway south relay
+4. C4 → Plugin: TCP {"type":"snowStart","loc":"drivewaySouth","data":24}
+5. Plugin waits 25 minutes (setTimeout)
+6. Plugin → C4: GET http://192.168.20.181:50260/startNorth
+7. C4 activates driveway north relay
+8. C4 → Plugin: TCP {"type":"snowStart","loc":"drivewayNorth","data":24}
+9. Plugin updates SignalK state
 ```
 
 ## Source

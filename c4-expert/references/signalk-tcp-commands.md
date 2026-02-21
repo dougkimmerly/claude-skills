@@ -1,8 +1,9 @@
 # SignalK TCP Commands - Control4 Integration
 
-**Last Updated:** 2026-01-12
+**Last Updated:** 2026-02-21
 **Device:** Generic TCP Command Driver (ID: 1108)
-**Target:** signalk.kbl55.com:50261 (currently 192.168.20.19)
+**Target:** homesk.kbl55.com:50261 (192.168.20.19)
+**HTTP Port:** 50260 on 192.168.20.181
 
 ## Connection Parameters
 
@@ -17,17 +18,33 @@ All commands use these standard parameters:
 ## Communication Architecture
 
 ```
-Control4 (.43:8080) ←─── HTTP Commands ───── SignalK (.19:3000)
-Control4 (.43)      ───→ TCP Status (JSON) ─→ SignalK (.19:50261)
+SignalK (.19) ───HTTP GET──→ C4 (.181:50260) /{commandName}
+C4 (.181)     ───TCP JSON──→ SignalK (.19:50261)
 ```
 
 **SignalK → C4 (HTTP):**
-- SignalK sends commands TO C4 at 192.168.20.43:8080/command/{commandName}
-- Used for: startSnow, stopSnow, increaseHeat, etc.
+- SignalK sends commands TO C4 at 192.168.20.181:50260/{commandName}
+- URL path is `/{commandName}` directly — no `/command/` prefix
+- Used for: startSouth, stopSouth, startNorth, stopNorth, increaseHeat, etc.
 
 **C4 → SignalK (TCP):**
-- C4 sends status updates TO SignalK at signalk.kbl55.com:50261
+- C4 sends status updates TO SignalK at homesk.kbl55.com:50261
 - All commands documented below
+
+## Snow Melt Per-Zone Commands (HTTP → C4)
+
+Added 2026-02-21 to replace legacy startSnow/stopSnow.
+
+| HTTP Command | C4 Event | Purpose |
+|-------------|----------|---------|
+| `startSouth` | Event 25 | Turn on driveway south relay |
+| `startNorth` | Event 26 | Turn on driveway north relay |
+| `startTent` | Event 27 | Turn on tent relay |
+| `stopSouth` | Event 28 | Turn off driveway south relay |
+| `stopNorth` | Event 29 | Turn off driveway north relay |
+| `stopTent` | Event 30 | Turn off tent relay |
+
+**Note:** The 25-minute stagger between south and north is handled in the plugin, not C4.
 
 ## Snow Melt Zone Control (6 commands)
 
@@ -206,9 +223,11 @@ When updating in Composer HE:
 
 ## Migration History
 
-| Date | Old IP | New IP | Notes |
-|------|--------|--------|-------|
-| 2026-01-12 | 192.168.20.166 | signalk.kbl55.com (192.168.20.19) | Migrated to Docker container, using DNS hostname |
+| Date | Change | Notes |
+|------|--------|-------|
+| 2026-01-12 | IP: 192.168.20.166 → homesk.kbl55.com (192.168.20.19) | Migrated to Docker container, using DNS hostname |
+| 2026-02-21 | Replaced startSnow/stopSnow with per-zone commands | Added startSouth, stopSouth, startNorth, stopNorth, startTent, stopTent. 25-min stagger moved to plugin. |
+| 2026-02-21 | Fixed HTTP URL path | Removed `/command/` prefix — commands at root path (`/startSouth` not `/command/startSouth`) |
 
 ## Related Documentation
 
