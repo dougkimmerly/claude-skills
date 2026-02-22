@@ -15,6 +15,7 @@ This repository contains modular skills that any Claude instance (PM or CC) can 
 | `sensesp-expert` | SensESP sensor development (C++), ESP32, PlatformIO | SensESP-chain-counter, rebootRelay01 |
 | `skipper-expert` | SKipper app UI design, controls, layouts, SignalK integration | All SignalK projects |
 | `powernet-expert` | Maretron MPower digital switching, CLMD12/16, CKM12, PGNs | powernet, any MPower installation |
+| `centralsk` | CentralSK boat server — architecture, services, Docker, SignalK, NMEA2000 | centralsk, dk400-boat |
 | `galley-expert` | Galley Meal Planner PWA — recipe management, meal planning, inventory sync, offline-first patterns | galley-meal-planner |
 | `victron-expert` | Victron energy systems | Coming soon |
 
@@ -127,6 +128,12 @@ skipper-expert/
     └── tips.md           # Best practices and troubleshooting
 ```
 
+### centralsk
+```
+centralsk/
+└── skill.md              # Boat server architecture, services, commands
+```
+
 ### galley-expert
 ```
 galley-expert/
@@ -151,6 +158,8 @@ galley-expert/
 | signalkDS | Orchestrator (future) | signalk-expert, skipper-expert |
 | powernet | Orchestrator (future) | signalk-expert, victron-expert |
 | navnet | Orchestrator (future) | signalk-expert, skipper-expert |
+| centralsk | Boat server | centralsk, signalk-expert |
+| dk400-boat | dk400 boat deployment | centralsk, dk400 |
 | galley-meal-planner | PWA | galley-expert |
 
 ## Support Links
