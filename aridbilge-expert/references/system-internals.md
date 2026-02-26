@@ -57,6 +57,32 @@ Adds 8 relay outputs to the PLC for zone valve control.
 
 Each relay output drives one solenoid valve. When the PLC activates zone N, it closes relay N on the D0-08TR, which sends 12V to that zone's solenoid valve.
 
+### Hour Meter Relays (8x)
+
+Eight micro relay sockets mounted inside the main enclosure (IMG_7241-7247). These relays switch 12V to the front panel hour meters when a zone is active.
+
+Each relay has 3 screw terminals (numbered 1, 2, 3 on the molded housing). The wiring pattern:
+
+**Common wires across all 8 relays:**
+- **Green wire** (left side) — Reset circuit from front panel reset button
+- **Orange wire** (left side) — Power rail (12V+ or GND common)
+- **Brown wire** (top right) — Other power rail conductor
+
+**Individual zone signal wires (from relay contact outputs to front panel hour meters):**
+
+| Relay Position | Zone | Wire Color |
+|---------------|------|------------|
+| 1 (top) | Sail Locker | White |
+| 2 | Front Cabin | Yellow |
+| 3 | Galley | Orange |
+| 4 | Port Bilge | Grey |
+| 5 | GenSet | Brown |
+| 6 | Engine | Green |
+| 7 | Steerage | Blue |
+| 8 (bottom) | Garage | Purple |
+
+These colored wires carry 12V when their zone is active and run from the relay contacts inside the enclosure through to the corresponding hour meter on the front panel.
+
 ### Solenoid Valves (8x)
 
 NResearch 12VDC solenoid valves mounted on an aluminum bracket.
@@ -106,7 +132,7 @@ Black buzzer mounted inside enclosure. Sounds on alarm conditions (flood fault, 
 
 ## Front Panel
 
-The front panel attaches via **Velcro strips** (black material visible at edges in photos) and is easily removable for access to internals.
+The front panel attaches via **Velcro strips** (black material visible at edges in photos) and is easily removable for access to internals. The front panel contains ONLY display and control elements — all relays and logic components are inside the main enclosure behind it.
 
 ### External Panel Features (IMG_7248)
 
@@ -121,36 +147,9 @@ From top to bottom:
 - **Contact**: 954-328-9705, Deerfield Beach, Florida
 - **Patent**: US Patent Number 6,837,174
 
-### Internal Panel Components (IMG_7241-7247)
+### Internal Panel Face
 
-Eight micro relay sockets mounted in two columns on the inside of the front panel. These relays switch 12V to the hour meters when a zone is active.
-
-Each relay has 3 screw terminals (numbered 1, 2, 3 on the molded housing). The wiring pattern:
-
-**Common wires across all 8 relays:**
-- **Green wire** (left side) — Reset circuit from front panel reset button
-- **Orange wire** (left side) — Power rail (12V+ or GND common)
-- **Brown wire** (top right) — Other power rail conductor
-
-**Individual zone signal wires (from relay contact outputs):**
-
-| Relay Position | Zone | Wire Color |
-|---------------|------|------------|
-| 1 (top) | Sail Locker | White |
-| 2 | Front Cabin | Yellow |
-| 3 | Galley | Orange |
-| 4 | Port Bilge | Grey |
-| 5 | GenSet | Brown |
-| 6 | Engine | Green |
-| 7 | Steerage | Blue |
-| 8 (bottom) | Garage | Purple |
-
-These colored wires carry 12V when their zone is active and connect to the corresponding hour meter on the external face of the panel.
-
-**Also on internal panel:**
-- Microswitch (top left, near rectangular cutout) — likely the "Reset Meters" button mechanism
-- Gray multi-conductor cable — runs from the main enclosure (PLC area) to the relay coils, carrying the drive signals from the D0-08TR expansion module
-- White zip ties organizing the wiring bundles
+The inside of the front panel has wires passing through to the hour meters, reset button, and status LEDs on the exterior face. This leaves open space on the interior face suitable for mounting new components (ESP32, optocoupler boards, buck converter).
 
 ## Internal Wiring Summary
 
@@ -160,15 +159,15 @@ These colored wires carry 12V when their zone is active and connect to the corre
 PLC D0-08TR relay outputs
     │ (gray multi-conductor cable)
     ▼
-Front Panel Hour Meter Relays (8x micro relays)
+Hour Meter Relays (8x micro relays, inside main enclosure)
     │
     ├── Relay coils driven by PLC via gray cable
     │
-    └── Relay contacts switch 12V to hour meters
+    └── Relay contacts switch 12V to front panel hour meters
          │
          ├── Orange wire (common power rail) ─── to one contact on each relay
          │
-         └── Individual colored wire per relay ─── to individual hour meter
+         └── Individual colored wire per relay ─── through to front panel hour meter
               (White, Yellow, Orange, Grey, Brown, Green, Blue, Purple)
 ```
 
@@ -189,7 +188,7 @@ Front Panel Hour Meter Relays (8x micro relays)
 | Black | Ground |
 | Pink | Auxiliary power/signal |
 | White | Sensor/signal (vacuum switches to PLC inputs) |
-| Gray cable | Multi-conductor, PLC → front panel relay coils |
+| Gray cable | Multi-conductor, PLC → hour meter relay coils |
 
 ## Photo Index
 
@@ -200,11 +199,11 @@ Front Panel Hour Meter Relays (8x micro relays)
 | IMG_7238 | Vacuum pressure switches (COM/NC/NO), collection chamber top, "ARID BILGE SYSTEMS, Inc." label |
 | IMG_7239 | Terminal blocks with fused connections, yellow wire distribution, power wiring |
 | IMG_7240 | Vacuum pump (Schwarzer diaphragm), solenoid valve array, buck converter area |
-| IMG_7241 | Front panel interior — full relay row (8 relays), colored wires, reset switch |
+| IMG_7241 | Inside enclosure — full hour meter relay row (8 relays), colored wires, reset switch wiring |
 | IMG_7242 | PLC close-up — DirectLogic 05, inputs X0-X7, version label |
-| IMG_7243 | Relay close-up (bottom relays) — terminal numbers, wire colors |
-| IMG_7244 | Relay close-up (middle relays) — orange/green/brown/blue/purple wires |
-| IMG_7245 | Full front panel interior — all 8 relays, gray cable, reset switch |
-| IMG_7246 | Full front panel interior (alternate angle) — wiring routing |
-| IMG_7247 | Top relays close-up — terminal numbering visible (2, 3 labels) |
+| IMG_7243 | Hour meter relay close-up (bottom relays) — terminal numbers, wire colors |
+| IMG_7244 | Hour meter relay close-up (middle relays) — orange/green/brown/blue/purple wires |
+| IMG_7245 | Inside enclosure — all 8 hour meter relays, gray cable routing |
+| IMG_7246 | Inside enclosure (alternate angle) — relay and wiring routing |
+| IMG_7247 | Top hour meter relays close-up — terminal numbering visible (2, 3 labels) |
 | IMG_7248 | **External front panel** — zone names, hour meters, status LEDs, branding |
