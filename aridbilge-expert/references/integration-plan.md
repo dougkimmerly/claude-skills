@@ -37,7 +37,7 @@ The Arid enclosure has two main sections:
 
 **Front panel (Velcro-attached, removable):**
 - Exterior face: 8 hour meter displays, reset button, 3 status LEDs (Low Vacuum, High Vacuum, System Flood Fault)
-- Interior face: wires passing through to hour meters and LEDs — open space available for mounting new boards
+- Interior face: hour meter terminals (where zone signal wires arrive from relays), LED wiring, reset button wiring — open space available for mounting new boards
 
 **Main enclosure (behind front panel):**
 - PLC (DirectLogic 05) and D0-08TR relay expansion module
@@ -52,14 +52,18 @@ The Arid enclosure has two main sections:
 
 ### Zone Signals (Optocoupler Board 1)
 
-Each zone has a colored signal wire that runs from the relay contacts inside the main enclosure through to the hour meter on the front panel. When a zone is active, its relay closes and 12V appears on that wire. We piggyback onto these wires and feed them to the optocoupler inputs.
+Each zone has a colored signal wire that runs from the relay contacts inside the main enclosure to the hour meter terminals on the front panel. We tap these wires **at the hour meter terminals on the front panel** — this keeps all zone wiring on the panel itself with short runs to the opto board, and avoids routing 8 signal wires across the Velcro gap.
 
 ```
 Hour Meter Relays (inside main enclosure)
     │
-    ├── Existing colored wire → Hour Meter Display on front panel (unchanged)
+    │ colored zone signal wires
+    ▼
+Hour Meter Terminals (on front panel)
     │
-    └── NEW piggyback wire → Optocoupler Board 1 Input
+    ├── Existing connection → Hour Meter Display (unchanged)
+    │
+    └── NEW piggyback tap → Optocoupler Board 1 Input (short run, same panel)
                                     │
                               PC817 LED side (anode)
                                     │
@@ -70,6 +74,12 @@ Optocoupler Board 1 Output Side:
     ESP32 GND  → Board GND
     Board OUT1-OUT8 → ESP32 GPIO pins (see table below)
 ```
+
+**Why tap at the hour meters instead of the relays:**
+- Opto boards mount on the same front panel — wire runs are inches, not feet
+- No zone signal wires need to cross the Velcro gap
+- Only power (2 wires) and status LED signals (3 wires) cross the gap
+- Hour meter terminals are accessible and easy to piggyback onto
 
 **Optocoupler input wiring (12V Arid side):**
 
@@ -100,13 +110,13 @@ Optocoupler Board 1 Output Side:
 
 ### Status Signals (Optocoupler Board 2)
 
-The three front panel LEDs (Low Vacuum, High Vacuum, System Flood Fault) are driven by PLC outputs. We tap the LED drive signals.
+The three front panel LEDs (Low Vacuum, High Vacuum, System Flood Fault) are driven by PLC outputs. We tap the LED drive wires on the front panel side — again keeping wiring local to the panel.
 
 | Opto Input | Signal | Source |
 |------------|--------|--------|
-| IN1 | Low Vacuum | LED drive wire |
-| IN2 | High Vacuum | LED drive wire |
-| IN3 | System Flood Fault | LED drive wire |
+| IN1 | Low Vacuum | LED drive wire (front panel) |
+| IN2 | High Vacuum | LED drive wire (front panel) |
+| IN3 | System Flood Fault | LED drive wire (front panel) |
 | IN4-IN8 | Spare | Available for future use |
 
 | Opto Output | ESP32 GPIO | Pin Mode |
@@ -118,11 +128,12 @@ The three front panel LEDs (Low Vacuum, High Vacuum, System Flood Fault) are dri
 ### ESP32 Power Supply
 
 ```
-Arid 12V DC (gray terminal block, fused)
+Arid 12V DC (gray terminal block, fused — inside main enclosure)
     │
     └── NEW wire to buck converter input (+12V and GND)
+        (these 2 wires cross the Velcro gap via connector)
             │
-        Buck Converter (MP1584/LM2596)
+        Buck Converter (MP1584/LM2596) — mounted on front panel
         Input: 12V DC
         Output: 5V DC
             │
@@ -167,51 +178,56 @@ In SensESP code, the `DigitalInputState` reading must be **inverted**:
 
 ## Physical Mounting Plan
 
-The ESP32 and optocoupler boards mount on the **inside of the front panel**. The front panel interior has open space (the exterior face holds the hour meters, reset button, and LEDs). The existing hour meter relays and all other Arid components are inside the main enclosure behind the panel.
+The ESP32 and optocoupler boards mount on the **inside of the front panel**, right next to the hour meter terminals they're tapping. This keeps all zone signal wiring short and local.
 
 ```
 ┌──────────────────────────────────────────────┐
 │ FRONT PANEL (inside view, facing you         │
 │ when panel is removed)                        │
 │                                               │
-│  ┌─────────┐                                  │
-│  │  Opto   │  Optocoupler Board 2             │
-│  │ Board 2 │  (3 status signals + 5 spare)    │
-│  └─────────┘                                  │
-│                                               │
-│  ┌─────────┐                                  │
-│  │  ESP32   │                                  │
-│  │ Dev Board│                                  │
-│  └─────────┘                                  │
-│                                               │
-│  ┌─────────┐                                  │
-│  │  Opto   │  Optocoupler Board 1             │
-│  │ Board 1 │  (8 zone signals)                │
-│  └─────────┘                                  │
-│                                               │
-│  ┌─────────┐                                  │
-│  │  Buck   │                                  │
-│  │Converter│                                  │
-│  └─────────┘                                  │
+│  Hour meter terminals   ┌─────────┐           │
+│  (tap zone signals      │  Opto   │           │
+│   here)                 │ Board 1 │           │
+│  [HM1] ─── short wire ──│ (zones) │           │
+│  [HM2] ─── short wire ──│         │           │
+│  [HM3] ─── short wire ──│         │           │
+│   ...                   └────┬────┘           │
+│                              │                │
+│  Status LED wires       ┌────┴────┐           │
+│  (tap here)             │  ESP32  │           │
+│  [LV] ── short wire ──┐│Dev Board│           │
+│  [HV] ── short wire ──┤└────┬────┘           │
+│  [FF] ── short wire ──┘     │                │
+│                         ┌────┴────┐           │
+│                         │  Opto   │           │
+│                         │ Board 2 │           │
+│                         │(status) │           │
+│                         └─────────┘           │
+│                         ┌─────────┐           │
+│                         │  Buck   │           │
+│                         │Converter│           │
+│                         └─────────┘           │
 │                                               │
 │  ═══════════ Velcro strip ══════════════      │
 └──────────────────────────────────────────────┘
 
 Wires crossing the Velcro gap to main enclosure:
-  • 8 zone signal piggyback wires (from relay contacts)
-  • 3 status LED signal wires
-  • 12V power feed (2 wires: +12V and GND)
+  • 12V power feed ONLY (2 wires: +12V and GND)
   → Use a connector (Molex/JST) at the gap for clean detach
+
+Zone signals and status LEDs are tapped on the front panel
+side — NO signal wires cross the Velcro gap.
 ```
 
 ## Commissioning Steps
 
 ### Phase 1: Verify Signals
 
-1. With Arid system running, use a multimeter on each colored wire at the relay contacts
+1. With Arid system running, use a multimeter on each colored wire at the hour meter terminals
 2. Confirm 12V appears when that zone is active, 0V when inactive
 3. Identify the polarity (which wire is +12V, which is GND reference)
 4. Document the actual voltage (may be 11-14V depending on battery state)
+5. Verify status LED signal wires show 12V when LED is lit
 
 ### Phase 2: Bench Test Optocoupler
 
@@ -223,10 +239,10 @@ Wires crossing the Velcro gap to main enclosure:
 ### Phase 3: Install Hardware
 
 1. Mount buck converter, ESP32, and opto boards on inside of front panel
-2. Wire buck converter to 12V source (via connector at Velcro gap)
-3. Wire 8 zone piggyback taps from relay contacts in enclosure to Opto Board 1 inputs (via connector at Velcro gap)
+2. Wire buck converter to 12V source (via connector at Velcro gap — only wires that cross the gap)
+3. Piggyback 8 zone signal taps from hour meter terminals to Opto Board 1 inputs (all on front panel)
 4. Wire Opto Board 1 outputs to ESP32 GPIOs
-5. Wire 3 status LED signals to Opto Board 2 inputs (via connector at Velcro gap)
+5. Piggyback 3 status LED signal taps to Opto Board 2 inputs (all on front panel)
 6. Wire Opto Board 2 outputs to ESP32 GPIOs
 7. Wire ESP32 3.3V and GND to both opto board output sides
 
@@ -251,5 +267,5 @@ Before closing up the enclosure:
 - [ ] Arid system operates normally with ESP32 connected
 - [ ] Hour meters still function (piggyback tap not loading the circuit)
 - [ ] Front panel can be removed and reattached without snagging wires
-- [ ] Connector at Velcro gap disconnects cleanly
+- [ ] Power connector at Velcro gap disconnects cleanly (only 2 wires)
 - [ ] No wire pinching when panel is pressed onto Velcro
