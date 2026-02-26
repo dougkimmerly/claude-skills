@@ -7,7 +7,7 @@ Complete wiring and mounting plan for adding ESP32/SensESP monitoring to the Ari
 1. **Non-invasive** — Piggyback taps only, no cutting or disconnecting existing Arid wiring
 2. **Galvanic isolation** — Optocouplers keep ESP32 electrically separated from Arid 12V system
 3. **Fail-safe** — If ESP32 fails or is removed, Arid system continues operating normally
-4. **Inside the enclosure** — All new components mount inside the Arid enclosure on the front panel
+4. **Inside the enclosure** — All new components mount inside the Arid enclosure
 
 ## Components
 
@@ -20,7 +20,7 @@ Complete wiring and mounting plan for adding ESP32/SensESP monitoring to the Ari
 | Buck converter (MP1584 or LM2596) | 1 | 12V→5V for ESP32 power | ⬜ Needed |
 | Wire (22-24 AWG, stranded) | ~3m | Signal connections | ⬜ Needed |
 | Red insulated crimp taps or solder splices | 8 | Piggyback onto hour meter wires | ⬜ Needed |
-| Small standoffs or double-sided foam tape | 4-6 | Mounting boards to front panel | ⬜ Needed |
+| Small standoffs or double-sided foam tape | 4-6 | Mounting boards inside enclosure | ⬜ Needed |
 | Heat shrink tubing | Assorted | Insulating connections | ⬜ Needed |
 
 ### Nice to Have
@@ -31,16 +31,33 @@ Complete wiring and mounting plan for adding ESP32/SensESP monitoring to the Ari
 | JST or Dupont connectors | Disconnectable wiring harness |
 | Ferrite bead on ESP32 power | Noise suppression |
 
+## Enclosure Layout
+
+The Arid enclosure has two main sections:
+
+**Front panel (Velcro-attached, removable):**
+- Exterior face: 8 hour meter displays, reset button, 3 status LEDs (Low Vacuum, High Vacuum, System Flood Fault)
+- Interior face: wires passing through to hour meters and LEDs — open space available for mounting new boards
+
+**Main enclosure (behind front panel):**
+- PLC (DirectLogic 05) and D0-08TR relay expansion module
+- 8 hour meter relays (driven by PLC, switch 12V to front panel hour meters)
+- 8 NResearch solenoid valves on aluminum bracket
+- Vacuum pump, collection chamber, pressure switches
+- Terminal blocks with fused 12V input
+- Gray multi-conductor cable carrying relay signals
+- Zone signal wires (colored) running from relays to front panel hour meters
+
 ## Wiring Plan
 
 ### Zone Signals (Optocoupler Board 1)
 
-Each zone's colored wire on the front panel relays goes to 12V when that zone is active. We piggyback onto these wires and feed them to the optocoupler inputs.
+Each zone has a colored signal wire that runs from the relay contacts inside the main enclosure through to the hour meter on the front panel. When a zone is active, its relay closes and 12V appears on that wire. We piggyback onto these wires and feed them to the optocoupler inputs.
 
 ```
-Hour Meter Relay Contacts (inside front panel)
+Hour Meter Relays (inside main enclosure)
     │
-    ├── Existing colored wire → Hour Meter Display (unchanged)
+    ├── Existing colored wire → Hour Meter Display on front panel (unchanged)
     │
     └── NEW piggyback wire → Optocoupler Board 1 Input
                                     │
@@ -150,25 +167,26 @@ In SensESP code, the `DigitalInputState` reading must be **inverted**:
 
 ## Physical Mounting Plan
 
-All new components mount on the **inside of the front panel**, alongside the existing hour meter relays.
+The ESP32 and optocoupler boards mount on the **inside of the front panel**. The front panel interior has open space (the exterior face holds the hour meters, reset button, and LEDs). The existing hour meter relays and all other Arid components are inside the main enclosure behind the panel.
 
 ```
 ┌──────────────────────────────────────────────┐
-│ FRONT PANEL (inside view)                     │
+│ FRONT PANEL (inside view, facing you         │
+│ when panel is removed)                        │
 │                                               │
-│  ┌─────┐  ┌─────┐                            │
-│  │Reset│  │Opto │ Optocoupler Board 2         │
-│  │ SW  │  │ #2  │ (3 status signals)          │
-│  └─────┘  └─────┘                            │
-│                                               │
-│  ┌─────────┐  ┌───┐ ┌───┐ ┌───┐ ┌───┐       │
-│  │  ESP32   │  │R1 │ │R2 │ │R3 │ │R4 │       │
-│  │ Dev Board│  └───┘ └───┘ └───┘ └───┘       │
+│  ┌─────────┐                                  │
+│  │  Opto   │  Optocoupler Board 2             │
+│  │ Board 2 │  (3 status signals + 5 spare)    │
 │  └─────────┘                                  │
 │                                               │
-│  ┌─────────┐  ┌───┐ ┌───┐ ┌───┐ ┌───┐       │
-│  │  Opto   │  │R5 │ │R6 │ │R7 │ │R8 │       │
-│  │ Board 1 │  └───┘ └───┘ └───┘ └───┘       │
+│  ┌─────────┐                                  │
+│  │  ESP32   │                                  │
+│  │ Dev Board│                                  │
+│  └─────────┘                                  │
+│                                               │
+│  ┌─────────┐                                  │
+│  │  Opto   │  Optocoupler Board 1             │
+│  │ Board 1 │  (8 zone signals)                │
 │  └─────────┘                                  │
 │                                               │
 │  ┌─────────┐                                  │
@@ -178,13 +196,13 @@ All new components mount on the **inside of the front panel**, alongside the exi
 │                                               │
 │  ═══════════ Velcro strip ══════════════      │
 └──────────────────────────────────────────────┘
+
+Wires crossing the Velcro gap to main enclosure:
+  • 8 zone signal piggyback wires (from relay contacts)
+  • 3 status LED signal wires
+  • 12V power feed (2 wires: +12V and GND)
+  → Use a connector (Molex/JST) at the gap for clean detach
 ```
-
-The front panel detaches via Velcro. The only wire crossing the Velcro gap:
-- 12V power feed (2 wires: +12V and GND) from main enclosure terminal block to buck converter
-- Status LED signal wires (3 wires) if status LEDs are driven from the PLC side
-
-Use a small connector (Molex or JST) at the Velcro gap so the panel can be fully detached for service.
 
 ## Commissioning Steps
 
@@ -204,11 +222,11 @@ Use a small connector (Molex or JST) at the Velcro gap so the panel can be fully
 
 ### Phase 3: Install Hardware
 
-1. Mount buck converter, ESP32, and opto boards on front panel
+1. Mount buck converter, ESP32, and opto boards on inside of front panel
 2. Wire buck converter to 12V source (via connector at Velcro gap)
-3. Wire 8 zone piggyback taps to Opto Board 1 inputs
+3. Wire 8 zone piggyback taps from relay contacts in enclosure to Opto Board 1 inputs (via connector at Velcro gap)
 4. Wire Opto Board 1 outputs to ESP32 GPIOs
-5. Wire 3 status signals to Opto Board 2 inputs
+5. Wire 3 status LED signals to Opto Board 2 inputs (via connector at Velcro gap)
 6. Wire Opto Board 2 outputs to ESP32 GPIOs
 7. Wire ESP32 3.3V and GND to both opto board output sides
 
