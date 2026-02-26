@@ -1,6 +1,6 @@
 ---
 name: aridbilge-expert
-description: Arid Bilge Systems Series 4 expertise for Doug's 8-zone vacuum dehumidification system and its ESP32/SensESP/SignalK integration. Use when working on the Arid Bilge monitoring project, wiring optocouplers to zone relay outputs, writing SensESP firmware for zone tracking, designing SignalK data paths for bilge analytics, or troubleshooting the PLC-based control system. Covers internal hardware (DirectLogic 05 PLC, D0-08TR relay expansion, NResearch solenoid valves), the hour meter relay tap strategy, optocoupler isolation, GPIO pin assignments, and the full SignalK data model for zone runtime analytics.
+description: Arid Bilge Systems Series 4 expertise for Doug's 8-zone vacuum dehumidification system and its ESP32/SensESP/SignalK integration. Use when working on the Arid Bilge monitoring project, wiring optocouplers to hour meter terminals, writing SensESP firmware for zone tracking, designing SignalK data paths for bilge analytics, or troubleshooting the PLC-based control system. Covers internal hardware (DirectLogic 05 PLC, D0-08TR relay expansion, NResearch solenoid valves), the hour meter tap strategy, optocoupler isolation, GPIO pin assignments, and the full SignalK data model for zone runtime analytics.
 ---
 
 # Arid Bilge Expert
@@ -52,22 +52,29 @@ Zone names in camelCase: `sailLocker`, `frontCabin`, `galley`, `portBilge`, `gen
 ## Integration Architecture
 
 ```
-Arid PLC (D0-08TR relay outputs)
-    │
-    ▼
-Hour Meter Relays (8x on front panel)
-    │
-    ├── Existing hour meter displays (unchanged)
-    │
-    ▼ (piggyback tap)
-8-ch PC817 Optocoupler Board #1 ──► ESP32 GPIO 4,5,13,14,16,17,18,19
-                                        │
-3x Status LEDs ──► Optocoupler Board #2 ──► ESP32 GPIO 21,22,23
-                                        │
-                                    SensESP
-                                        │
-                                    SignalK Server (WebSocket)
+Arid PLC → D0-08TR relays → Hour Meter Relays (inside enclosure)
+                                    │
+                          colored signal wires
+                                    │
+                                    ▼
+                        Hour Meter Terminals (on front panel)
+                                    │
+                    ┌───────────────┤
+                    │               │
+              (unchanged)     (piggyback tap)
+                    │               │
+                    ▼               ▼
+              Hour Meters    8-ch PC817 Opto Board #1 → ESP32 GPIOs
+                                                           │
+              Status LEDs → 8-ch PC817 Opto Board #2 → ESP32 GPIOs
+                                                           │
+                                                       SensESP
+                                                           │
+                                                    SignalK Server
 ```
+
+All signal taps are at the front panel (hour meter terminals + LED wires).
+Only 12V power crosses the Velcro gap from main enclosure to front panel.
 
 Power: 12V from Arid terminal block → Buck converter (12V→5V) → ESP32 USB/VIN
 
@@ -90,8 +97,9 @@ Power: 12V from Arid terminal block → Buck converter (12V→5V) → ESP32 USB/
 | Optocoupler Boards | 2x AOICRIE 8-channel PC817, 3.6-24V input, 3.6-30V output |
 | ESP32 | TBD dev board (must have 11+ GPIO with internal pullup) |
 | Buck Converter | MP1584 or LM2596, 12V→5V, for ESP32 power |
-| Front Panel | Velcro-attached, removable |
-| Mounting | ESP32 + opto boards inside enclosure, on front panel |
+| Front Panel | Velcro-attached, removable — hour meters, reset, LEDs on exterior |
+| Tap Points | Hour meter terminals + LED wires on front panel interior |
+| Mounting | ESP32 + opto boards on inside of front panel |
 
 ## Key Documentation
 
