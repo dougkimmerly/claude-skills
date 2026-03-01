@@ -17,6 +17,7 @@ This repository contains modular skills that any Claude instance (PM or CC) can 
 | `powernet-expert` | Maretron MPower digital switching, CLMD12/16, CKM12, PGNs | powernet, any MPower installation |
 | `centralsk` | CentralSK boat server — architecture, services, Docker, SignalK, NMEA2000 | centralsk, dk400-boat |
 | `galley-expert` | Galley Meal Planner PWA — recipe management, meal planning, inventory sync, offline-first patterns | galley-meal-planner |
+| `imaging-expert` | Imaging service — shared document/image storage, REST API, WebDAV scanning, scan sessions, XMP metadata, thumbnails | imaging-service, cruising-app (maintenance) |
 | `victron-expert` | Victron energy systems | Coming soon |
 
 ## Usage
@@ -134,6 +135,14 @@ centralsk/
 └── skill.md              # Boat server architecture, services, commands
 ```
 
+### imaging-expert
+```
+imaging-expert/
+└── SKILL.md              # REST API, WebDAV, scan sessions, XMP, client integration recipes
+```
+
+Source of truth: `imaging-service/.claude/skills/imaging-expert/SKILL.md`
+
 ### galley-expert
 ```
 galley-expert/
@@ -161,6 +170,7 @@ galley-expert/
 | centralsk | Boat server | centralsk, signalk-expert |
 | dk400-boat | dk400 boat deployment | centralsk, dk400 |
 | galley-meal-planner | PWA | galley-expert |
+| imaging-service | Service | imaging-expert |
 
 ## Support Links
 
