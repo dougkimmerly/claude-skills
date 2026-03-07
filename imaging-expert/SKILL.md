@@ -1,6 +1,6 @@
 ---
 name: imaging-expert
-description: Imaging service development expertise for the shared document/image storage system on Distant Shores II. Use when uploading, storing, querying, or serving documents and images from any app — maintenance, clearing, inventory, manuals, galley, boat-log. Covers REST API, WebDAV scanning, scan sessions, XMP metadata, thumbnails, full-text search, and client integration.
+description: Imaging service development expertise for the shared document/image storage system on Distant Shores II. Use when uploading, storing, querying, or serving documents and images from any app — maintenance, clearing, inventory, manuals, galley, boat-log. Covers REST API, WebDAV scanning, scan sessions, XMP metadata, thumbnails, full-text search, semantic search (pgvector + Ollama embeddings), OCR, and client integration.
 triggers:
   - imaging
   - documents
@@ -14,6 +14,9 @@ triggers:
   - webdav
   - document storage
   - file upload
+  - semantic search
+  - embeddings
+  - ollama
   - invoice
   - manual
   - attachment
@@ -73,9 +76,9 @@ On upload, SHA-256 of file content is checked against `cruising.documents.conten
 | Runtime | Node.js 20 (Alpine) |
 | Server | Express 4 |
 | Database | PostgreSQL (`dk400`, schema: `cruising`) |
-| File Processing | Sharp (thumbnails, HEIC), exiftool-vendored (XMP), pdftoppm (PDF thumbnails) |
+| File Processing | Sharp (thumbnails, HEIC), exiftool-vendored (XMP), pdftoppm (PDF thumbnails), pdftotext + Tesseract (OCR), Ollama nomic-embed-text (embeddings) |
 | Upload | Multer (multipart), WebDAV (Genius Scan+) |
-| Container | Docker (node:20-alpine + vips-dev + perl + poppler-utils) |
+| Container | Docker (node:20-alpine + vips-dev + perl + poppler-utils + tesseract-ocr) |
 | Port | 3100 |
 | Network | `boat` Docker bridge |
 
@@ -89,12 +92,18 @@ imaging-service/
 │   ├── db.js              # PostgreSQL CRUD for cruising.documents
 │   ├── thumbnails.js      # Sharp: 200x200 thumb + 800x800 preview (WebP)
 │   ├── webdav.js          # WebDAV router for Genius Scan+ auto-sync
-│   └── xmp.js             # ExifTool: embed metadata into JPEG/PNG/PDF files
+│   ├── xmp.js             # ExifTool: embed metadata into JPEG/PNG/PDF files
+│   ├── ocr.js             # Text extraction: pdftotext first, Tesseract OCR fallback
+│   └── embeddings.js      # Text chunking + Ollama nomic-embed-text (768-dim vectors)
 ├── schema/
-│   └── 002-documents.sql  # Table, 7 indexes, auto-update trigger
+│   ├── 002-documents.sql  # Table, 7 indexes, auto-update trigger
+│   └── 003-document-chunks.sql  # Chunks table + HNSW index for semantic search
 ├── scripts/
 │   ├── migrate-from-docstore.js  # One-time migration from old DocumentStore
 │   ├── backfill-xmp.js           # Embed XMP into existing documents
+│   ├── import-manuals.js         # Import manuals from DSII Manuals collection
+│   ├── ocr-manuals.js            # Batch OCR (--dry-run, --limit, --id, --reprocess)
+│   ├── embed-manuals.js          # Batch embed (--dry-run, --limit, --id, --rechunk)
 │   └── smoke-test.sh             # Integration tests (REST + WebDAV + scan sessions)
 ├── compose.yaml
 ├── Dockerfile
@@ -138,8 +147,11 @@ GET    /documents/:id/extraction    Retrieve extraction results
 ### Search
 
 ```
-GET    /search?q=fuel+filter   Full-text search across caption + extracted_text
-                                Optional: &app=&limit=
+GET    /search?q=fuel+filter          Full-text search (keyword match on caption + extracted_text)
+                                       Optional: &app=&limit=
+GET    /search/semantic?q=...          Semantic search via pgvector + Ollama embeddings
+                                       Natural language queries (e.g. "oil capacity of the yanmar")
+                                       Optional: &app=&category=&limit=
 ```
 
 ### Scan Sessions
@@ -185,7 +197,7 @@ Virtual filesystem:
 ### Health
 
 ```
-GET    /health                 { status, postgres, documents, storage, uptime }
+GET    /health                 { status, postgres, documents, storage, chunks, ollama, uptime }
 ```
 
 ## Database Schema
@@ -217,6 +229,21 @@ Table: `cruising.documents` (shared cruising schema on dk400-postgres)
 | `updated_at` | TIMESTAMPTZ | Last update (trigger) |
 
 Key indexes: app, app+category, GIN on tags, content_hash, GIN full-text on caption+extracted_text.
+
+### Document Chunks (Semantic Search)
+
+Table: `cruising.document_chunks` — stores chunked text with vector embeddings.
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `id` | SERIAL PK | Auto-increment chunk ID |
+| `doc_id` | TEXT FK | References `documents(id)`, CASCADE delete |
+| `chunk_index` | INTEGER | Zero-based position within the document |
+| `chunk_text` | TEXT | ~500-token overlapping chunk of extracted text |
+| `embedding` | vector(768) | nomic-embed-text embedding, NULL until embedded |
+| `created_at` | TIMESTAMPTZ | Creation time |
+
+Key indexes: doc_id (btree), embedding (HNSW with vector_cosine_ops).
 
 ## Three-Layer Metadata Recovery
 
@@ -367,6 +394,7 @@ Sharp generates 200x200 thumbnails and 800x800 previews as WebP (quality 80).
 | `MAX_UPLOAD_MB` | 20 | Maximum upload size |
 | `WEBDAV_USER` | — | WebDAV Basic auth username (enables WebDAV if set) |
 | `WEBDAV_PASS` | — | WebDAV Basic auth password |
+| `OLLAMA_URL` | http://ollama:11434 | Ollama server URL for embeddings |
 
 ## Deployment
 
@@ -395,8 +423,183 @@ WEBDAV_USER=scan WEBDAV_PASS=scan bash scripts/smoke-test.sh http://localhost:31
 6. **UID 100** — container runs as non-root imaging user; volume dirs must be owned by 100:101
 7. **Parameterized queries** — never interpolate SQL
 
+## OCR / Text Extraction
+
+`lib/ocr.js` extracts text from PDFs and images for full-text search:
+
+1. **pdftotext** (instant) — tries embedded text first; used if >= 50 chars returned
+2. **Tesseract OCR** (fallback) — renders pages to PNG via pdftoppm at 300 DPI, OCRs each page
+
+Batch script: `scripts/ocr-manuals.js`
+- `--dry-run` — show what would be processed
+- `--limit N` — process only N documents
+- `--id doc-xxx` — process a single document
+- `--reprocess` — re-run pdftotext on all docs (upgrades OCR'd text to cleaner embedded text)
+
+Results stored in PG: `extracted=true`, `extracted_text`, `extraction` (method, pages, chars, duration).
+Full-text search GIN index covers `extracted_text` automatically.
+
+**Current stats:** 431/489 manuals extracted (352 via pdftotext, 79 via Tesseract OCR), 10,503 pages, 17.8M chars.
+
+## Semantic Search / Embeddings
+
+`lib/embeddings.js` chunks extracted text and generates 768-dimensional vector embeddings via Ollama's `nomic-embed-text` model. Enables natural language queries like "oil capacity of the yanmar" or "how to replace the impeller".
+
+### Architecture
+
+```
+Query → Ollama embed → pgvector cosine similarity → ranked results with chunk context
+```
+
+**Infrastructure:** Requires `pgvector/pgvector:pg16` (postgres image) and an `ollama` container with `nomic-embed-text` model on the `boat` network.
+
+### Chunking Strategy
+
+- Split on paragraph boundaries (`\n\n`)
+- Merge short paragraphs up to ~2000 chars (~500 tokens)
+- Split long paragraphs at sentence boundaries
+- 400-char (~100-token) overlap between adjacent chunks
+- Preserves OCR page markers for context
+
+### Embed Cleaning
+
+Before embedding, text is cleaned to reduce token inflation from OCR artifacts:
+- Trailing whitespace trimmed per line
+- Repeated ASCII dots (`.....`) collapsed to `...`
+- Repeated Unicode ellipsis (`……`) collapsed
+- Repeated underscores, dashes, newlines collapsed
+- Text truncated to 8000 chars (nomic-embed-text has 8192-token context)
+
+### Batch Script
+
+`scripts/embed-manuals.js` — chunks and embeds all extracted manuals.
+
+- `--dry-run` — show chunk counts without embedding
+- `--limit N` — process only N documents
+- `--id doc-xxx` — process a single document
+- `--rechunk` — delete existing chunks and re-embed from scratch
+
+Resumable: skips documents that already have chunks (unless `--rechunk`).
+
+### Client Usage
+
+```javascript
+// Semantic search — natural language query
+const res = await fetch(`${IMAGING}/api/v1/search/semantic?q=how+to+winterize+the+engine`);
+const { results } = await res.json();
+// results[]: { chunk_text, chunk_index, similarity, id, original_filename, app, category, ... }
+
+// With filters
+const res2 = await fetch(`${IMAGING}/api/v1/search/semantic?q=oil+change&app=manuals&limit=5`);
+```
+
+**Current stats:** 423 docs chunked, 11,033 chunks embedded, ~1.1s per chunk average.
+
+## Embeddable Components
+
+Reusable UI components served at `/components/`. Any app includes two tags:
+
+```html
+<link rel="stylesheet" href="http://centralsk:3100/components/imaging-components.css">
+<script src="http://centralsk:3100/components/imaging-components.js"></script>
+```
+
+### PhotoGallery — Entity-Scoped Gallery
+
+```javascript
+// Show all photos for a maintenance job, with upload + caption + delete
+const gallery = new Imaging.PhotoGallery(document.getElementById('photos'), {
+  app: 'maintenance',
+  entityType: 'job',
+  entityId: 'JOB-1074',
+  allowUpload: true,
+  allowDelete: true,
+  allowCaption: true,
+  compact: false     // true = single 48x48 thumbnail for table rows
+});
+// Events: img:uploaded, img:deleted, img:captionChanged, img:loaded
+// Public: load(), getCount(), destroy()
+```
+
+### DocumentBrowser — Embeddable Browse/Search Panel
+
+```javascript
+// Full document browser scoped to manuals
+const browser = new Imaging.DocumentBrowser(document.getElementById('docs'), {
+  app: 'manuals',        // scope to app (null = all)
+  showSearch: true,
+  showUpload: true,
+  showDetail: true,      // split-view detail panel
+  height: '600px'
+});
+// Events: img:documentSelected, img:documentDeleted
+// Public: load(), setFilter({ app, category }), search(q), destroy()
+```
+
+### UploadWidget — Standalone Upload
+
+```javascript
+const uploader = new Imaging.UploadWidget(document.getElementById('upload'), {
+  app: 'maintenance',
+  category: 'JOB-1074',
+  tags: { job_id: 'JOB-1074' }
+});
+// Events: img:uploaded, img:uploadError
+```
+
+### ScanSession — iPhone Scan Integration
+
+```javascript
+const scanner = new Imaging.ScanSession(document.getElementById('scan'), {
+  app: 'maintenance',
+  category: 'JOB-1074',
+  doc_type: 'invoice',
+  tags: { job_id: 'JOB-1074' },
+  pollInterval: 2500
+});
+// Events: img:scanMatched, img:scanExpired
+// Public: start(), cancel()
+```
+
+### Token Auth for Components
+
+```javascript
+// Set token globally for all components
+Imaging.setToken('your-bearer-token');
+
+// Or per-component
+new Imaging.PhotoGallery(el, { token: 'your-bearer-token', ... });
+```
+
+### Theme Inheritance
+
+Components use CSS custom properties with `img-` prefix. They auto-inherit from the host app if these variables are defined:
+
+```
+--bg-primary, --bg-secondary, --bg-card, --bg-card-hover,
+--text-primary, --text-secondary, --text-muted,
+--accent, --accent-hover, --success, --warning, --danger, --border
+```
+
+### Server-Side Node.js Client
+
+`lib/imaging-client.js` wraps the REST API for use from any Node.js app:
+
+```javascript
+const ImagingClient = require('./lib/imaging-client');
+const client = new ImagingClient({
+  baseUrl: 'http://imaging:3100',
+  token: process.env.IMAGING_TOKEN
+});
+
+// List, search, scan sessions
+const docs = await client.list({ app: 'maintenance', tags: { job_id: 'JOB-1074' } });
+const results = await client.search('fuel filter');
+const semantic = await client.searchSemantic('how to replace impeller');
+const session = await client.createScanSession({ app: 'maintenance', category: 'JOB-1074' });
+```
+
 ## Future Work
 
 - **Replication** — rsync files + app-level PG sync between boat (centralsk) and home server
-- **Manuals Knowledge Base** — import ~595 marine equipment manuals, OCR with Tesseract, pgvector embeddings for semantic search
-- **RAG** — pgvector column, chunking pipeline, embedding generation, natural-language document queries
+- **Migrate maintenance photo-manager.js** to use `Imaging.PhotoGallery` component
