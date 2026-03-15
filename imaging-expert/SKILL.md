@@ -20,6 +20,11 @@ triggers:
   - invoice
   - manual
   - attachment
+  - triage
+  - classify
+  - extraction
+  - immigration
+  - clearance
 ---
 
 # Imaging Expert
@@ -94,7 +99,14 @@ imaging-service/
 │   ├── webdav.js          # WebDAV router for Genius Scan+ auto-sync
 │   ├── xmp.js             # ExifTool: embed metadata into JPEG/PNG/PDF files
 │   ├── ocr.js             # Text extraction: pdftotext first, Tesseract OCR fallback
-│   └── embeddings.js      # Text chunking + Ollama nomic-embed-text (768-dim vectors)
+│   ├── embeddings.js      # Text chunking + Ollama nomic-embed-text (768-dim vectors)
+│   ├── triage.js          # AI document triage engine (Claude API classification + extraction)
+│   └── triage-modules/    # Module definitions (auto-loaded on startup)
+│       ├── index.js       # Registry: auto-scans directory, loads all .js module defs
+│       ├── maintenance.js # Invoices, quotes, receipts, work orders
+│       ├── immigration.js # Clearance forms, port invoices, zarpes, permits
+│       ├── fuel.js        # Fuel receipts, marina fuel dock invoices
+│       └── manuals.js     # Equipment manuals, wiring diagrams, tech docs
 ├── schema/
 │   ├── 002-documents.sql  # Table, 7 indexes, auto-update trigger
 │   └── 003-document-chunks.sql  # Chunks table + HNSW index for semantic search
@@ -142,6 +154,16 @@ GET    /documents/:id/preview  Preview 800x800 WebP
 ```
 PUT    /documents/:id/extraction    Save extraction JSON
 GET    /documents/:id/extraction    Retrieve extraction results
+```
+
+### Document Triage (AI classification + structured extraction)
+
+```
+POST   /documents/:id/triage        Classify and extract — returns result only (no side effects)
+                                     Body: { active_jobs?, equipment?, user_instructions? }
+POST   /documents/:id/auto-triage   Classify, extract, AND apply results to document
+                                     Body: { active_jobs?, equipment?, user_instructions? }
+GET    /triage/modules              List registered modules and their extraction schemas
 ```
 
 ### Search
@@ -395,6 +417,7 @@ Sharp generates 200x200 thumbnails and 800x800 previews as WebP (quality 80).
 | `WEBDAV_USER` | — | WebDAV Basic auth username (enables WebDAV if set) |
 | `WEBDAV_PASS` | — | WebDAV Basic auth password |
 | `OLLAMA_URL` | http://ollama:11434 | Ollama server URL for embeddings |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key (required for document triage) |
 
 ## Deployment
 
@@ -598,6 +621,126 @@ const results = await client.search('fuel filter');
 const semantic = await client.searchSemantic('how to replace impeller');
 const session = await client.createScanSession({ app: 'maintenance', category: 'JOB-1074' });
 ```
+
+## Document Triage (AI Classification + Extraction)
+
+Universal document intelligence powered by Claude Sonnet. Classifies documents into modules and extracts module-specific structured data.
+
+### Registered Modules
+
+| Module | Handles | Key extraction fields |
+|--------|---------|----------------------|
+| `maintenance` | Invoices, quotes, receipts, work orders, parts lists | vendor, costs[], parts[], equipment[], total_amount, invoice_number |
+| `immigration` | Clearance forms, port invoices, zarpes, permits, registrations | country, port, visit_type, date, fees_usd, fees_local, permit_number, crew_count |
+| `fuel` | Fuel receipts, marina fuel dock invoices | litres, cost, price_per_litre, fuel_type, location, date |
+| `manuals` | Equipment manuals, wiring diagrams, spec sheets | manufacturer, model, equipment_name, doc_subtype |
+
+**Extensible:** Add a new module by creating a `.js` file in `lib/triage-modules/`. The registry auto-loads it and the AI prompt auto-includes it. No changes to core triage logic needed.
+
+### Iterative Triage Workflow
+
+The triage system is designed for iterative refinement. The `POST /documents/:id/triage` endpoint is read-only — it returns a classification but does not modify the document. This lets a client call it multiple times with increasing context until satisfied, then apply the result.
+
+**Step 1: Initial triage (no context)**
+```javascript
+// First pass — AI classifies from document content alone
+const result = await fetch(`${IMAGING}/api/v1/documents/${docId}/triage`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({})
+});
+// result: { module: "maintenance", doc_type: "invoice", caption: "FKG Marine invoice for impeller replacement", extraction: { vendor: "FKG Marine", costs: [...] }, confidence: 0.85 }
+```
+
+**Step 2: Reassess with context**
+```javascript
+// User sees the result and wants to refine — provide additional context
+const result2 = await fetch(`${IMAGING}/api/v1/documents/${docId}/triage`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    active_jobs: [
+      { id: 'JOB-1074', title: 'Impeller replacement', stage: 'in-progress', system: 'Engine', equipment: 'Raw water pump' }
+    ],
+    equipment: [
+      { id: 'EQ-042', name: 'Yanmar 4JH5E Raw Water Pump', system: 'Engine' }
+    ],
+    user_instructions: 'This is the final invoice from FKG for the impeller job'
+  })
+});
+// result2: { module: "maintenance", job_id: "JOB-1074", equipment_id: "EQ-042", confidence: 0.95 }
+```
+
+**Step 3: Apply when satisfied**
+```javascript
+// Lock in the result — updates app, category, tags, caption, extraction on the document
+const { triage, document } = await fetch(`${IMAGING}/api/v1/documents/${docId}/auto-triage`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    active_jobs: [...],
+    equipment: [...],
+    user_instructions: 'This is the final invoice from FKG for the impeller job'
+  })
+}).then(r => r.json());
+```
+
+**Key points:**
+- `triage` is read-only — call it as many times as needed, it never modifies the document
+- `auto-triage` classifies AND applies — use only when the user is satisfied with the result
+- `user_instructions` is injected as highest-priority context (same pattern as maintenance email-analyzer)
+- Context (active_jobs, equipment) improves matching but is optional — triage works without it
+- The AI is told explicitly not to guess or fabricate values — only fields present in the document are extracted
+
+### Server-Side Client
+
+```javascript
+const ImagingClient = require('./lib/imaging-client');
+const client = new ImagingClient({ baseUrl: 'http://imaging:3100' });
+
+// Read-only triage
+const result = await client.triage(docId, {
+  active_jobs: [...],
+  equipment: [...],
+  user_instructions: 'invoice for keel work'
+});
+
+// Triage + apply
+const { triage, document } = await client.autoTriage(docId, {
+  active_jobs: [...],
+  equipment: [...]
+});
+
+// List available modules
+const { modules } = await client.triageModules();
+```
+
+### WebDAV Auto-Triage
+
+Documents uploaded via WebDAV (Genius Scan+) are automatically triaged after ingest if `ANTHROPIC_API_KEY` is set. A 5-second delay allows the background OCR to complete first. Results are applied immediately (same as auto-triage). This means scanning a clearance form auto-classifies it as immigration without any manual step.
+
+### Adding a New Module
+
+Create a file in `lib/triage-modules/` (e.g., `inventory.js`):
+
+```javascript
+module.exports = {
+  name: 'inventory',
+  description: 'Spare parts inventory: purchase orders, packing slips, inventory counts.',
+  doc_types: ['purchase_order', 'packing_slip', 'inventory_count', 'receipt'],
+  keywords: ['spare', 'parts', 'inventory', 'order', 'packing slip', 'stock'],
+  extraction_schema: {
+    vendor: { type: 'string', description: 'Supplier name' },
+    items: { type: 'array', items: { name: 'string', part_number: 'string', quantity: 'number' } },
+    order_number: { type: 'string', description: 'PO or order reference' },
+    total_cost: { type: 'number', description: 'Total cost' }
+  },
+  context_fields: {},
+  prompt_hint: 'For inventory documents: extract all line items with part numbers and quantities.'
+};
+```
+
+That's it — restart the service and the new module appears in `GET /triage/modules` and is included in all triage prompts automatically.
 
 ## Future Work
 
