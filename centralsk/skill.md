@@ -6,24 +6,30 @@ CentralSK is the primary compute server for Distant Shores II. Ubuntu 24.04 LTS 
 
 | Info | Value |
 |------|-------|
-| Staging IP | 192.168.20.209 (house network) |
-| Production IP | 192.168.22.15 (boat Ethernet) |
-| SSH | `ssh doug@192.168.20.209` (staging) |
+| Ethernet IP | 192.168.22.15 (boat network) |
+| WiFi IP | 192.168.22.18 (boat network, backup) |
+| SSH | `ssh doug@192.168.22.15` |
 | OS | Ubuntu 24.04 LTS |
+| Hardware | XCY X63G fanless industrial mini PC |
+| CPU | Intel i7-9750H (6C/12T), 32GB DDR4, 1TB NVMe |
+| Power | DC 9V-36V input, ATX/AT switch for auto-power-on |
+| Serial/GPIO | 6x DB9 COM (RS232/422/485), 14x GPIO |
+| BIOS | AMI v5.13 (2022-11-09) |
+| Status | **LIVE** on Distant Shores II |
 
 ---
 
 ## Architecture
 
 ```
-CentralSK (.15 boat / .209 staging)
+CentralSK (.15 Ethernet / .18 WiFi)
 │
 ├── NATIVE SERVICES (systemd)
-│   └── SignalK Server v2.19.1
+│   └── SignalK Server v2.19.1 (Node v20.19.6)
 │       ├── Port 3000 (API/WebSocket/Admin)
 │       ├── Node-RED (plugin)
-│       ├── iKonvert NavNet (/dev/ikonvert-nav)
-│       └── iKonvert PowerNet (/dev/ikonvert-power)
+│       ├── iKonvert NavNet (/dev/ikonvert-nav) — 30 devices
+│       └── iKonvert PowerNet (/dev/ikonvert-power) — 18 devices
 │
 ├── DOCKER — /opt/centralsk/ (dougkimmerly/centralsk repo)
 │   ├── NPM (80, 443, 81) — Reverse proxy
@@ -45,7 +51,9 @@ CentralSK (.15 boat / .209 staging)
 ├── DOCKER NETWORK
 │   └── boat (external) — All services interconnected
 │
-└── DATA SOURCES (boat network)
+└── DATA SOURCES
+    ├── iKonvert Nav (USB, B400BI8S) — NavNet NMEA2000 (RAW mode 15, 230400 baud)
+    ├── iKonvert Power (USB, B400BI8Z) — PowerNet NMEA2000 (RAW mode 15, 230400 baud)
     ├── Power Net Pi (.14) — Maretron MPower
     ├── Nav Net Pi (.16) — GPS, AIS, instruments
     └── Victron GX (.25) — Battery/MPPT
@@ -88,8 +96,7 @@ CentralSK (.15 boat / .209 staging)
 
 ```bash
 # SSH
-ssh doug@192.168.20.209  # staging
-ssh doug@192.168.22.15   # production
+ssh doug@192.168.22.15
 
 # SignalK
 sudo systemctl status signalk
@@ -118,7 +125,26 @@ docker exec -it dk400-postgres psql -U dk400 dk400
 
 # iKonvert devices
 ls -la /dev/ikonvert* /dev/ttyUSB*
+
+# SignalK API (with auth token)
+SK_TOKEN="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJkZXZpY2UiOiJjbGF1ZGUtY29kZSIsImlhdCI6MTc3MzY4MjE3Nn0.YIkHGp8nYZhqjyfOiymYG2vzBBor4KXptwrZja195ek"
+curl -s -H "Authorization: Bearer $SK_TOKEN" http://localhost:3000/skServer/providers
+curl -s -H "Authorization: Bearer $SK_TOKEN" http://localhost:3000/signalk/v1/api/vessels/self/
 ```
+
+---
+
+## iKonvert USB Gateways
+
+| Property | NavNet | PowerNet |
+|----------|--------|----------|
+| Serial | B400BI8S | B400BI8Z |
+| Symlink | /dev/ikonvert-nav | /dev/ikonvert-power |
+| Mode | 15 (RAW) — all DIP switches ON | 15 (RAW) — all DIP switches ON |
+| Baud | 230400 | 230400 |
+| Firmware | v3.34 | v3.34 |
+| Provider type | `ikonvert-canboatjs` via `providers/simple` | `ikonvert-canboatjs` via `providers/simple` |
+| N2K devices | 30 (GPS, AIS, autopilot, MPPT, etc.) | 18 (CLMD16 breakers, CKM12 keypads) |
 
 ---
 
@@ -128,12 +154,13 @@ ls -la /dev/ikonvert* /dev/ttyUSB*
 |----|--------|---------|
 | .1 | Peplink | Router, DHCP, backup DNS |
 | .14 | Power Net Pi | NMEA2000 power network |
-| .15 | CentralSK | Main server |
+| .15 | CentralSK | Main server (Ethernet) |
+| .18 | CentralSK | Main server (WiFi, backup) |
 | .16 | Nav Net Pi | NMEA2000 nav network |
 | .25 | Victron GX | Battery/MPPT |
 
-- **House staging:** 192.168.20.0/24
-- **Boat production:** 192.168.22.0/24
+- **Boat network:** 192.168.22.0/24 (LIVE)
+- **House staging retired** (was 192.168.20.209)
 - **VPN:** Peplink SpeedFusion (primary), Tailscale (backup)
 
 ---
