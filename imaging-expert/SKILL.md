@@ -107,6 +107,11 @@ imaging-service/
 │       ├── immigration.js # Clearance forms, port invoices, zarpes, permits
 │       ├── fuel.js        # Fuel receipts, marina fuel dock invoices
 │       └── manuals.js     # Equipment manuals, wiring diagrams, tech docs
+│   ├── rag.js             # RAG engine: retrieval + Claude answer generation
+│   ├── classify.js        # Post-OCR content-based doc_type + caption classification
+│   └── equipment-resolver.js  # Maps natural language → specific boat equipment
+├── mcp/
+│   └── server.js          # MCP server for Claude Code (runs on dev Mac)
 ├── schema/
 │   ├── 002-documents.sql  # Table, 7 indexes, auto-update trigger
 │   └── 003-document-chunks.sql  # Chunks table + HNSW index for semantic search
@@ -742,7 +747,93 @@ module.exports = {
 
 That's it — restart the service and the new module appears in `GET /triage/modules` and is included in all triage prompts automatically.
 
+## RAG Q&A (Retrieval-Augmented Generation)
+
+Ask natural language questions about the boat and get answers grounded in the document library.
+
+### Endpoint
+
+```
+POST /api/v1/ask
+Body: { question, app?, category?, limit?, structured_context? }
+Returns: { answer, sources: [{ id, filename, app, category, caption, doc_type, similarity }] }
+```
+
+### How It Works
+
+Three-layer hybrid retrieval:
+1. **Semantic search** — embed question via Ollama, pgvector cosine similarity
+2. **Full-text search** — PostgreSQL GIN index keyword matching (catches docs semantic misses)
+3. **Equipment-targeted search** — resolves equipment references ("the engine" → Yanmar 4JH5E), then full-text searches within those equipment's tagged documents
+
+Equipment resolver (`lib/equipment-resolver.js`) maps common names to specific gear via an alias table + cruising.equipment DB lookup. Also includes removed equipment flagged as REMOVED/REPLACED so Claude can answer questions about previous gear.
+
+After retrieval, sends top chunks + equipment context to Claude Sonnet for a grounded answer with source citations.
+
+### RAG Quality Notes
+
+- **Manuals** — work well, equipment-targeted search finds the right sections
+- **Invoices/receipts** — OCR'd and embedded, work for vendor/cost queries
+- **Immigration docs** — re-embedded using synthesized text from triage extraction (raw OCR from handwritten forms is garbage)
+- **Structured data** (fuel logs, port visits) — lives in cruising-app DB, not documents. Use `structured_context` field to inject DB records alongside document chunks
+- **Post-OCR classification** — `lib/classify.js` auto-detects invoice/quote/receipt from text content and generates captions
+
+### Client Usage
+
+```javascript
+// Server-side
+const result = await client.ask('What is the oil capacity of the engine?');
+// { answer: "5.5 ± 0.3 L at 0° rake...", sources: [...] }
+
+// With structured context from calling app's DB
+const result = await client.ask('How much fuel in Florida?', {
+  structured_context: 'Fuel records:\n- 2023-01-15 Marathon FL: 200L diesel $340\n...'
+});
+```
+
+## MCP Server (Claude Code Integration)
+
+Every Claude Code instance can query the boat's knowledge base via MCP tools.
+
+**Location:** `mcp/server.js` — runs locally on dev Mac, HTTP calls to centralsk:3100
+**Config:** `~/.claude.json` → `mcpServers.boat-docs`
+
+### Tools
+
+| Tool | Purpose |
+|------|---------|
+| `ask_about_boat` | **Primary tool.** Full RAG Q&A with hybrid retrieval + equipment resolution |
+| `search_boat_docs` | Fallback: raw semantic search returning text chunks |
+| `get_boat_document` | Get metadata for a specific document by ID |
+| `list_boat_equipment` | Equipment lookup by system or search term |
+
+### Configuration
+
+```json
+// In ~/.claude.json under mcpServers:
+"boat-docs": {
+  "type": "stdio",
+  "command": "node",
+  "args": ["/path/to/imaging/mcp/server.js"],
+  "env": { "IMAGING_URL": "http://192.168.22.15:3100" }
+}
+```
+
+## Batch Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/ocr-manuals.js` | Batch OCR (`--app maintenance --dry-run`, `--reprocess`) |
+| `scripts/embed-manuals.js` | Batch embed (`--app maintenance --rechunk`) |
+| `scripts/batch-triage.js` | Batch AI triage (`--app maintenance --apply`) |
+| `scripts/reembed-triaged.js` | Re-embed with synthesized text from triage data (`--app immigration --apply`) |
+| `scripts/reclassify-docs.js` | Reclassify doc_type/caption from content (`--apply`) |
+| `scripts/import-manuals.js` | Import manuals from source directory |
+
+All scripts support `--dry-run`, `--app`, `--id`, `--limit` flags.
+
 ## Future Work
 
+- **Cruising app chat UI** — conversation page calling `/api/v1/ask`
+- **Structured context integration** — cruising app auto-injects DB records (fuel, immigration, jobs) alongside document queries
 - **Replication** — rsync files + app-level PG sync between boat (centralsk) and home server
-- **Migrate maintenance photo-manager.js** to use `Imaging.PhotoGallery` component
