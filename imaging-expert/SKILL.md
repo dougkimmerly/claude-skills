@@ -431,25 +431,36 @@ Sharp generates 200x200 thumbnails and 800x800 previews as WebP (quality 80).
 
 ## Deployment
 
+**Multi-site compose layout (2026-06-01).** One repo, one `main`, everything committed — no per-host uncommitted mods:
+- `compose.yaml` — shared, parameterized **base**; every per-site value is `${VAR:-default}` and the **defaults are the BOAT** (centralsk) deployment.
+- `compose.override.yaml` — **boat-only** structural extras (the `manuals-source:ro` mount + public `dns:`). Docker **auto-loads** it on a bare `docker compose up`, so the boat deploys exactly as before.
+- `deploy.sh [home|boat]` — injects per-site secrets from SOPS (`homelab-secrets/secrets/<site>/imaging-service.sops.yaml`) via `sops exec-env`. **Home** runs `-f compose.yaml` (explicit → skips the boat override); **boat** runs bare (base + override).
+- Per-site **config** lives in each host's `.env` (auto-read for `${VAR}` interpolation); per-site **secrets** in SOPS.
+
 ```bash
-# On centralsk
+# BOAT (centralsk) — not yet SOPS-migrated (Phase 3), so still deploys plaintext:
 cd /opt/dk400-boat/imaging-service
-git pull
-docker compose up -d --build
+git pull && docker compose up -d --build      # base + auto-loaded compose.override.yaml
 curl http://localhost:3100/health
 
-# Run smoke tests
+# HOME (docker-server) — secrets from SOPS:
+cd /opt/docker-server/imaging-service
+git pull && ./deploy.sh home                   # docker compose -f compose.yaml up, sops exec-env
+
+# Smoke tests
 WEBDAV_USER=scan WEBDAV_PASS=scan bash scripts/smoke-test.sh http://localhost:3100
 ```
 
-**Volume:** `/opt/dk400-boat/documents` → `/store` (owned by UID 100:101)
+**Volume (boat):** `/opt/dk400-boat/documents` → `/store` (owned by UID 100:101)
 **Database:** `dk400-postgres` container, `imaging.documents` table
 **Postgres volume:** `postgres_postgres_data` (compose-managed from `/opt/centralsk/postgres/`)
 **Network:** `boat` (external Docker bridge, shared with maintenance, dk400-postgres)
 
-### Multi-host / replica deployment (added 2026-05-05)
+> **Gotcha:** before this layout, both sites' compose **hardcoded** `MAX_UPLOAD_MB=20` while both `.env`s said `100` — the `.env` was ignored. The parameterized base honors the `.env`, so the effective limit is now **100** at both sites. Pin via `.env` if a different value is wanted.
 
-Imaging is deployed on multiple hosts. Each host is its own deployment with its own clone of `imaging-service` and its own `compose.yaml`/`.env`. Replication between hosts is governed by imaging-service ADR 0003 (3-layer hybrid: imaging-core via `/sync/*` HTTP, files via Syncthing, tenant side-effect schemas via postgres replication) and fixer ADR 0008 (cruising-schema scope and mechanism).
+### Multi-host / replica deployment (added 2026-05-05, updated 2026-06-01)
+
+Imaging is deployed on multiple hosts from **one shared repo** (see "Multi-site compose layout" above) — each host selects its config via `.env` + SOPS, not via a divergent committed `compose.yaml`. Replication between hosts is governed by imaging-service ADR 0003 (3-layer hybrid: imaging-core via `/sync/*` HTTP, files via Syncthing, tenant side-effect schemas via postgres replication) and fixer ADR 0008 (cruising-schema scope and mechanism).
 
 **Per-host deployment differences seen in the wild:**
 
@@ -460,7 +471,7 @@ Imaging is deployed on multiple hosts. Each host is its own deployment with its 
 | Docker network | `boat` | `homelab` |
 | Postgres image | `centralsk/postgres:pg16` (custom, with pgvector + PostGIS 3.4) | `dk400-postgres:pg16` (built from `dougkimmerly/dk400-postgres-image`, pgvector + PostGIS 3.6.3) — upgraded from `postgres:16-alpine` 2026-05-06 per ADR 0009 |
 | `PGUSER` | `dk400` | `fixer` (the local app role; `dk400` role exists but uses a different SCRAM password we don't have stored) |
-| Ollama | local container on `boat` network | not deployed; `OLLAMA_URL=""` |
+| Ollama | local container on `boat` network | `OLLAMA_URL=http://192.168.20.201:11434` (home Ollama host) |
 | `AUTH_LOCAL_SUBNETS` | `192.168.22.,172.` | `192.168.20.,172.` |
 | Tenants primary on this host | `maintenance, manuals, ports, receipts` | (future) `taxes, medical, legal, household` |
 
