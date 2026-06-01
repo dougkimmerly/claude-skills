@@ -71,16 +71,19 @@ git add -A && git commit -m "..." && git push
 #    Watch: gh run list --limit 1 --workflow=build.yml
 #    Typical: ~60s
 
-# 3. Pull + restart on docker-server
-ssh doug@192.168.20.19 "cd /opt/docker-server/command-centre && \
-  source .env && echo \$GHCR_TOKEN | docker login ghcr.io -u dougkimmerly --password-stdin && \
-  docker compose pull && docker compose up -d && docker logout ghcr.io"
+# 3. Pull + restart on docker-server — ALWAYS via deploy.sh (injects secrets from SOPS)
+ssh doug@192.168.20.19 "/opt/docker-server/command-centre/deploy.sh"
 
 # 4. Verify
 curl -s http://192.168.20.19:8080/health
 ```
 
-The `docker logout ghcr.io` is intentional — keeps credentials out of `~/.docker/config.json` between deploys (they live in `.env`, managed via Bitwarden).
+`deploy.sh` wraps the GHCR-login + `compose pull` + `up -d` in `sops exec-env`
+(secrets from `homelab-secrets/secrets/home/command-centre.sops.yaml`, ADR 0017),
+then `docker logout ghcr.io` to keep creds out of `~/.docker/config.json`. The
+`.env` now holds **non-secret config only**; `NETBOX_TOKEN`/`DK400_DB_URL`/
+`SIGNALK_TOKEN`/`GHCR_TOKEN` live in SOPS. Use the `secrets` skill to read/rotate
+them — never re-add a token to `.env`. (Bitwarden is retired, ADR 0017.)
 
 ---
 
@@ -230,7 +233,7 @@ Historical note: the old `GET /api/healthchecks/results` convenience route was r
 | `BRAIN_URL_PRIMARY` / `BACKUP` | `http://192.168.20.19:8420` / `192.168.20.16:8420` | Legacy health monitor (homelab-brain) |
 | `GHCR_TOKEN` | `(secret)` | `docker login` to pull image |
 
-All secrets live in `/opt/docker-server/command-centre/.env` and Bitwarden.
+Secrets (`NETBOX_TOKEN`, `DK400_DB_URL`, `SIGNALK_TOKEN`, `GHCR_TOKEN`) live in **SOPS** (`homelab-secrets/secrets/home/command-centre.sops.yaml`, ADR 0017), injected by `deploy.sh`. The on-disk `.env` holds non-secret config only. See the `secrets` skill.
 
 ---
 
