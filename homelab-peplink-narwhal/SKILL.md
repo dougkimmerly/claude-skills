@@ -1,0 +1,1 @@
+/Users/doug/Programming/dkSRC/infrastructure/homelab/.claude/skills/peplink-narwhal/skill.md

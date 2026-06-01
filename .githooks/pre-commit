@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Skills must NEVER embed secret values — they point to SOPS (ADR 0017).
+# This hook blocks a commit that contains one. Enable: git config core.hooksPath .githooks
+set -euo pipefail
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks git --pre-commit --staged --redact --no-banner || {
+    echo "BLOCKED: gitleaks found a secret in staged skill content. Reference SOPS (sops -d ...), don't embed."; exit 1; }
+else
+  echo "WARNING: gitleaks not installed — secret scan skipped."
+fi
