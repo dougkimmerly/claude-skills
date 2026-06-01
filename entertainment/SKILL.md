@@ -15,6 +15,7 @@ The home media pipeline:
 
 ## Where it lives
 - **Live config (working copy):** Synology `192.168.20.16`, `/volume1/Home Files/Media/arrStack/`.
+- **Media library root:** `/volume1/Home Files/Media/` (Movies, TV Shows, Music, Other Shows) — the one canonical location. The whole arr stack mounts only this; Plex points at `\\Blackhole55\Home Files\Media\...`. A legacy `/volume1/Media` shared folder used to hold an old Plex TV library (a strict subset, ~3 TB) left behind by a Jan-2026 cutover into `Home Files/Media`; it had no unique episodes and nothing referenced it, so the data + the `Media` share/subvolume were deleted 2026-06-01 (`synoshare --del TRUE Media`), reclaiming 3 TB. There is no longer any `Media` share — if a doc or memory mentions one, it's stale.
 - **Git source of truth:** `homelab-synology/arrstack` (compose.yaml, run-kometa.sh, kometa franchise configs, `config.yml.example`). Secrets (`.env`, real `config.yml`) and generated files (`franchises-auto.yml`) are gitignored — see Secrets below.
 - **Docker on the Synology:** non-interactive PATH lacks it — use `sudo /usr/local/bin/docker`. `sudo` is passwordless for `doug`.
 
