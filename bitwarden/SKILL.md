@@ -1,15 +1,15 @@
 ---
 name: bitwarden
-description: Access credentials from Bitwarden vault. The `bw` CLI on Doug's Mac is the canonical fetch path because it decrypts items client-side using his master password. The OAuth REST API can list and create but returns ciphertext; it cannot decrypt.
+description: DEPRECATED (ADR 0017) — Vaultwarden/Bitwarden is being RETIRED. For all credential access use the `secrets` skill (SOPS+age). This is kept ONLY as reference while migrating existing Vaultwarden items into SOPS (secrets-migration runbook, Phase 6) and decommissioning the containers.
 triggers:
-  - bitwarden
-  - credentials
-  - secrets
-  - password lookup
+  - vaultwarden retire
+  - bitwarden migration
 location: project
 ---
 
-# Bitwarden Credential Lookup
+# Bitwarden Credential Lookup — DEPRECATED
+
+> **⛔ DEPRECATED (ADR 0017, 2026-06-01).** The two-store model is **LastPass (human) + SOPS (machine)** only. Vaultwarden is being retired — **do NOT use `bw get` or this skill to fetch secrets.** Use the **`secrets`** skill (`sops -d`). Everything below is reference for the one-time **migration** of existing Vaultwarden items into SOPS and the decommission (secrets-migration runbook, Phase 6).
 
 Self-hosted Vaultwarden at `https://bitwarden.kbl55.com` (container on docker-server's dk400 network).
 
