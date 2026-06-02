@@ -100,6 +100,7 @@ imaging-service/
 │   ├── xmp.js             # ExifTool: embed metadata into JPEG/PNG/PDF files
 │   ├── ocr.js             # Text extraction: pdftotext first, Tesseract OCR fallback
 │   ├── embeddings.js      # Text chunking + Ollama nomic-embed-text (768-dim vectors)
+│   ├── mailer.js          # Gmail email via nodemailer + App Password (GMAIL_USER/GMAIL_APP_PASSWORD)
 │   ├── triage.js          # v1 single-shot classifier (used only by WebDAV auto-triage hook)
 │   ├── triage-modules/    # v1 module definitions used by lib/triage.js
 │   │   ├── index.js       # Registry: auto-scans directory
@@ -119,7 +120,8 @@ imaging-service/
 │   └── server.js          # MCP server for Claude Code (runs on dev Mac)
 ├── schema/
 │   ├── 002-documents.sql  # Table, 7 indexes, auto-update trigger
-│   └── 003-document-chunks.sql  # Chunks table + HNSW index for semantic search
+│   ├── 003-document-chunks.sql  # Chunks table + HNSW index for semantic search
+│   └── 004-collections.sql  # imaging.collections + imaging.collection_documents
 ├── scripts/
 │   ├── migrate-from-docstore.js  # One-time migration from old DocumentStore
 │   ├── backfill-xmp.js           # Embed XMP into existing documents
@@ -196,6 +198,36 @@ GET    /scan-sessions/:id      Poll status: pending → matched → expired
                                 When matched: includes full document row
 DELETE /scan-sessions/:id      Cancel active session
 ```
+
+### Collections
+
+User-defined document groups that span apps and categories.
+
+```
+GET    /collections             List all collections
+POST   /collections             Create: { name, description? }
+PATCH  /collections/:id         Update: { name?, description? }
+DELETE /collections/:id         Delete collection (documents are NOT deleted)
+
+POST   /collections/:id/documents          Add doc: { document_id }
+DELETE /collections/:id/documents/:docId   Remove doc from collection
+
+GET    /documents?collection_id=<uuid>     Filter documents by collection (overrides app/category)
+GET    /tree                               Returns { tree, collections } — collections included since 2026-06-02
+```
+
+Schema: `schema/004-collections.sql` — `imaging.collections` + `imaging.collection_documents`
+
+### Email
+
+Send any document as an email attachment. Requires `GMAIL_USER` + `GMAIL_APP_PASSWORD` env vars.
+
+```
+POST   /documents/:id/email    Body: { to, subject?, message? }
+                                Returns 503 if email not configured (no GMAIL_USER/GMAIL_APP_PASSWORD)
+```
+
+Sent from `"Distant Shores II" <GMAIL_USER>`. Uses nodemailer + App Password (not OAuth2 — App Password has no expiry, suitable for unattended stored-boat operation).
 
 ### Bulk & Admin
 
@@ -428,6 +460,8 @@ Sharp generates 200x200 thumbnails and 800x800 previews as WebP (quality 80).
 | `WEBDAV_PASS` | — | WebDAV Basic auth password |
 | `OLLAMA_URL` | http://ollama:11434 | Ollama server URL for embeddings |
 | `ANTHROPIC_API_KEY` | — | Anthropic API key (required for document triage) |
+| `GMAIL_USER` | — | Gmail address to send from (e.g. dougkimmerly@gmail.com) |
+| `GMAIL_APP_PASSWORD` | — | Google App Password (Account → Security → 2-Step → App Passwords) |
 
 ## Deployment
 
@@ -630,10 +664,21 @@ const gallery = new Imaging.PhotoGallery(document.getElementById('photos'), {
 // Public: load(), getCount(), destroy()
 ```
 
+### FolderTree — Navigation Sidebar
+
+```javascript
+const tree = new Imaging.FolderTree(document.getElementById('sidebar'), {
+  filterApp: 'ports',      // optional: show only categories under one app (null = all apps)
+  onSelect: (app, cat) => browser.setFilter({ app, category: cat }),
+  onSelectCollection: (id, name) => browser.setFilter({ collectionId: id, collectionName: name })
+  // Collections section is always shown below the app tree (with + to create new)
+});
+tree.load();
+```
+
 ### DocumentBrowser — Embeddable Browse/Search Panel
 
 ```javascript
-// Full document browser scoped to manuals
 const browser = new Imaging.DocumentBrowser(document.getElementById('docs'), {
   app: 'manuals',        // scope to app (null = all)
   showSearch: true,
@@ -642,7 +687,16 @@ const browser = new Imaging.DocumentBrowser(document.getElementById('docs'), {
   height: '600px'
 });
 // Events: img:documentSelected, img:documentDeleted
-// Public: load(), setFilter({ app, category }), search(q), destroy()
+// Public: load(), setFilter({ app, category, collectionId, collectionName }), search(q), destroy()
+//
+// Detail panel features (2026-06-02):
+//   - "Text" toggle: shows inline OCR extracted_text (only when extracted_text exists)
+//   - "Save" button: adds doc to existing or new collection via popover
+//   - "Email" button: inline To/Subject/Message form, sends via POST /documents/:id/email
+//   - "Print all" button: fetches all docs in current view, opens printable HTML bundle
+//
+// When collectionId is set: blue badge in toolbar, app/category filters cleared
+// setFilter({ collectionId, collectionName }) — mutually exclusive with app/category
 ```
 
 ### UploadWidget — Standalone Upload
@@ -957,6 +1011,7 @@ All scripts support `--dry-run`, `--app`, `--id`, `--limit` flags.
 
 ## Future Work
 
+- **Migrate `photo-manager.js`** — maintenance photo gallery still uses custom code; should use `Imaging.PhotoGallery` component
+- **Boat SOPS Phase 3** — centralsk imaging still uses manually-maintained `.env` for secrets. When complete, `GMAIL_APP_PASSWORD` and other secrets move to `secrets/boat/imaging-service.sops.yaml` + `deploy.sh boat`
 - **Cruising app chat UI** — conversation page calling `/api/v1/ask`
 - **Structured context integration** — cruising app auto-injects DB records (fuel, immigration, jobs) alongside document queries
-- **Replication** — rsync files + app-level PG sync between boat (centralsk) and home server
