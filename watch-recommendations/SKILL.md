@@ -34,7 +34,7 @@ Watching with **Maggie**, who has Irish roots. Authenticity of setting, dialect,
 - **Maggie** — Irish roots, authenticity matters deeply. Loves warmth, cosiness, family. Adores Paddington ("anything with teddy bears, except Ted"). **Darkness isn't a dealbreaker when there's a strong pull** (2026-06-01 survey): she's watched Peaky Blinders *twice* — the British/historical/period connection overrides the darkness — and loved Slow Horses (dark spy, but strong characters + wit). So don't rule out dark/intense crime for her, but the *hook* matters: British/historical, strong characters, or humour. Her hard no's: emotionally-close-to-home Irish trauma (Belfast 2021), and — biggest of all — **animals/dogs dying or suffering (see HARD TRIGGER below)**. She also rates cosy mystery / warm rom-com *higher* than the joint baseline (the bigger fan).
 - **HARD TRIGGER — dogs/animals dying or suffering. The single firmest filter for Maggie.** She was in tears throughout **A Dog's Purpose (2017)** — and the reincarnation "he always comes back" framing did NOT help; the repeated deaths were too much. **Never recommend anything where a dog or pet dies or suffers, no matter how feel-good the overall tone or how it's resolved.** This overrides everything else — a movie can be perfect on every other axis and still be an instant no on this. When unsure whether a film has animal death, flag it rather than recommend blind.
 - **Comfort rewatches are a whole viewing mode of their own.** Maggie rewatches feel-good sitcoms endlessly — **Friends and The Big Bang Theory** above all, plus **Corner Gas**. (**M*A*S*H is Doug's comfort rewatch, not hers** — he rewatches it repeatedly; she liked it but doesn't return to it the same way.) She ticked "wouldn't rewatch" for Corner Gas on the survey yet still turns it on for a light easy watch — so the survey's rewatch box is unreliable for *her* comfort shows. These are go-to background staples, not done-with-it. ("Wouldn't rewatch" genuinely means low-priority for The Diplomat / Lupin, which just didn't stick.) When she wants comfort rather than something new, the answer is a warm familiar sitcom, not a recommendation.
-- **THE FALLS-ASLEEP TEST — the strongest engagement signal we have.** Joint viewing is **after dinner, when Maggie is often tired**, so *pace and engagement* matter as much as taste: if something doesn't hold her, she falls asleep — even when she's genuinely interested in the subject. This is more predictive than her stated ratings.
+- **THE FALLS-ASLEEP TEST — the strongest engagement signal we have.** Joint viewing is **after dinner, when Maggie is often tired**, so *pace and engagement* matter as much as taste: if something doesn't hold her, she falls asleep — even when she's genuinely interested in the subject. This is more predictive than her stated ratings. **Now captured structurally** as `ratings.engagement` (`held`/`faded`/`asleep`) by the watch-rater app — query it, don't just infer it.
   - *Interested but doesn't hold attention → asleep:* **Hamnet (2025)** — she likes it, but it's slow/heavy/literary; she fell asleep two nights running, still only 2/3 through. So slow-burn, contemplative, heavy, or literary films fail the after-dinner slot **even when the subject appeals to her**.
   - *Engaging + feel-good → wide awake despite exhaustion:* **The Muppet Christmas Carol** — she was really tired and stayed awake the whole way through.
   - **Implication:** for after-dinner joint picks, weight ENGAGEMENT + uplift + momentum heavily. "Good" or "her kind of thing" isn't enough — it has to *hold* her. Note this also refines the period-drama preference: propulsive, soapy, character-driven period (Downton, Bridgerton, Peaky) holds her; slow literary period (Hamnet) does not — it's about **pace, not genre**. Save slow-burn/heavy for when she's fresh, or for Doug-solo.
@@ -73,14 +73,22 @@ Watching with **Maggie**, who has Irish roots. Authenticity of setting, dialect,
 - Genuinely bleak with no warmth, wit, or hook (Captain Hook: The Cursed Tides — disliked). NOTE: dark/intense alone is NOT a disqualifier for Maggie — she loved Peaky Blinders (watched twice) and Slow Horses. The bar is bleakness with no character/humour/historical pull.
 - Belfast (2021) — Maggie won't watch (emotionally too close to home, not because it's dark)
 
-**Taste profile query:**
+**Taste profile query** (now with the structured signals — score, engagement, reaction tags):
 ```sql
-SELECT t.title, t.year, t.genres, t.keywords, t.origin_country, r.rating
+SELECT t.title, t.year, t.genres, t.keywords, t.origin_country,
+       r.viewer, r.rating, r.score, r.engagement, r.notes,
+       (SELECT array_agg(rt2.label) FROM watchlist.rating_tags rtg
+        JOIN watchlist.reaction_tags rt2 ON rt2.id = rtg.tag_id
+        WHERE rtg.rating_id = r.id) AS tags
 FROM watchlist.titles t
 JOIN watchlist.ratings r ON r.title_id = t.id
-WHERE r.rating IN ('loved', 'liked') AND r.status = 'watched'
-ORDER BY CASE r.rating WHEN 'loved' THEN 1 WHEN 'liked' THEN 2 END, t.title;
+WHERE r.status = 'watched' AND r.rating IN ('loved', 'liked')
+ORDER BY r.score DESC NULLS LAST, t.title;
 ```
+Weight `engagement='asleep'` as a strong *negative* for after-dinner joint picks
+even when `rating` is positive (the falls-asleep test, now structured), and read
+per-viewer rows (`r.viewer`) for solo profiles. Negative-polarity tags
+(too dark/violent/sad, dragged) flag *why* something missed.
 
 ---
 
@@ -91,7 +99,18 @@ ORDER BY CASE r.rating WHEN 'loved' THEN 1 WHEN 'liked' THEN 2 END, t.title;
 ssh doug@192.168.20.19 "docker exec dk400-postgres psql -U fixer -d dk400 -c \"...\""
 ```
 
-**Schema:** `watchlist` (three tables)
+**Schema:** `watchlist` (five tables). Canonical DDL is codified in the
+`watch-rater` repo (`db/schema.sql`); the `fixer` role owns it, the `dk400` role
+has read/write (used by the app + the `watch_sync` program).
+
+**How ratings get captured now (2026-06-02):** the **watch-rater PWA**
+(`http://192.168.20.19:3125`, add-to-home-screen on the phones/iPad) shows what
+was watched in Plex but not yet rated and captures per-viewer reactions. The
+Plex→DB sync is automated by the **`watch_sync` dk400 program** (daily 08:00,
+Robot job `WATCH_SYNC`) — it links `plex_library` rows to `titles` via the
+`tmdb://` GUID and TMDB-enriches. So `plex_library`/`titles` self-maintain and
+ratings arrive continuously; don't hand-sync Plex or hand-insert watched ratings
+unless backfilling something the app can't reach.
 
 ### `watchlist.titles` — one row per title, TMDB-enriched
 | Column | Type | Notes |
@@ -112,15 +131,29 @@ ssh doug@192.168.20.19 "docker exec dk400-postgres psql -U fixer -d dk400 -c \".
 | decade | integer | GENERATED: floor(year/10)*10 |
 | tmdb_fetched_at | timestamptz | NULL = not yet enriched |
 
-### `watchlist.ratings` — per-viewer status and rating
+### `watchlist.ratings` — per-viewer status and rating (UNIQUE on (title_id, viewer))
 | Column | Type | Notes |
 |--------|------|-------|
 | title_id | FK → titles.id | |
-| viewer | text | `doug`, `maggie`, `both` |
-| status | text | `watched`, `want_to_watch`, `wont_watch`, `requested`, `abandoned` |
+| viewer | text | `doug`, `maggie`, `both` (app writes per-person; `both` is historical) |
+| status | text | `watched`, `want_to_watch`, `wont_watch`, `requested`, `abandoned`, `not_watched` |
 | rating | text | `loved`, `liked`, `neutral`, `disliked` — NULL if not yet seen |
-| notes | text | free text |
+| score | smallint | 1–10 (finer than `rating`; app derives `rating` from it) |
+| engagement | text | `held` / `faded` / `asleep` — **the structured falls-asleep signal** |
+| finished | boolean | did they finish it |
+| watched_together | boolean | first rater's audience call: did the partner also watch |
+| notes | text | free-text reaction |
 | watched_at | date | |
+
+`status='not_watched'` = the app's per-viewer "I didn't watch this" dismiss (not a real rating — exclude from taste).
+
+### `watchlist.reaction_tags` / `watchlist.rating_tags` — checkbox reactions
+`reaction_tags` defines the editable checkboxes (id, key, label, `polarity`
+positive/negative, `category` tone/craft, `active`, `display_order`); add/retire
+by inserting rows or flipping `active`. `rating_tags(rating_id, tag_id)` records
+which boxes were ticked for a rating. Tone tags (Too dark/Too violent/Too
+sad/Scary) and craft tags (Good story/Great characters/Funny/Heartwarming/
+Predictable/Dragged) are strong content-based signals — join them for scoring.
 
 ### `watchlist.plex_library` — Plex library sync
 | Column | Type | Notes |
@@ -170,15 +203,15 @@ VALUES (<id from above>, 'both', 'watched', 'liked', 'optional note');
 ## Overseerr — TMDB Metadata + Requesting
 
 **URL:** `http://192.168.20.16:5055` (also accessible at port 5055 from docker-server)
-**API key:** Bitwarden item "Overseer", custom field `api_key`
-  - Value: `${OVERSEERR_API_KEY}`
+**API key:** SOPS `secrets/home/watch-rater.sops.yaml` → `OVERSEERR_API_KEY`
+  - `export OVERSEERR_API_KEY=$(SOPS_AGE_KEY_FILE=$HOME/.config/sops/age/keys.txt sops -d --extract '["OVERSEERR_API_KEY"]' ~/Programming/dkSRC/infrastructure/homelab-secrets/secrets/home/watch-rater.sops.yaml)`
   - Fallback: `docker exec overseerr cat /app/config/settings.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['main']['apiKey'])" | base64 -d`
 
 **Auth: API key alone only works for `/api/v1/status`. Everything else needs Plex session cookie:**
 
 ```bash
-export BW_SESSION=$(cat ~/.bw-session)
-PLEX_TOKEN=$(bw get password "Plex - 55VIDEOSERVER Token" --session "$BW_SESSION")
+export SOPS_AGE_KEY_FILE=$HOME/.config/sops/age/keys.txt
+PLEX_TOKEN=$(sops -d --extract '["PLEX_TOKEN"]' ~/Programming/dkSRC/infrastructure/homelab-secrets/secrets/home/dk400.sops.yaml)
 
 # Login — saves session cookie on docker-server
 ssh doug@192.168.20.19 "curl -s -X POST \
@@ -238,13 +271,13 @@ ssh doug@192.168.20.19 "curl -s -X POST -b /tmp/ovcookie.txt \
 ## Plex API
 
 **Server:** `http://192.168.20.12:32400` (55VIDEOSERVER, Windows)
-**Token:** Bitwarden item `Plex - 55VIDEOSERVER Token` (password field)
+**Token:** SOPS `secrets/home/dk400.sops.yaml` → `PLEX_TOKEN`
 
 Access via homelab SSH since Plex IP not directly reachable from Mac:
 
 ```bash
-export BW_SESSION=$(cat ~/.bw-session)
-PLEX_TOKEN=$(bw get password "Plex - 55VIDEOSERVER Token" --session "$BW_SESSION")
+export SOPS_AGE_KEY_FILE=$HOME/.config/sops/age/keys.txt
+PLEX_TOKEN=$(sops -d --extract '["PLEX_TOKEN"]' ~/Programming/dkSRC/infrastructure/homelab-secrets/secrets/home/dk400.sops.yaml)
 PLEX="http://192.168.20.12:32400"
 
 # Recent watch history
