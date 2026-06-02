@@ -85,9 +85,22 @@ ExecStart=/usr/local/bin/sops exec-env /path/homelab-secrets/secrets/<site>/<svc
 `sops` becomes the unit's MainPID; it decrypts, sets the env, and runs the command as a child (`/bin/sh -c '<cmd>'` → your process). **The MainPID (sops) does NOT carry the secret in its own `/proc/<pid>/environ` — only the child process does.** Verify against the *child* PID, not MainPID. Any further subprocesses the service spawns **inherit** the injected env; if they also `load_dotenv()`, that's fine — python-dotenv defaults to `override=False`, so the injected var wins (and the stripped `.env` no longer carries it anyway). The age key file is local disk, so this works at cold boot with no network. The unit lives in `/etc/systemd/system/` (NOT git) → back it up as `<unit>.pre-sops` before editing, and `daemon-reload` after.
 
 **Rotate / break-glass:**
-- Rewrap recipients after a key change: `sops updatekeys secrets/<site>/<file>.sops.yaml`.
-- Rotate a value: edit it (`sops <file>`), then rotate it upstream (the provider) too.
-- A host key leaked → re-provision that host's key + `updatekeys`. The `age1admin` break-glass lives in LastPass (and the Mac) — it's what recovers everything; it can't live in SOPS (it decrypts SOPS).
+
+*Philosophy:* machine creds we mint get **no forced expiry** — an unattended host can't renew, so an expiry is a self-inflicted outage. Control via tight scope + SOPS + revocation, and **rotate on cause, not on a clock**: a value leaked (transcript/plaintext-in-git/echoed), a host key may be compromised, someone left, or a provider forces it. Third-party creds with a forced expiry are the exception — track them in the migration runbook's "Credential expiries" table with a reminder ~2 weeks prior. (No periodic-rotation treadmill unless an audit requires one.)
+
+*Rotate a secret VALUE* (the common case): edit it where the host that uses it can re-read it — `sops secrets/<site>/<svc>.sops.yaml` (or `sops set … '["KEY"]' '"newval"'`), commit + push, then **redeploy** the consuming service so the new value bakes into the container/process (`<svc>/deploy.sh`; on the boat the puller + `deploy.sh`'s own `git pull` bring it down). **Then rotate it upstream at the provider** and confirm the service still authenticates. If the old value ever touched plaintext (git history, a transcript), treat rotation as *mandatory*, not optional.
+
+*Rotate a HOST age key* (suspected compromise of `age1<host>`):
+1. On the host: `age-keygen -o ~/.config/sops/age/keys.txt.new`, note the new public key, `mv` it into place (keep the old until step 4 succeeds).
+2. On the Mac: swap the host's public key in `.sops.yaml` (every path rule that lists it), then `sops updatekeys secrets/<site>/*.sops.yaml` to **rewrap** all affected files for the new recipient set (run as `age1admin`, which is always a recipient). Commit + push.
+3. Host pulls; verify it can `sops -d` its scoped files with the new key.
+4. Update the host-key **LastPass** break-glass item with the new `keys.txt`; destroy the old private key. (A leaked age key only ever let someone *decrypt* the files it was a recipient on — so also rotate the *values* in those files, per above.)
+
+*Rotate the `age1admin` authoring key* (worst case): same rewrap dance but `age1admin` is on **every** path rule, so `sops updatekeys secrets/**` across the whole tree, update its LastPass item, and re-key the Mac. It can't live in SOPS (it's what decrypts SOPS) — LastPass + the Mac are its only homes.
+
+*Break-glass recovery* (lost a host / fresh machine): install age+sops, write the host's `keys.txt` back from LastPass (`chmod 600`), `git config core.hooksPath .githooks`, done. `age1admin` from LastPass recovers/decrypts everything if a host key is unavailable.
+
+**Host-key backups:** all four (`age1admin`/`age1centralsk`/`age1dockerserver`/`age1synology`) are in **LastPass** (2026-06-02). Each item's note carries the **public** key as the fingerprint + a recover-to-`~/.config/sops/age/keys.txt` instruction; the body is the full `keys.txt`. When handing a private key to Doug, **clipboard only** (`ssh <host> "cat ~/.config/sops/age/keys.txt" | pbcopy`) — never print it; verify identity first with `age-keygen -y` (public output is safe).
 
 ## Migrate a running service to SOPS (proven on dk400 / command-centre / galley, 2026-06-01)
 
