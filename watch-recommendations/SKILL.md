@@ -112,6 +112,16 @@ Robot job `WATCH_SYNC`) — it links `plex_library` rows to `titles` via the
 ratings arrive continuously; don't hand-sync Plex or hand-insert watched ratings
 unless backfilling something the app can't reach.
 
+**The app has WatchList + Recommendations tabs (per-person):**
+- **WatchList** = `status='want_to_watch'`, now written **per viewer** (`doug`/`maggie`), not `both`. Search "＋ Later" and accepted recs land here. A title drops off automatically once it's watched/started in Plex (view activity) or the viewer rates/dismisses it. Legacy `both` want_to_watch rows still show for both people.
+- **Recommendations** = `status='recommended'`. **This is how you surface picks into the app.** When recommending, insert a row per viewer with the pitch in `notes`:
+  ```sql
+  INSERT INTO watchlist.ratings (title_id, viewer, status, notes)
+  VALUES (<title_id>, 'maggie', 'recommended', 'Cozy Irish whodunit — Derry Girls energy')
+  ON CONFLICT (title_id, viewer) DO UPDATE SET status='recommended', notes=EXCLUDED.notes;
+  ```
+  (Ensure the `titles` row exists first — enrich via Overseerr like any new entry.) In the app, tapping a rec moves it to that viewer's WatchList and fires an Overseerr download if it's not already on Plex. Recs for titles the viewer has already watched/dismissed/listed are auto-filtered.
+
 ### `watchlist.titles` — one row per title, TMDB-enriched
 | Column | Type | Notes |
 |--------|------|-------|
@@ -136,7 +146,7 @@ unless backfilling something the app can't reach.
 |--------|------|-------|
 | title_id | FK → titles.id | |
 | viewer | text | `doug`, `maggie`, `both` (app writes per-person; `both` is historical) |
-| status | text | `watched`, `want_to_watch`, `wont_watch`, `requested`, `abandoned`, `not_watched` |
+| status | text | `watched`, `want_to_watch` (per-person WatchList), `wont_watch`, `requested`, `abandoned`, `not_watched`, `recommended` (app Recs feed) |
 | rating | text | `loved`, `liked`, `neutral`, `disliked` — NULL if not yet seen |
 | score | smallint | 1–10 (finer than `rating`; app derives `rating` from it) |
 | engagement | text | `held` / `faded` / `asleep` — **the structured falls-asleep signal** |
