@@ -68,7 +68,7 @@ Same-title remakes (e.g. two "RoboCop") can't be title-keyed safely and are skip
 
 ## Secrets (ADR 0017 — SOPS, not a vault)
 - gluetun `.env` VPN creds → SOPS (`secrets/home/dk400-vpn.sops.yaml`), injected into the dk400 container by `dk400-homelab/deploy.sh` (`sops exec-env`). The program reads them via env.
-- Kometa `config.yml` (Plex token, TMDb apikey, *arr API keys — 19 secret fields) is still host-only plaintext, **pending SOPS migration** (secrets-migration runbook). `config.yml.example` in git has them redacted.
+- Kometa `config.yml` (Plex token, TMDb apikey, *arr API keys) → **SOPS source-of-truth 2026-06-02** (option 1): binary-encrypted at `homelab-secrets/secrets/home/synology/kometa-config.yml.sops`. The **live `config.yml` stays plaintext on disk by design** — the persistent kometa container reads it on its own daily schedule (untouched). To change config (collections OR secrets): `sops` the encrypted source → run `homelab-synology/arrstack/render-kometa-config.sh` on the Synology to push it live → Kometa applies next run. Binary mode = exact byte/comment preservation (git diff shows an opaque blob; use `sops` to view). `config.yml.example` in git still has redacted placeholders.
 - TMDb + Plex tokens for `franchise_sync` are in the same SOPS file.
 - Never commit the real `config.yml` or `.env`; never embed these tokens in skills.
 
