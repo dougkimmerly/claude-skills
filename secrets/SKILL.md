@@ -74,6 +74,16 @@ sops exec-env "$SECRETS" 'docker compose up -d --build <svc>'
 sops exec-env "$SECRETS" 'echo "$GHCR_TOKEN" | docker login ghcr.io -u <user> --password-stdin && docker compose pull && docker compose up -d && docker logout ghcr.io'
 ```
 
+**Propagate to a remote/untrusted host (boat model, Phase 4)** — give it a **read-only GitHub deploy key**, not a write-capable user key, so a compromised remote can't push to the shared repo (blast-radius limit). Generate the keypair *on the host* (`ssh-keygen -t ed25519 -f ~/.ssh/<repo>-deploy`), add the **public** key to the repo with `gh api repos/<owner>/<repo>/keys -f title=… -f key=… -F read_only=true`, then pin the clone to it: `git config core.sshCommand "ssh -i ~/.ssh/<repo>-deploy -o IdentitiesOnly=yes"` (scoped to that one clone — other repos keep the user key). Verify `fetch` works and `push` is denied. Keep it fresh with a **user-mode systemd timer** that `fetch`+`merge --ff-only`s on a cadence (`OnUnitActiveSec` + `Persistent=true` to catch up after downtime), safe to fail when the link is down. Consequence: that host can't author secrets anymore — author on the Mac (`age1admin`), push, let it pull; or `sops` locally then move the **encrypted** file to the Mac to commit.
+
+**Inject into a native systemd service (not docker)** — wrap `ExecStart` with `sops exec-env` (proven on boat `vhf-transcriber`, 2026-06-02):
+```ini
+[Service]
+Environment=SOPS_AGE_KEY_FILE=/home/<user>/.config/sops/age/keys.txt
+ExecStart=/usr/local/bin/sops exec-env /path/homelab-secrets/secrets/<site>/<svc>.sops.yaml '<real ExecStart command>'
+```
+`sops` becomes the unit's MainPID; it decrypts, sets the env, and runs the command as a child (`/bin/sh -c '<cmd>'` → your process). **The MainPID (sops) does NOT carry the secret in its own `/proc/<pid>/environ` — only the child process does.** Verify against the *child* PID, not MainPID. Any further subprocesses the service spawns **inherit** the injected env; if they also `load_dotenv()`, that's fine — python-dotenv defaults to `override=False`, so the injected var wins (and the stripped `.env` no longer carries it anyway). The age key file is local disk, so this works at cold boot with no network. The unit lives in `/etc/systemd/system/` (NOT git) → back it up as `<unit>.pre-sops` before editing, and `daemon-reload` after.
+
 **Rotate / break-glass:**
 - Rewrap recipients after a key change: `sops updatekeys secrets/<site>/<file>.sops.yaml`.
 - Rotate a value: edit it (`sops <file>`), then rotate it upstream (the provider) too.
