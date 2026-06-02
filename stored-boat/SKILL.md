@@ -437,6 +437,22 @@ ping 192.168.22.15
 5. **Resource planner not running?** → check cruising-app logs on centralsk; verify `/api/resource-planner/stored-state` responds
 6. **Mode not propagating to SK?** → check cruising-app worker that publishes `vessel.mode` path
 
+## Diagnosing WAN / connectivity issues
+
+**ALWAYS check Peplink WAN status FIRST** before diving into device-specific diagnostics:
+
+```bash
+# NarwhalCore MANGA API — one call shows what each WAN actually sees
+curl -s http://192.168.22.1/api/status.wan.connection | jq '.[]|{id,statusLed,message,uptime}'
+# statusLed "green" = connected; "red" = problem (see message: "No Cable Detected", "No Signal", etc.)
+```
+
+The Peplink has layer-1/layer-2 visibility that device-specific tools don't. `statusLed: "red", message: "No Cable Detected"` means physical cable or power — don't spend time on USSD/API debugging until the Peplink sees the link.
+
+**Lesson (2026-05-28 HD1 Dome incident):** USSD balance query was failing. Root cause was Peplink reporting "No Cable Detected" on WAN 2 — the modem had gone physically dark. Went deep into USSD wire-protocol debugging without checking `status.wan.connection` first. Doug had to point it out from the PowerNet control panel. One API call would have resolved it immediately.
+
+**Also:** `wan_traffic` delta-based metrics (like `recent_rate_gb`) can look plausible from pre-failure activity. Don't trust computed freshness when the raw source-of-truth check is available.
+
 ### Phase 2 shutdown loop (2026-05-24 incident)
 
 **Symptom:** Telegram alerts saying boat is going into shutdown; centralsk repeatedly shutting down and rebooting; heartbeat log shows `phase2_active=True detected` every 5 minutes.
