@@ -48,6 +48,7 @@ command-centre/
 │   ├── SnowmeltPanel.jsx        # Home snowmelt control (override + events + feedback)
 │   ├── BoatStarlinkPanel.jsx    # Boat Starlink manual override (Wyze-cam-access use case)
 │   ├── WeatherHeader.jsx        # Top weather strip
+│   ├── CredentialExpiryBanner.jsx # Top banner: creds <30d from expiry (red <=7d), hidden when empty. Data: GET /api/credential-expiries → DK/400 fixer.credential_expiries (written by the credential_expiries dk400 program). CC's dk400 role needs SELECT (the program grants it).
 │   ├── DK400Status.jsx, JobsPanel.jsx, ...
 │   └── ServiceDetailModal.jsx   # Per-service detail modal (icon click)
 ├── deploy/compose.yaml          # SOP-compliant compose (uses GHCR image)
