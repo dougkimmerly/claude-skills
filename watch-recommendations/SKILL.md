@@ -1,6 +1,6 @@
 ---
 name: watch-recommendations
-description: Pick something to watch — pulls watchlist DB + Plex history to build a taste profile, searches for candidates via Overseerr/JustWatch, recommends and logs new watches. Use when Doug asks what to watch, wants recommendations, or needs to log something he's seen.
+description: Pick something to watch AND the "Shows" app (aka watch-rater) that drives it — the rating/search/WatchList/recommendations PWA, its watchlist DB + schema, the watch_sync Plex sync, and deploy. Use when Doug/Maggie want a recommendation or to log a watch, OR when working on / deploying / debugging the watch-rater (Shows) app.
 metadata:
   type: skill
 ---
@@ -91,6 +91,31 @@ per-viewer rows (`r.viewer`) for solo profiles. Negative-polarity tags
 (too dark/violent/sad, dragged) flag *why* something missed.
 
 ---
+
+## The Shows app (watch-rater) — the front end for all of this
+
+**"Shows"** (display name) is the PWA Doug + Maggie use to rate, search, build a
+WatchList, and act on recommendations. Internally everything is named
+**watch-rater** (repo, container, GHCR image, compose dir, SOPS file) — grep and
+deploy by that name. Full architecture + endpoints live in the repo README;
+rationale in fixer **ADR 0018**. This section is the operational summary + the
+gotchas.
+
+- **URL:** `http://192.168.20.19:3125` (docker-server, host network). Add-to-home-screen on phones/iPad; Tailscale away from home. Identity is a per-device localStorage choice (Doug/Maggie) — no login.
+- **Tabs:** **Rate** (per-viewer queue of watched-but-unrated + "needs review"); **Search** (Overseerr titles + people, "On Plex" computed from our own `plex_library`, Request, "＋ Later"); **WatchList** (shared **vote** model — Doug/Maggie/Both sub-tabs, each `want_to_watch` row = one person's vote, both votes ⇒ Both); **Recs** (`status='recommended'` — accept ⇒ `want_to_watch` + Overseerr download if not on Plex; "Seen it" ⇒ `watched`/rating-NULL + Plex scrobble).
+- **Cross-repo layout:** app + canonical schema → `dkSRC/apps/watch-rater` (`db/schema.sql`, idempotent); Plex→DB sync → `dk400-homelab/programs/watch_sync.py` (daily Robot job `WATCH_SYNC`, 08:00); compose + `deploy.sh` → `homelab-docker-server/watch-rater`; secret → `homelab-secrets/secrets/home/watch-rater.sops.yaml` (`DK400_DB_URL`, `GHCR_TOKEN`, `OVERSEERR_API_KEY`, `PLEX_TOKEN`).
+- **DB role:** app + watch_sync connect as **dk400** (granted on the `watchlist` schema); **fixer** owns it — apply schema as fixer.
+
+### Deploy (and the gotchas)
+1. Push the app repo → GitHub Actions builds `ghcr.io/dougkimmerly/watch-rater:latest`.
+2. On docker-server: **`cd /opt/docker-server && git pull` FIRST** — `deploy.sh` only pulls the homelab-secrets repo, **not** the compose repo, so compose/env changes won't land otherwise. Then `cd /opt/docker-server/watch-rater && ./deploy.sh` (sops exec-env → docker login → compose pull → up).
+3. **Schema changes before deploy:** `cat db/schema.sql | ssh doug@192.168.20.19 "docker exec -i dk400-postgres psql -U fixer -d dk400 -v ON_ERROR_STOP=1"` (idempotent — safe to re-run).
+4. **watch_sync changes** bake into the running container only on the next dk400 rebuild; to test immediately, `docker cp` the file into the running `dk400` container and invoke `from programs import watch_sync; asyncio.run(watch_sync.run())`.
+
+### Integration gotchas
+- **Marking "watched" in Plex uses the LOCAL server API** (`GET {PLEX_URL}/:/scrobble?identifier=com.plexapp.plugins.library&key=<plex_key>&X-Plex-Token=…`) — reliable. The Plex **watchlist cloud API** (`discover.provider.plex.tv`) is flaky/undocumented — **don't** build on it.
+- **"Is it on Plex?" is computed from our own `plex_library`** (kept current by watch_sync), not Overseerr's `mediaInfo` (which is often empty here).
+- **Overseerr runs on docker-server** (`localhost:5055`); the **API key alone authorizes** search/request — no Plex session cookie needed (the cookie dance in the Overseerr section below is outdated).
 
 ## Watchlist Database
 
