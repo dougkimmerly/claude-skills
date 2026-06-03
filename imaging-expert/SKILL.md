@@ -101,12 +101,13 @@ imaging-service/
 │   ├── ocr.js             # Text extraction: pdftotext first, Tesseract OCR fallback
 │   ├── embeddings.js      # Text chunking + Ollama nomic-embed-text (768-dim vectors)
 │   ├── mailer.js          # Gmail email via nodemailer + App Password (GMAIL_USER/GMAIL_APP_PASSWORD)
-│   ├── triage.js          # v1 single-shot classifier (used only by WebDAV auto-triage hook)
+│   ├── triage.js          # v1 single-shot classifier (legacy; only behind GET /triage/modules)
 │   ├── triage-modules/    # v1 module definitions used by lib/triage.js
 │   │   ├── index.js       # Registry: auto-scans directory
 │   │   ├── maintenance.js, immigration.js, fuel.js, manuals.js
 │   ├── agent-runtime.js   # v2 generic Anthropic tool-use loop (tenant-agnostic)
-│   ├── triage-tools.js    # Shared SQL helpers used by v2 tenants (searchJobs, etc.)
+│   ├── triage-learning.js # v2 correction-learning loop: compactPlan, diffPlans, recordFeedback (ADR 0004)
+│   ├── triage-tools.js    # Shared SQL helpers used by v2 tenants (searchJobs, findSimilarDoc, etc.)
 │   ├── tenants/           # v2 tenant modules — see ADR 0002 + lib/tenants/README.md
 │   │   ├── index.js       # Registry: auto-discovers modules, validates contract
 │   │   ├── maintenance/   # jobs, job_parts, equipment
@@ -764,7 +765,7 @@ const session = await client.createScanSession({ app: 'maintenance', category: '
 
 ## Document Triage — two systems
 
-The current architecture (post ADR 0001 + 0002) is a **tool-using triage v2** with tenant modules. The legacy single-shot v1 still runs for one specific path.
+The current architecture (post ADR 0001 + 0002 + 0004) is a **tool-using triage v2** with tenant modules — including the WebDAV scan path. The legacy single-shot v1 survives only behind the read-only `/triage/modules` registry endpoint.
 
 ### v2 — Tenant modules (current path)
 
@@ -784,11 +785,24 @@ Household is intentionally minimal in v1 — no primary entity, no tenant SQL sc
 
 **Adding a new top-level tenant:** one directory under `lib/tenants/<name>/` + one render branch in cruising-app/work-items.js. Imaging core unchanged. See `lib/tenants/README.md`.
 
+### WebDAV scan triage — v2 + correction-learning loop (ADR 0004)
+
+When Genius Scan+ delivers a doc via WebDAV, `triageScannedDoc()` (server.js) runs the **v2** tenant agent for `doc.app` after a 5-second delay (lets OCR finish). It stashes the proposed plan on the doc (`tags.triage_v2_proposed`) and marks `tags.triage_v2_pending` so the doc surfaces in the inbox with its plan already computed.
+
+`TRIAGE_SCAN_MODE` (env, default `review`) is the safety knob:
+- `review` — stash the plan, apply nothing; the user taps apply in the inbox.
+- `auto-confident` — auto-apply only when confidence ≥ 0.8 AND an existing `JOB-xxx` matched AND not a flagged duplicate.
+- `auto-file` — auto-apply any existing-job match (filing + cost).
+
+Duplicates are always **flagged and held** (`plan.duplicate_of`, set by `find_thread_doc` for same-thread or `find_similar_doc` for content dups) — never auto-applied, never auto-deleted.
+
+**The correction-learning loop:** every `/triage-v2/apply` diffs the applied plan against the stashed proposed plan and writes an `imaging.triage_feedback` row (`corrected`, `fields_changed`) — `lib/triage-learning.js`. That's the training signal; Stage 2 distills it into `imaging.triage_lessons` the agent recalls each triage. Schema: `schema/008-triage-learning.sql`.
+
+**Removed in ADR 0004:** the v1 scan auto-classifier (`triageDocument`/`applyTriageResult` on the WebDAV hook) and the `WEBHOOK_URL_{MODULE}` webhook that fired after it (it only ever fired from the v1 scan path). If an external consumer needs a post-triage notification again, re-wire it on the v2 `/triage-v2/apply` path — see `[[project_triage_webhook_removed]]`.
+
 ### v1 — Legacy single-shot (`lib/triage.js` + `lib/triage-modules/`)
 
-Still wired to the WebDAV auto-triage hook (`server.js` line ~1280): when Genius Scan+ delivers a doc via WebDAV, a 5-second `setTimeout` calls `triageDocument()` to classify the doc into one of the v1 modules (maintenance/immigration/fuel/manuals). This keeps freshly-scanned docs from sitting unclassified in the inbox.
-
-When you re-trigger triage from the `/imaging/` UI (autorunner or "Re-plan with hints"), the request goes to `/triage-v2` which dispatches to the v2 tenant — not v1.
+Retired from the scan path. Survives only behind `GET /triage/modules` (the read-only module registry). Don't add new doc types here — they belong in v2 tenants.
 
 ### Iterative Triage Workflow
 
@@ -868,13 +882,13 @@ const { triage, document } = await client.autoTriage(docId, {
 const { modules } = await client.triageModules();
 ```
 
-### WebDAV Auto-Triage
+### WebDAV Scan Triage
 
-Documents uploaded via WebDAV (Genius Scan+) are automatically triaged after ingest if `ANTHROPIC_API_KEY` is set. A 5-second delay allows the background OCR to complete first. Results are applied immediately (same as auto-triage). This means scanning a clearance form auto-classifies it as immigration without any manual step.
+Documents uploaded via WebDAV (Genius Scan+) are triaged through **v2** after ingest if `ANTHROPIC_API_KEY` is set (`triageScannedDoc`, ADR 0004). A 5-second delay lets background OCR complete first. In the default `review` mode nothing is applied — the proposed plan is stashed (`tags.triage_v2_proposed`) and the doc is marked `triage_v2_pending` so it surfaces in the inbox for one-tap apply. `TRIAGE_SCAN_MODE` can graduate this to `auto-confident`/`auto-file`. See "WebDAV scan triage — v2 + correction-learning loop" above.
 
 ### Adding a New Tenant (v2)
 
-This is the modern path. v1 modules in `lib/triage-modules/` are only used by the WebDAV auto-classifier; new doc types belong in v2 tenants.
+This is the modern path. v1 modules in `lib/triage-modules/` are legacy (read-only `/triage/modules` only); new doc types belong in v2 tenants.
 
 Create a directory `lib/tenants/<name>/` exporting eight things from `index.js`:
 
