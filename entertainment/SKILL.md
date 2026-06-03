@@ -67,6 +67,44 @@ Server address, tokens, library section keys, and the API all live in the
 **owner** token (the registry `PlexOnlineToken`); a *read-only* token makes Kometa
 report "No libraries found / token is read only".
 
+## Subtitles (Bazarr sync) — Doug + Maggie rely on subtitles for everything
+Bazarr downloads subs and audio-syncs them with bundled **ffsubsync**. Critical
+config (`…/arrStack/bazarr/config/config/config.yaml`; set via the UI, or stop
+bazarr → edit → start so it can't overwrite on shutdown):
+- `use_subsync: true` + both `use_subsync_*_threshold: false` → sync every download.
+- **`no_fix_framerate: false`** — MUST be false. If true, ffsubsync only *shifts* and
+  never corrects framerate, so PAL/NTSC mismatches **drift through the show** (the #1
+  "fine at first, way off by the end" complaint). ffsubsync corrects a constant offset
+  AND one framerate scale across the whole audio (e.g. `0.959` = 23.976÷25 = a 25 fps
+  sub on a 23.976 file) — i.e. *linear* drift. It does NOT fix *non-linear* drift
+  (different cut / ad-break gaps / missing scenes) — that needs `alass`, not ffsubsync.
+- **`max_offset_seconds: 300`** — default 60 is too low; big lead-in differences (intro
+  logos) need headroom or the sync is abandoned.
+- **`use_embedded_subs: false`** — embedded (in-.mkv) subtitle tracks **can't be
+  synced/shifted**; if Bazarr counts them as "done" it never fetches a syncable external
+  sidecar (this is why a film can be stuck on a mistimed embedded track). False → Bazarr
+  always grabs an external `.srt` it can sync.
+
+Bazarr API (`X-API-KEY` header, key in config.yaml, `http://192.168.20.16:6767`):
+list/run jobs via `GET`/`POST /api/system/tasks` (`--data taskid=<id>`):
+`wanted_search_missing_subtitles_{movies,series}`, `upgrade_subtitles`,
+`{movies,series}_full_scan_subtitles`. A full-library wanted-search is a long background
+job — providers throttle (OpenSubtitles daily caps); Bazarr paces and retries on its own.
+
+### Manually re-sync one title (a specific sub is off)
+ffsubsync is bundled in the bazarr container at `/app/bazarr/bin/libs`:
+```bash
+D="sudo /usr/local/bin/docker"
+MKV="/movies/<dir>/<file>.mkv"; SRT="/movies/<dir>/<file>.en.srt"
+$D exec -e PYTHONPATH=/app/bazarr/bin/libs -e REF="$MKV" -e IN="$SRT" -e OUT=/tmp/s.srt bazarr \
+  /lsiopy/bin/python3 -c 'import os,sys; sys.argv=["ffsubsync",os.environ["REF"],"-i",os.environ["IN"],"-o",os.environ["OUT"],"--max-offset-seconds","300"]; from ffsubsync import main; sys.exit(main())'
+# it logs "offset seconds" + "framerate scale factor"; back up + replace the .srt with /tmp/s.srt
+```
+Plex *does* index sidecar `<video>.<lang>.srt` files. To make Plex use a specific sub:
+refresh the item (`PUT /library/metadata/<id>/refresh`), identify the stream
+(`GET /library/streams/<sid>` returns the srt — match by first cue), then set it default:
+`PUT /library/parts/<partId>?subtitleStreamID=<sid>&allParts=1`. (Plex server/token: `plex` skill.)
+
 ## Secrets (ADR 0017 — SOPS, not a vault)
 - gluetun `.env` VPN creds → SOPS (`secrets/home/dk400-vpn.sops.yaml`), injected into the dk400 container by `dk400-homelab/deploy.sh` (`sops exec-env`). The program reads them via env.
 - Kometa `config.yml` (Plex token, TMDb apikey, *arr API keys) → **SOPS source-of-truth 2026-06-02** (option 1): binary-encrypted at `homelab-secrets/secrets/home/synology/kometa-config.yml.sops`. The **live `config.yml` stays plaintext on disk by design** — the persistent kometa container reads it on its own daily schedule (untouched). To change config (collections OR secrets): `sops` the encrypted source → run `homelab-synology/arrstack/render-kometa-config.sh` on the Synology to push it live → Kometa applies next run. Binary mode = exact byte/comment preservation (git diff shows an opaque blob; use `sops` to view). `config.yml.example` in git still has redacted placeholders.
