@@ -62,9 +62,10 @@ Kometa groups franchise films/shows in the main A–Z view via per-item `sort_ti
 Same-title remakes (e.g. two "RoboCop") can't be title-keyed safely and are skipped. To add a custom grouping, edit `franchises-custom.yml` / `tv-franchises.yml` with exact Plex titles.
 
 ## Plex (55videoServer)
-- The server that serves the media: **`192.168.20.12`** (ethernet, preferred) / `192.168.20.201` (wifi) — a **Windows** host (`hostname 55videoServer`; SSH drops into cmd.exe, use `powershell -Command`).
-- **Owner token** (full read/write — needed by Kometa & tooling) = the `PlexOnlineToken` in the host's registry: `Get-ItemProperty 'HKCU:\Software\Plex, Inc.\Plex Media Server' -Name PlexOnlineToken`. A *read-only* token makes Kometa report "No libraries found / token is read only".
-- Library section keys: Movies = **3**, TV Shows = **5**. List/inspect via `http://192.168.20.12:32400/library/sections?X-Plex-Token=…` and `/library/sections/<key>/all?includeGuids=1` (the bulk movie list with TMDb ids, one call).
+Server address, tokens, library section keys, and the API all live in the
+**`plex`** skill. Kometa-specific gotcha worth keeping here: Kometa needs Plex's
+**owner** token (the registry `PlexOnlineToken`); a *read-only* token makes Kometa
+report "No libraries found / token is read only".
 
 ## Secrets (ADR 0017 — SOPS, not a vault)
 - gluetun `.env` VPN creds → SOPS (`secrets/home/dk400-vpn.sops.yaml`), injected into the dk400 container by `dk400-homelab/deploy.sh` (`sops exec-env`). The program reads them via env.

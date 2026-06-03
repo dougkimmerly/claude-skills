@@ -113,7 +113,7 @@ gotchas.
 4. **watch_sync changes** bake into the running container only on the next dk400 rebuild; to test immediately, `docker cp` the file into the running `dk400` container and invoke `from programs import watch_sync; asyncio.run(watch_sync.run())`.
 
 ### Integration gotchas
-- **Marking "watched" in Plex uses the LOCAL server API** (`GET {PLEX_URL}/:/scrobble?identifier=com.plexapp.plugins.library&key=<plex_key>&X-Plex-Token=…`) — reliable. The Plex **watchlist cloud API** (`discover.provider.plex.tv`) is flaky/undocumented — **don't** build on it.
+- **"Seen it" scrobbles via the reliable LOCAL Plex API** (see the `plex` skill). The reason the app keeps its own watchlist instead of Plex's: the Plex **cloud watchlist API is flaky** (also in the `plex` skill).
 - **"Is it on Plex?" is computed from our own `plex_library`** (kept current by watch_sync), not Overseerr's `mediaInfo` (which is often empty here).
 - **Overseerr runs on docker-server** (`localhost:5055`); the **API key alone authorizes** search/request — no Plex session cookie needed (the cookie dance in the Overseerr section below is outdated).
 
@@ -242,35 +242,19 @@ VALUES (<id from above>, 'both', 'watched', 'liked', 'optional note');
   - `export OVERSEERR_API_KEY=$(SOPS_AGE_KEY_FILE=$HOME/.config/sops/age/keys.txt sops -d --extract '["OVERSEERR_API_KEY"]' ~/Programming/dkSRC/infrastructure/homelab-secrets/secrets/home/watch-rater.sops.yaml)`
   - Fallback: `docker exec overseerr cat /app/config/settings.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['main']['apiKey'])" | base64 -d`
 
-**Auth: API key alone only works for `/api/v1/status`. Everything else needs Plex session cookie:**
-
-```bash
-export SOPS_AGE_KEY_FILE=$HOME/.config/sops/age/keys.txt
-PLEX_TOKEN=$(sops -d --extract '["PLEX_TOKEN"]' ~/Programming/dkSRC/infrastructure/homelab-secrets/secrets/home/dk400.sops.yaml)
-
-# Login — saves session cookie on docker-server
-ssh doug@192.168.20.19 "curl -s -X POST \
-  -H 'Content-Type: application/json' \
-  -H 'X-Api-Key: ${OVERSEERR_API_KEY}' \
-  -c /tmp/ovcookie.txt \
-  -d '{\"authToken\": \"$PLEX_TOKEN\"}' \
-  'http://localhost:5055/api/v1/auth/plex'"
-
-# Now use cookie for all subsequent requests
-ssh doug@192.168.20.19 "curl -s -b /tmp/ovcookie.txt 'http://localhost:5055/api/v1/...'"
-```
+**Auth: the `X-Api-Key` header authorizes all `/api/v1` endpoints** — search, movie/tv detail, discover, request. No Plex session cookie needed (an older note here claimed it was; that was wrong — verified the API key alone works).
 
 ### Search
 ```bash
 # URL-encode the query manually (spaces → %20, not +)
-ssh doug@192.168.20.19 "curl -s -b /tmp/ovcookie.txt 'http://localhost:5055/api/v1/search?query=Knives%20Out'"
+ssh doug@192.168.20.19 "curl -s -H "X-Api-Key: $OVERSEERR_API_KEY" 'http://localhost:5055/api/v1/search?query=Knives%20Out'"
 # Returns: [{id, title, mediaType:'movie'|'tv', releaseDate, ...}, ...]
 ```
 
 ### Get TMDB metadata for a title
 ```bash
 # movie: /api/v1/movie/{tmdb_id}   tv: /api/v1/tv/{tmdb_id}
-ssh doug@192.168.20.19 "curl -s -b /tmp/ovcookie.txt 'http://localhost:5055/api/v1/movie/546554' | python3 -c \"
+ssh doug@192.168.20.19 "curl -s -H "X-Api-Key: $OVERSEERR_API_KEY" 'http://localhost:5055/api/v1/movie/546554' | python3 -c \"
 import sys, json
 d = json.load(sys.stdin)
 print('Title:', d.get('title'))
@@ -284,7 +268,7 @@ print('Country:', d.get('originCountry'))
 
 ### Discover popular movies/shows
 ```bash
-ssh doug@192.168.20.19 "curl -s -b /tmp/ovcookie.txt 'http://localhost:5055/api/v1/discover/movies?page=1' | python3 -c \"
+ssh doug@192.168.20.19 "curl -s -H "X-Api-Key: $OVERSEERR_API_KEY" 'http://localhost:5055/api/v1/discover/movies?page=1' | python3 -c \"
 import sys, json
 d = json.load(sys.stdin)
 for r in d.get('results', [])[:10]:
@@ -295,56 +279,20 @@ for r in d.get('results', [])[:10]:
 ### Request a title (via Overseerr)
 ```bash
 # Get tmdb_id from search first, then:
-ssh doug@192.168.20.19 "curl -s -X POST -b /tmp/ovcookie.txt \
+ssh doug@192.168.20.19 "curl -s -X POST -H 'X-Api-Key: $OVERSEERR_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{\"mediaType\": \"movie\", \"mediaId\": 546554}' \
   'http://localhost:5055/api/v1/request'"
+# (auto-approves → starts downloading; for tv add  \"seasons\": \"all\")
 ```
 
 ---
 
-## Plex API
+## Plex
 
-**Server:** `http://192.168.20.12:32400` (55VIDEOSERVER, Windows)
-**Token:** SOPS `secrets/home/dk400.sops.yaml` → `PLEX_TOKEN`
-
-Access via homelab SSH since Plex IP not directly reachable from Mac:
-
-```bash
-export SOPS_AGE_KEY_FILE=$HOME/.config/sops/age/keys.txt
-PLEX_TOKEN=$(sops -d --extract '["PLEX_TOKEN"]' ~/Programming/dkSRC/infrastructure/homelab-secrets/secrets/home/dk400.sops.yaml)
-PLEX="http://192.168.20.12:32400"
-
-# Recent watch history
-ssh doug@192.168.20.19 "curl -s -H 'X-Plex-Token: $PLEX_TOKEN' \
-  '$PLEX/status/sessions/history/all?sort=viewedAt:desc&limit=50'" | python3 -c "
-import sys, xml.etree.ElementTree as ET
-from datetime import datetime
-tree = ET.parse(sys.stdin)
-for v in tree.getroot().findall('Video'):
-    ts = int(v.get('viewedAt', 0))
-    date = datetime.fromtimestamp(ts).strftime('%Y-%m-%d')
-    t = v.get('type')
-    title = v.get('title') if t == 'movie' else f\"{v.get('grandparentTitle')} — {v.get('title')}\"
-    print(f'{date}  [{t}]  {title}')
-"
-
-# Movie library (section 3)
-ssh doug@192.168.20.19 "curl -s -H 'X-Plex-Token: $PLEX_TOKEN' '$PLEX/library/sections/3/all'" | python3 -c "
-import sys, xml.etree.ElementTree as ET
-tree = ET.parse(sys.stdin)
-for v in tree.getroot().findall('Video'):
-    print(v.get('title'), v.get('year'))
-"
-
-# TV shows library (section 5)
-ssh doug@192.168.20.19 "curl -s -H 'X-Plex-Token: $PLEX_TOKEN' '$PLEX/library/sections/5/all'" | python3 -c "
-import sys, xml.etree.ElementTree as ET
-tree = ET.parse(sys.stdin)
-for v in tree.getroot().findall('Directory'):
-    print(v.get('title'), v.get('year'))
-"
-```
+Server, token, section keys, and the API (watch history, `/library/sections/{3,5}/all`,
+mark-watched/scrobble) are in the **`plex`** skill. How the recommendation flow uses it:
+watch history → taste profile; section 3/5 listings → what's already on Plex; scrobble → "Seen it".
 
 ---
 
