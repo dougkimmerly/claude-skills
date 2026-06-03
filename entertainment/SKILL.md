@@ -84,6 +84,8 @@ bazarr → edit → start so it can't overwrite on shutdown):
   synced/shifted**; if Bazarr counts them as "done" it never fetches a syncable external
   sidecar (this is why a film can be stuck on a mistimed embedded track). False → Bazarr
   always grabs an external `.srt` it can sync.
+- **HI subtitles:** profile item `hi: "False"` (non-HI preferred, HI as fallback) + `subzero_mods: remove_HI` **strips `[door creaks]` annotations** from whatever's downloaded — so an "English HI" *source* still delivers plain English. That combo is the wanted "plain English, HI fallback"; don't fight it.
+- **Perpetual upgrade loop** (a title re-downloading the *same* sub every `upgrade_frequency` hours forever — e.g. The 39 Steps did this twice-daily for years): the upgrader re-grabs a sub that can't reach a "perfect" score, and each re-download resets the file's age so `days_to_upgrade_subs` never closes it. Diagnose with repeat counts in `GET /api/movies/history?length=2000`. **Fix (keep the sub, stop re-trying):** set that title's profile to none — `POST /api/movies` `radarrid=<id>&profileid=null` (sidecar stays on disk, Bazarr just stops managing it). Blacklisting does the OPPOSITE (deletes the sub + fetches a different one).
 
 Bazarr API (`X-API-KEY` header, key in config.yaml, `http://192.168.20.16:6767`):
 list/run jobs via `GET`/`POST /api/system/tasks` (`--data taskid=<id>`):
