@@ -93,6 +93,21 @@ list/run jobs via `GET`/`POST /api/system/tasks` (`--data taskid=<id>`):
 `{movies,series}_full_scan_subtitles`. A full-library wanted-search is a long background
 job — providers throttle (OpenSubtitles daily caps); Bazarr paces and retries on its own.
 
+- **`audio_exclude` is the big silent gotcha:** profile item `audio_exclude:"True"` means
+  "don't fetch subs when the audio already matches this language" → with English audio
+  (most of the library), Bazarr fetches NO English subs and looks "flaky/idle." Set it
+  `"False"` for "subtitles on everything." Profiles live in the DB, edited via
+  `POST /api/system/settings` (`languages-profiles`=JSON) — that save is slow (reprocesses
+  the library) and can leave the API 500ing; **restart bazarr** to recover + recompute.
+- **A previously-unmonitored series Bazarr ignores for subs.** Monitor it (in Sonarr) →
+  Bazarr `update_series` → re-apply its profile → `series_full_scan_subtitles` to rebuild
+  the "wanted" list; only file-present, monitored episodes get fetched.
+- **Don't hammer the wanted-search.** With sync-on-download on, each grab runs ffsubsync;
+  triggering the search repeatedly stacks parallel ffsubsync jobs that **saturate the
+  Synology's weak J3455 CPU** and make Bazarr's API time out (HTTP 000). It's not crashed —
+  `docker restart bazarr` clears the stack. Let the scheduled cadence grind big backlogs;
+  if it hurts Plex playback, cap the container CPU (`docker update --cpus=2 bazarr`).
+
 ### Manually re-sync one title (a specific sub is off)
 ffsubsync is bundled in the bazarr container at `/app/bazarr/bin/libs`:
 ```bash
