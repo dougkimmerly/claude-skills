@@ -67,11 +67,21 @@ Server address, tokens, library section keys, and the API all live in the
 **owner** token (the registry `PlexOnlineToken`); a *read-only* token makes Kometa
 report "No libraries found / token is read only".
 
-## Subtitles (Bazarr sync) — Doug + Maggie rely on subtitles for everything
-Bazarr downloads subs and audio-syncs them with bundled **ffsubsync**. Critical
-config (`…/arrStack/bazarr/config/config/config.yaml`; set via the UI, or stop
-bazarr → edit → start so it can't overwrite on shutdown):
-- `use_subsync: true` + both `use_subsync_*_threshold: false` → sync every download.
+## Subtitles — Doug + Maggie rely on subtitles for everything
+**Architecture (find/sync split, ADR 0019 in fixer):** Bazarr is **find-only** — it
+fetches the best real sub for everything but does **not** sync. The CPU-heavy sync
+(ffsubsync) runs in a **standalone worker on 55videoserver** (fast CPU), not on the
+weak Synology. A **Whisper-GPU** service on 55videoserver is wired into Bazarr as the
+**lowest-priority** provider — fallback only, for content with no real sub (it
+transcribes audio, so it can't translate foreign films). The worker + Subs-tab progress
+live in the **`watch-recommendations`** skill (`subsync-worker/`, `watchlist.subtitle_syncs`).
+
+Bazarr config (`…/arrStack/bazarr/config/config/config.yaml`; stop bazarr → edit → start
+so it can't overwrite on shutdown):
+- **`use_subsync: false`** — find-only. (Was `true`; flipped 2026-06-04 so the Synology
+  stops running ffsubsync. The worker on 55videoserver syncs instead.)
+- The ffsubsync *behaviour* below still governs the **worker** (same engine) + the manual
+  recipe — keep it in mind when syncing:
 - **`no_fix_framerate: false`** — MUST be false. If true, ffsubsync only *shifts* and
   never corrects framerate, so PAL/NTSC mismatches **drift through the show** (the #1
   "fine at first, way off by the end" complaint). ffsubsync corrects a constant offset
@@ -102,11 +112,12 @@ job — providers throttle (OpenSubtitles daily caps); Bazarr paces and retries 
 - **A previously-unmonitored series Bazarr ignores for subs.** Monitor it (in Sonarr) →
   Bazarr `update_series` → re-apply its profile → `series_full_scan_subtitles` to rebuild
   the "wanted" list; only file-present, monitored episodes get fetched.
-- **Don't hammer the wanted-search.** With sync-on-download on, each grab runs ffsubsync;
-  triggering the search repeatedly stacks parallel ffsubsync jobs that **saturate the
-  Synology's weak J3455 CPU** and make Bazarr's API time out (HTTP 000). It's not crashed —
-  `docker restart bazarr` clears the stack. Let the scheduled cadence grind big backlogs;
-  if it hurts Plex playback, cap the container CPU (`docker update --cpus=2 bazarr`).
+- **Historical CPU trap (now designed out):** when `use_subsync` was `true`, every grab ran
+  ffsubsync *in the bazarr container*, so hammering the wanted-search stacked parallel jobs
+  that saturated the J3455 and timed out Bazarr's API (HTTP 000; `docker restart bazarr`
+  cleared it). With sync now off in Bazarr and moved to the 55videoserver worker (ADR 0019),
+  Bazarr's wanted-search is light again. If 55videoserver ever feels the sync load during
+  Plex playback, the worker runs at concurrency 1 by design; bump/cap there, not in Bazarr.
 
 ### Manually re-sync one title (a specific sub is off)
 ffsubsync is bundled in the bazarr container at `/app/bazarr/bin/libs`:
