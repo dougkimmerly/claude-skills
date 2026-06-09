@@ -67,16 +67,15 @@ Server address, tokens, library section keys, and the API all live in the
 **owner** token (the registry `PlexOnlineToken`); a *read-only* token makes Kometa
 report "No libraries found / token is read only".
 
-## Subtitles — Doug + Maggie rely on subtitles for everything
-**Architecture (find/sync split, ADR 0019 in fixer):** Bazarr is **find-only** — it
-fetches the best real sub for everything but does **not** sync. The CPU-heavy sync
-(ffsubsync) runs in a **standalone worker on 55videoserver** (fast CPU), not on the
-weak Synology. A **Whisper-GPU** service on 55videoserver is wired into Bazarr as the
-**lowest-priority** provider — fallback only, for content with no real sub (it
-transcribes audio, so it can't translate foreign films). The worker + Subs-tab progress
-live in the **`watch-recommendations`** skill (`subsync-worker/`, `watchlist.subtitle_syncs`).
-
-Bazarr config (`…/arrStack/bazarr/config/config/config.yaml`; stop bazarr → edit → start
+## Subtitles — the Bazarr (arr-stack) side
+Doug + Maggie rely on subtitles for everything. **Find/sync split (ADR 0019):** Bazarr here is
+**find-only** — it fetches the best real sub but does **not** sync, and it is **not** a Whisper
+provider (ADR 0020). The **syncing, Whisper transcription, QC/repair/remap, and the Subs-tab** are a
+separate system **owned by the `watch-recommendations` skill + the `watch-rater` repo**
+(`subsync-worker/`, `whisper-asr/`, `whisper-worker/`, `watchlist.subtitle_syncs`) — **that's the
+source of truth**: go there for the engine, the workers, the `--repair`/remap/wrong-sub logic (incl.
+the DS9 off-by-one find) and the run model. What lives in *this* skill is the **Bazarr config** the
+find side runs on (`…/arrStack/bazarr/config/config/config.yaml`; stop bazarr → edit → start
 so it can't overwrite on shutdown):
 - **`use_subsync: false`** — find-only. (Was `true`; flipped 2026-06-04 so the Synology
   stops running ffsubsync. The worker on 55videoserver syncs instead.)

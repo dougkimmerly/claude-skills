@@ -104,11 +104,61 @@ gotchas.
 - **URL:** `http://192.168.20.19:3125` (docker-server, host network). Add-to-home-screen on phones/iPad; Tailscale away from home. Identity is a per-device localStorage choice (Doug/Maggie) — no login.
 - **Tabs:** **Rate** (per-viewer queue of watched-but-unrated + "needs review"); **Search** (Overseerr titles + people, "On Plex" computed from our own `plex_library`, Request, "＋ Later"); **WatchList** (shared **vote** model — Doug/Maggie/Both sub-tabs, each `want_to_watch` row = one person's vote, both votes ⇒ Both); **Recs** (`status='recommended'` — accept ⇒ `want_to_watch` + Overseerr download if not on Plex; "Seen it" ⇒ `watched`/rating-NULL + Plex scrobble); **Subs** (the subtitle fixer — see below).
 - **Subs tab (fix mistimed subtitles in the moment):** lists Plex **Now Playing** (`GET /api/now-playing`); tap a title and `POST /api/fix-subtitles` re-syncs it — the backend **SSHes to the Synology** (`SYNOLOGY_SSH`, key mounted at `/root/.ssh/id_ed25519`, copied to root-owned `/tmp/wr_sshkey` at startup since ssh rejects non-owner keys) and runs **ffsubsync in the bazarr container** against the file's audio, replaces the `.en.srt` sidecar, then sets it as Plex's default (matches the corrected stream by first-cue via `GET /library/streams/<id>`). Logs to `watchlist.subtitle_fixes`. Low-confidence/different-cut results → `status='needs_review'` (the escalation queue). **To clear the queue:** `SELECT * FROM watchlist.subtitle_fixes WHERE status='needs_review'` → run alass/manual per the `entertainment` skill's "manually re-sync one title" recipe, then mark them done. ffsubsync fixes linear drift only; different cuts need alass (see `entertainment`/`plex` skills).
-- **Bulk pre-sync (find/sync split, ADR 0019):** Bazarr is **find-only**; a standalone **`subsync-worker/`** (Python, in this repo) runs on **55videoserver** (192.168.20.12, fast CPU). Flow:
+- **Bulk pre-sync (find/sync split, ADR 0019):** Bazarr is **find-only** (its find-side config — `use_subsync`, `audio_exclude`, the HI strip, the perpetual-upgrade-loop fix — is owned by the **`entertainment`** skill); a standalone **`subsync-worker/`** (Python, in this repo) runs on **55videoserver** (192.168.20.12, fast CPU). Flow:
   - **Queue (not a walk):** worker pulls `GET /api/sync-queue` = **Bazarr download history** (`/api/episodes|movies/history` → `subtitles_path`) **minus** already-synced rows, ordered **unwatched + newest-download first** (`GET /api/watched-tmdb` = rated-watched or Plex view_count>0, matched by the `{tmdb-…}` folder tag). Backend needs `BAZARR_URL` + `BAZARR_API_KEY` (SOPS `watch-rater.sops.yaml`). `--walk` is a full-tree fallback for subs older than Bazarr's history window.
   - **Compute on 55videoserver, write on the Synology:** worker mounts the share as SMB user **`home`** (via `net use` from `.smbpass`, rendered from SOPS `synology/smb.sops.yaml`; `cmdkey` can't persist over an SSH logon) to **READ** media for ffsubsync, then ships the synced `.srt` (base64) to `POST /api/sync-result`. The **backend writes the sidecar on the Synology as root via SSH** (`writeSidecarOnSynology` → `synssh` + `sudo tee`, backs up once). This is essential: writing over SMB as `home` fails — sidecars are `640` owned by the arr user (perm), AND Bazarr holds them open during the wanted-search (SMB share-mode lock → `WinError 5`). Root-on-Synology bypasses both (Linux has no mandatory locks). `express.json` limit is `12mb` for the payload.
   - **Status/queue:** `synced`/`needs_review` are excluded from the queue; **`failed` re-queues** (transient). `GET /api/sync-progress` feeds the Subs tab's **"Library sync (background)"** panel. Runs as the **`SubtitleSyncWorker`** scheduled task (run as `doug`, interactive, `--once` every 30 min, MultipleInstancesPolicy=IgnoreNew). Throughput ~8/min on small TV files. Deploy: copy `subsync-worker/*` to `C:\subsync-worker\`, render `.smbpass` from SOPS (see `subsync-worker/README.md`).
-  - **Whisper-GPU** (deferred, large-v3) will be Bazarr's lowest-priority provider — fallback only when no real sub exists. See memory `whisper-subtitle-fallback-todo`.
+  - **Whisper-GPU fallback (ADR 0020, built 2026-06-04):** a `whisper-asr` engine (faster-whisper
+    **large-v3** `float16`, FastAPI on **55videoserver :9000**, lazy-load + idle-unload to share the
+    4060 with the music-library ML worker + Ollama; OOM-falls-back to int8_float16) + a co-located
+    **`whisper-worker/`** (in this repo). The worker polls **`GET /api/whisper-queue`** (backend
+    resolves Bazarr's *wanted* IDs → `{video,kind,id,seriesid}`, minus settled/already-whisper'd,
+    movies/unwatched first). **Live "score & replace" (no time-gate):** per title the worker calls
+    **`POST /api/whisper-decide`** → backend manual-searches Bazarr's providers; if a real English
+    sub scores **≥ `WHISPER_REAL_SCORE_THRESHOLD` (80)** it downloads *that* via Bazarr (skips
+    Whisper, helps drain the backlog); else the worker transcribes (or translate-to-English for
+    foreign) and ships the SRT to **`/api/sync-result` source='whisper'** → backend writes the
+    sidecar on the Synology as root, recorded already-in-sync (never ffsubsync'd) + a row in
+    **`watchlist.whisper_subs`**. A backend timer (`WHISPER_REPLACE_INTERVAL_H`, 12h) re-checks
+    whisper'd titles and swaps in a real sub once one scores higher. **NOT a Bazarr provider**
+    (Bazarr's `whisperai` is score-based/always-on — see ADR 0020); true fallback-only, no Bazarr
+    config change. **ENABLED 2026-06-05** (folded into the `WhisperRepairWorker` daemon via
+    `--fallback`; the old separate `WhisperSubtitleWorker` task is superseded/left disabled). The
+    gate was lifted because the Bazarr wanted backlog (~2,270 eps) is genuinely **subtitle-less**
+    (sampled 9/10 have no sub at any provider — obscure woodworking/sailing/old shows), so Whisper
+    transcription is the only path to subs for them. `WhisperASR` engine = live, self-healing.
+  - **Whisper sub QC + needs_review repair (ADR 0020, built 2026-06-04 — ENABLED):** the *other*
+    Whisper use. The worker's **`--repair` mode** (`whisper_worker.py --repair`, task
+    **`WhisperRepairWorker`**, polls `GET /api/repair-queue`) Whispers ~5 short audio windows,
+    text-matches spoken lines to sub cues to get a **content match-rate**, RANSAC-fits
+    `audio=scale*sub+shift`, and **triages**: match-rate **<0.18 → WRONG SUB** (content mismatch —
+    e.g. the DS9 `.srt`s are a mislabeled off-by-one pack) → then **REMAPS**: content-matches the
+    audio against the season's sibling `.srt`/`.bak-subsync` files, finds the *correct* sub, re-times
+    + installs it (validated: Hippocratic Oath matched the E03 file at 85%, PAL-retimed, installed).
+    matches+identity → **verified in-sync** (rescues ffsubsync false flags);
+    matches+offset/scale → **re-timed** (rewrites sidecar `source='whisper-sync'`, no max-offset
+    cap); matches+nonlinear → **different cut** (alass/manual). Records `verified_at` + `match_rate`
+    on `subtitle_syncs` (Subs tab shows verified + wrong-sub counts; `/api/sync-progress`).
+    Orphaned wrong subs (no correct sibling) → `POST /api/whisper-refetch` blacklists the sub in
+    Bazarr (deletes + auto-refetches a different one), one-shot via `whisper_refetched`.
+    `--only <substr>` targets one title; `WHISPER_WRONG_SUB_RATE`/`WHISPER_REMAP_RATE` tune
+    thresholds. Was ~66 flagged (mostly old DS9/Heroes, many the off-by-one mislabel).
+    **Full-library verify sweep (`--sweep`, lower priority):** when the flagged queue is empty the
+    worker pulls **`GET /api/verify-queue`** = every synced sub not yet Whisper-verified (or changed:
+    `verified_at < synced_at`) and runs the same triage to confirm/repair — catching wrong subs
+    ffsubsync happened to "sync". Flagged subs always win; sweep fills idle GPU. The
+    `verified_at`/`match_rate` record means a sub isn't re-checked unless it changes.
+    **Foreign-audio guard:** repair/verify auto-detects the audio language; a foreign-audio film's
+    correct English sub can't text-match a foreign transcription, so it's recorded verified-foreign
+    and NOT flagged/blacklisted (prevents deleting good subs on foreign films during the sweep).
+    **Run model:** `WhisperRepairWorker` is **ONE continuous headroom-gated daemon** (`--repair
+    --sweep --fallback`, no `--once`) at BELOW_NORMAL priority — it processes items back-to-back in
+    priority order (**flagged repairs → fallback transcription → verify sweep**) **only when the GPU
+    has headroom** (polls `nvidia-smi`: pauses on high
+    compute util = ML worker/ollama, high NVENC = Plex transcode, or low free VRAM), so it uses
+    all spare capacity and instantly yields to Plex/ML worker (AS/400 run-priority style). ~2,260
+    synced subs to sweep; tune `WHISPER_GPU_BUSY_UTIL`/`ENC`/`MIN_FREE_MB`. Self-healing task
+    (5-min IgnoreNew, unlimited runtime), like `WhisperASR`.
 - **Cross-repo layout:** app + canonical schema → `dkSRC/apps/watch-rater` (`db/schema.sql`, idempotent); Plex→DB sync → `dk400-homelab/programs/watch_sync.py` (daily Robot job `WATCH_SYNC`, 08:00); compose + `deploy.sh` → `homelab-docker-server/watch-rater`; secret → `homelab-secrets/secrets/home/watch-rater.sops.yaml` (`DK400_DB_URL`, `GHCR_TOKEN`, `OVERSEERR_API_KEY`, `PLEX_TOKEN`).
 - **DB role:** app + watch_sync connect as **dk400** (granted on the `watchlist` schema); **fixer** owns it — apply schema as fixer.
 
@@ -121,7 +171,7 @@ gotchas.
 ### Integration gotchas
 - **"Seen it" scrobbles via the reliable LOCAL Plex API** (see the `plex` skill). The reason the app keeps its own watchlist instead of Plex's: the Plex **cloud watchlist API is flaky** (also in the `plex` skill).
 - **"Is it on Plex?" is computed from our own `plex_library`** (kept current by watch_sync), not Overseerr's `mediaInfo` (which is often empty here).
-- **Overseerr runs on docker-server** (`localhost:5055`); the **API key alone authorizes** search/request — no Plex session cookie needed (the cookie dance in the Overseerr section below is outdated).
+- **Overseerr runs on the Synology** (`192.168.20.16:5055`), co-located with the Arr stack (Radarr `:7878` / Sonarr `:8989`); the **API key alone authorizes** search/request — no Plex session cookie needed. ⚠️ **There is a STRAY EMPTY Overseerr on docker-server** (`localhost:5055`, no Radarr/Sonarr connected, different key) — do NOT use it. The watch-rater backend's `OVERSEERR_URL` (compose default) + `OVERSEERR_API_KEY` (SOPS) must both point at the Synology one. **Fixed 2026-06-08:** they were on `localhost:5055`/a stale key, so every app request 403'd into the empty instance and never reached the Arr stack. Symptom = "requests aren't getting through"; check `docker exec watch-rater env | grep OVERSEERR` first.
 
 ## Watchlist Database
 
@@ -243,7 +293,7 @@ VALUES (<id from above>, 'both', 'watched', 'liked', 'optional note');
 
 ## Overseerr — TMDB Metadata + Requesting
 
-**URL:** `http://192.168.20.16:5055` (also accessible at port 5055 from docker-server)
+**URL:** `http://192.168.20.16:5055` (on the Synology, with the Arr stack). NOTE: `localhost:5055` on docker-server is a **different, empty** Overseerr — always use `192.168.20.16:5055`.
 **API key:** SOPS `secrets/home/watch-rater.sops.yaml` → `OVERSEERR_API_KEY`
   - `export OVERSEERR_API_KEY=$(SOPS_AGE_KEY_FILE=$HOME/.config/sops/age/keys.txt sops -d --extract '["OVERSEERR_API_KEY"]' ~/Programming/dkSRC/infrastructure/homelab-secrets/secrets/home/watch-rater.sops.yaml)`
   - Fallback: `docker exec overseerr cat /app/config/settings.json | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['main']['apiKey'])" | base64 -d`
@@ -253,14 +303,14 @@ VALUES (<id from above>, 'both', 'watched', 'liked', 'optional note');
 ### Search
 ```bash
 # URL-encode the query manually (spaces → %20, not +)
-ssh doug@192.168.20.19 "curl -s -H "X-Api-Key: $OVERSEERR_API_KEY" 'http://localhost:5055/api/v1/search?query=Knives%20Out'"
+ssh doug@192.168.20.19 "curl -s -H "X-Api-Key: $OVERSEERR_API_KEY" 'http://192.168.20.16:5055/api/v1/search?query=Knives%20Out'"
 # Returns: [{id, title, mediaType:'movie'|'tv', releaseDate, ...}, ...]
 ```
 
 ### Get TMDB metadata for a title
 ```bash
 # movie: /api/v1/movie/{tmdb_id}   tv: /api/v1/tv/{tmdb_id}
-ssh doug@192.168.20.19 "curl -s -H "X-Api-Key: $OVERSEERR_API_KEY" 'http://localhost:5055/api/v1/movie/546554' | python3 -c \"
+ssh doug@192.168.20.19 "curl -s -H "X-Api-Key: $OVERSEERR_API_KEY" 'http://192.168.20.16:5055/api/v1/movie/546554' | python3 -c \"
 import sys, json
 d = json.load(sys.stdin)
 print('Title:', d.get('title'))
@@ -274,7 +324,7 @@ print('Country:', d.get('originCountry'))
 
 ### Discover popular movies/shows
 ```bash
-ssh doug@192.168.20.19 "curl -s -H "X-Api-Key: $OVERSEERR_API_KEY" 'http://localhost:5055/api/v1/discover/movies?page=1' | python3 -c \"
+ssh doug@192.168.20.19 "curl -s -H "X-Api-Key: $OVERSEERR_API_KEY" 'http://192.168.20.16:5055/api/v1/discover/movies?page=1' | python3 -c \"
 import sys, json
 d = json.load(sys.stdin)
 for r in d.get('results', [])[:10]:
@@ -288,7 +338,7 @@ for r in d.get('results', [])[:10]:
 ssh doug@192.168.20.19 "curl -s -X POST -H 'X-Api-Key: $OVERSEERR_API_KEY' \
   -H 'Content-Type: application/json' \
   -d '{\"mediaType\": \"movie\", \"mediaId\": 546554}' \
-  'http://localhost:5055/api/v1/request'"
+  'http://192.168.20.16:5055/api/v1/request'"
 # (auto-approves → starts downloading; for tv add  \"seasons\": \"all\")
 ```
 
