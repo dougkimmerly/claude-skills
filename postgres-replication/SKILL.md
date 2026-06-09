@@ -59,6 +59,11 @@ CREATE SUBSCRIPTION <schema>_sub
   WITH (copy_data = true, create_slot = true, slot_name = '<schema>_sub');
 ```
 
+## Connecting to each side (psql)
+
+- **Publisher (centralsk, boat):** `ssh doug@192.168.22.15 "docker exec dk400-postgres psql -U dk400 -d dk400 -c '...'"`. The `dk400` role owns the `cruising` schema here.
+- **Subscriber (home, docker-server):** `ssh doug@192.168.20.19 "docker exec dk400-postgres psql -U homelab_admin -d dk400 -c '...'"`. **Use `homelab_admin`, not `dk400`** — on home the `dk400` role has no privileges on the `cruising` schema (a `SELECT` errors `permission denied for schema cruising`, and `information_schema.columns` silently returns nothing). DDL for schema-drift fixes (`ADD COLUMN`, `REFRESH PUBLICATION`) runs as `homelab_admin`.
+
 ## Diagnostic queries
 
 ### Per-table state (subscriber)
@@ -247,6 +252,18 @@ If a NEW table is added to centralsk's `cruising` schema that should replicate:
 3. `ALTER SUBSCRIPTION <schema>_sub REFRESH PUBLICATION` on home.
 
 If a table is added but should NOT replicate (e.g. new raw-telemetry table per ADR 0008 summary-shipping pattern), do nothing — the explicit publication list keeps it out by default.
+
+### Drift on a PUBLISHED table blocks the WHOLE stream (seen 2026-06-05)
+
+Any un-appliable change to a published table makes the apply worker **crash-loop and halt the entire `cruising` apply stream** — so `vessel_log` and everything else silently freeze, even though only one table drifted. The cruising-app evolves the boat schema often; this recurs.
+
+- **Symptom / canary:** the MagicMirror "DSII Stats" box goes stale while the boat is fine. `cruising.vessel_log` on home stops advancing; on the boat it's current.
+- **The misleading part:** `pg_stat_subscription` shows a worker `pid` and a tiny `lag` (3s) — but that's just **keepalives**. The real tells: `received_lsn` is **NULL** (not streaming), the **publisher slot is `active=f`** with WAL piling up (`pg_wal_lsn_diff(...) > 0`), and the home Postgres log crash-loops every ~5s.
+- **Find the actual error** in the subscriber log: `docker logs dk400-postgres | grep -iE "logical replication|violates|missing"`. Two forms seen: `target relation "cruising.port_visits" is missing replicated columns` (boat added columns) and `violates check constraint "..._check"` (boat **dropped/relaxed** a CHECK that home still enforces).
+- **Fix:** make the home table accept the boat's rows — `ADD COLUMN IF NOT EXISTS` for new columns; for a constraint the boat dropped, `DROP CONSTRAINT IF EXISTS` on the replica (the boat is the validated source). Then the worker resumes and drains the backlog automatically.
+- **psql gotchas that bit here:** (1) a multi-statement `psql -c "ALTER TABLE …; ALTER TABLE …; ALTER SUBSCRIPTION … REFRESH;"` runs as ONE implicit transaction — and `REFRESH PUBLICATION` **cannot run in a transaction**, so its error **rolls back the ALTER TABLEs too** (they print "ALTER TABLE" then silently revert). Run each `ALTER TABLE` in its own `-c`, and `REFRESH PUBLICATION` as a standalone `-c`. (2) the apply worker caches relcache — a worker that started mid-DDL may error one more cycle, then a freshly-started worker picks up the change.
+
+**Detection gap:** nothing proactively alerts on this — the mirror was the only signal, after ~9h. A dk400 replication-health check (apply-worker crash-loop / `active=f` slot / growing lag) is the right fix.
 
 ## Cross-site state (current as of 2026-05-06)
 
