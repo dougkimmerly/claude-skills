@@ -87,16 +87,21 @@ mv <repo>/.claude/skills/X ~/.claude/skills/X
 
 No registry to update. New location shows up in the next session's reminder.
 
-## Optional: version-controlling `~/.claude/skills/`
+## Version control & backup (ADR 0022)
 
-Nothing stops you:
-```bash
-cd ~/.claude/skills && git init && git remote add origin <repo>
-```
+`~/.claude/skills` **is** a git repo: `git@github.com:dougkimmerly/claude-skills.git`, with a gitleaks pre-commit hook. It is a **single-machine backup of real-file universal skills** — not a shared library synced across clones. Two-tier model:
 
-No other tool assumes the directory is versioned. Start simple; add a repo only when you've felt the pain of losing a skill edit or want to share across machines.
+| Skill form | Backed up by | Commit where |
+|---|---|---|
+| **Real file** under `~/.claude/skills/` (e.g. `adr`, `netbox`, `lightroom`) | `claude-skills` | `cd ~/.claude/skills && git add … && commit && push` |
+| **Symlink** into a project repo (`homelab-*`) | the **project repo** that owns the real file | commit in that project repo (git stores only the symlink here, not the target) |
+| **Project-scoped** (`<repo>/.claude/skills/`) | its own repo | that repo |
 
-A previous attempt (`claude-skills` as a shared repo for marine-domain skills) ended up archived because maintaining separate clones and sync rules became its own overhead. The current layout is deliberately flatter.
+- **Edit the real target, not the symlink** — and commit in *that file's* home repo. Committing a symlinked skill's change to `claude-skills` backs up nothing (only the link is tracked).
+- **After authoring a new real-file universal skill, commit it.** `claude-skills` only protects what's committed; an authored-but-uncommitted skill lives on one SSD with no backup (this is how the `lightroom` skill went unprotected — see ADR 0022).
+- **Never embed secrets** — the gitleaks hook will block the commit; point at SOPS (`secrets` skill) instead.
+
+> This is deliberately *not* the archived round-one `claude-skills` (a shared marine-domain "expert skills" repo, abandoned for its clone/sync overhead). The current repo is a thin one-push backup mirror — no sync rules. ADR `fixer/docs/decisions/0022-version-control-claude-skills.md` records the full rationale.
 
 ## Anti-patterns
 
