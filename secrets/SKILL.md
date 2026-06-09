@@ -51,7 +51,7 @@ VAL=$(ssh doug@<host> "grep '^KEY=' /path/.env | cut -d= -f2-")   # stays in the
 Migrate the value *on the box where it already lives* when you can (keeps it off your workstation). `age1dockerserver` decrypts/edits home secrets too, so docker-server can `sops set` locally.
 
 **Provision a NEW host as a SOPS host** (the proven 6-step pattern — also in the runbook):
-1. Install `age` + `sops` on the host.
+1. Install `age` + `sops` **and `gitleaks`** on the host — all three as release binaries into `/usr/local/bin` (no apt needed): grab the matching `*_linux_x64.tar.gz` (or DSM arch) from each project's GitHub releases. **Don't skip gitleaks** — without it the pre-commit hook silently *no-ops its pattern scan* (it still enforces the SOPS-encryption check, but the entropy/leak scan is the other half of the safety model). Match the Mac's version (gitleaks `8.30.1`). Verify: `gitleaks git --pre-commit --staged --redact --no-banner` runs clean on a clean tree and exits 1 on a planted high-entropy secret (low-entropy placeholders are intentionally filtered).
 2. `age-keygen -o ~/.config/sops/age/keys.txt` (0600); note its **public** key.
 3. Add that public key as a recipient on its site's path in `.sops.yaml` (Mac); `sops updatekeys secrets/<site>/*.sops.yaml` to rewrap existing files.
 4. Commit + push; clone `homelab-secrets` on the host; `git config core.hooksPath .githooks`.
