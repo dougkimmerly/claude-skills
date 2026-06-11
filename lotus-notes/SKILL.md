@@ -50,12 +50,23 @@ Pop-Location
 `KeyFilename` selects which **Notes ID** the engine runs as. The ID must have access to the database (for a *local, unencrypted* NSF, any valid ID works; for the owner's own mail, use the owner's ID).
 
 ## Passwords — keep them off-chat
-Most IDs are password-protected. **`Initialize("")` with a blank/wrong password HANGS on a hidden GUI prompt** (kill the stuck `cscript`). To pass the real password without putting it in the transcript:
-1. Have Doug save it via Notepad to `C:\NotesData\pw.txt` (just the password, "Save as type: All Files").
-2. The script reads it from the file.
-3. **`Remove-Item C:\NotesData\pw.txt`** immediately after.
+Most IDs are password-protected. **`Initialize("")` with a blank/wrong password HANGS on a hidden GUI prompt** (kill the stuck `cscript`). The export script reads the password from `C:\NotesData\pw.txt` on the XPS; the value gets there one of two ways:
 
-Never echo a password into chat. See [[feedback-never-echo-secrets]].
+**Maggie's ID password is already in SOPS** — no need to ask:
+```bash
+cd ~/Programming/dkSRC/infrastructure/homelab-secrets
+export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"
+PW=$(sops -d --extract '["MAGGIE_ID_PASSWORD"]' secrets/home/lotus-notes.sops.yaml)
+# write it to the XPS without echoing, run the export, then delete:
+ssh doug@<xps> "powershell -Command \"Set-Content -NoNewline C:\NotesData\pw.txt '$PW'\""; PW=
+# ... run export ... then:
+ssh doug@<xps> "powershell -Command \"Remove-Item C:\NotesData\pw.txt -Force\""
+```
+(`secrets/home/lotus-notes.sops.yaml` can hold other Notes-ID passwords too — add `DOUG_ID_PASSWORD` etc. via `sops set` as needed; see the `secrets` skill.)
+
+**For an ID NOT yet in SOPS:** have Doug save it via Notepad to `C:\NotesData\pw.txt`, use it, then **store it in SOPS** (capture into a var off the box, `sops set`, round-trip-verify by hash) so it's there next time, and `Remove-Item` the plaintext.
+
+Never echo a password into chat. See [[feedback-never-echo-secrets]] and the `secrets` skill.
 
 ## Verify the engine (before any real work)
 
@@ -104,18 +115,36 @@ Key locations: loose files under `/volume1/Home Files/Data/Systems Stuff/Old Com
 
 ## NSFs inside Parallels VMs
 
-Many richest copies live *inside* `.pvm` VMs on the NAS (`/volume1/Home Files/Data/Systems Stuff/Virtual Macines/` — e.g. `MaggieDSN`, `MaggiesOld`, `KBL XP`). Doug's Mac is **Apple-Silicon (M1) → CANNOT BOOT** these x86 VMs, but **can mount their disks read-only** to copy files out:
+Many richest copies live *inside* `.pvm` VMs on the NAS (`/volume1/Home Files/Data/Systems Stuff/Virtual Macines/` — e.g. `MaggieDSN`, `MaggiesOld`, `KBL XP`). Doug's Mac is **Apple-Silicon (M1) → CANNOT BOOT** these x86 VMs.
 
+### Browsing / small files: Parallels Mounter (Mac) — METADATA ONLY
 ```bash
-# the Home Files share mounts on the Mac at /Volumes/Home Files
 open -a "/Applications/Parallels Desktop.app/Contents/MacOS/Parallels Mounter.app" \
-  "/Volumes/Home Files/.../<VM>.pvm/<VM>.hdd"
-# mounts appear under /Volumes/.PEVolumes/PEVolume{...}  (one per partition)
-pgrep -fl PEFSUtil          # shows the mount points + [C]/[D] labels
+  "/Volumes/Home Files/.../<VM>.pvm/<VM>.hdd"   # mounts under /Volumes/.PEVolumes/PEVolume{...}
+pgrep -fl PEFSUtil                                # shows mount points + [C]/[D] labels
 ```
-- Mounter over SMB is **slow + flaky**. If it wedges (Explorer running, no PEFSUtil), reset: `pkill -f "Parallels Mounter"; pkill -f "Parallels Explorer"`, then relaunch.
-- The PEFS filesystem is **unreliable for recursive `find`** (`bfs:` errors skip dirs) — enumerate top-level dirs, then `ls` each Notes-named dir + its `mail/` subdir directly.
-- Unmount: `osascript -e 'tell application "Parallels Mounter" to quit'`.
+- Good for `ls` and file *sizes*. **CONTENT reads of large files HANG** (PEFS wedges; even a 1 MB `dd` blocks). Don't use it to copy a multi-hundred-MB NSF.
+- Flaky over SMB: if it wedges, `pkill -f "Parallels Mounter"; pkill -f "Parallels Explorer"`, relaunch, be patient (can take 100s+ and a couple of auto-relaunches).
+- Recursive `find` over PEFS throws `bfs:` errors and skips dirs — enumerate top dirs, `ls` each directly. Unmount: `osascript -e 'tell application "Parallels Mounter" to quit'`.
+
+### Copying a real file out: qemu-nbd on docker-server (THE reliable way)
+docker-server (`192.168.20.19`) has passwordless sudo, **/dev/kvm**, Docker, and the NAS read-only at **`/mnt/home-files`**. Attach the Parallels disk as NBD and copy just the one file (reads only needed blocks, not the whole 87 GB image):
+```bash
+# on docker-server, as root:
+apt-get install -y qemu-utils ntfs-3g          # one-time
+modprobe nbd max_part=8
+HDS="/mnt/home-files/Data/Systems Stuff/Virtual Macines/<VM>.pvm/<VM>.hdd/<VM>.hdd.0.{...}.hds"
+qemu-nbd --read-only --connect=/dev/nbd0 -f parallels "$HDS"
+partprobe /dev/nbd0; lsblk -rno NAME,SIZE,FSTYPE /dev/nbd0   # find the big NTFS = C:
+mount -o ro /dev/nbd0p2 /mnt/mvm
+cp "/mnt/mvm/Notes/Data/mail/MKIMMERL.NSF" /tmp/out.nsf      # NOTE: Linux NTFS is CASE-SENSITIVE
+umount /mnt/mvm; qemu-nbd --disconnect /dev/nbd0
+```
+- **Case-sensitivity trap:** the on-disk path is `/Notes/Data/mail/...` (capital `Data`), not `data`. Use `find -iname` to discover real case.
+- Relay to the XPS via the Mac (`scp` docker-server→Mac→XPS) or set up direct auth. ~30s per GB on the wired LAN.
+
+## Encrypted NSFs (active mailboxes)
+Some copies are **locally encrypted** with the owner's ID (active working mailboxes often are; unencrypted *replicas/exports* of the same mailbox also exist and carve fine). Tell-tale: `grep -a -o Subject file.nsf` returns **0** (zero readable strings at all), the body is high-entropy, but the **header is still a valid NSF magic `1a 00 00 04 ...`**. Carving/`strings` is useless on these. **Only the encrypting ID opens it** — run the COM engine with that owner's `.id` + password and it decrypts transparently (e.g. MaggieDSN's 1.16 GB `MKIMMERL.NSF` is encrypted; `maggie.id` opens it). So: encrypted = *more* complete/authoritative, not a dead end — just route it through the engine, never the grep.
 
 ## Gotchas / recovery checklist
 - `ActiveX component can't create object` → you used 64-bit cscript/regsvr32. Use **SysWOW64**.
