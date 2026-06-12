@@ -5,7 +5,7 @@ description: Extract data (calendars, mail, documents) from Doug's 25-year Lotus
 
 # Lotus Notes / NSF extraction
 
-Doug lived in Lotus Notes for ~25 years (XTL → DSN eras). The archive is preserved as `.nsf` files scattered across the NAS and inside old Parallels VMs. **There is no licensed running Domino server and the Notes GUI client crashes on the Win11 host** — so all extraction is **headless, via the Notes C engine + COM API** on the XPS. This skill is the operating manual for that.
+Doug lived in Lotus Notes for ~25 years (XTL → DSN eras). **As of 2026-06-12 every distinct database is consolidated into one place: `C:\NotesArchive\` on the XPS** (`primary\` = best copy of each db, `copies\` = other distinct versions, `MANIFEST.txt` = provenance). It's backed up via the unified→restic→USB tiers. The scattered loose originals were deleted; backups (NAS `#recycle`, Novell-backup folders, Time Machine, the VMs) were left intact. **There is no licensed running Domino server and the Notes GUI client crashes on the Win11 host** — so all *reading/extraction* is **headless, via the Notes C engine + COM API** on the XPS. This skill is the operating manual.
 
 Project context, scope decisions, and the keep/drop list live in the **`notes-archive-vault`** memory — read it for the "why" and current state. This skill is the "how".
 
@@ -106,11 +106,24 @@ Mail/document extraction follows the same engine pattern (iterate views/document
 ## Finding NSFs
 
 ```bash
-# full inventory across the NAS (Synology busybox: no -printf, no strings)
-ssh doug@<synology> "find /volume1 -iname '*.nsf' -not -path '*/@eaDir/*' 2>/dev/null"
+# full inventory across the NAS (Synology supports -printf; busybox has no strings)
+ssh doug@<synology> "find /volume1 -type f -iname '*.nsf' -not -path '*/@eaDir/*' -not -path '*/@appdata/*' -printf '%s|%p\n' 2>/dev/null"
 # count calendar entries in a loose NSF without opening it:
 ssh doug@<synology> "grep -a -o ApptUNID '<path>.nsf' | wc -l"   # ApptUNID/CalendarDateTime/StartDateTime markers
 ```
+- **ALWAYS `-type f`.** Eclipse workspace metadata creates *directories* named `*.nsf` (e.g. `Salesplace_5copport.nsf`); `find` without `-type f` returns them, and **`md5sum` HANGS on a directory** (`Is a directory` over busybox blocks). The NAS had 2712 `.nsf` matches but only 1212 real files. Exclude `@appdata/` too (Synology bind-mounts double-count every share).
+- **Run heavy work over SSH, not SMB.** SMB-mounted finds (Mac → `/Volumes/...`) are glacial and flaky; the same `find` run *on the host* via SSH is instant. Hosts seen: NAS, this Mac (local), Aperture Mac, 2008 Mac, VMs (qemu-nbd).
+
+**SMB share → real host:** `mount | grep cifs` / `smbutil status <ip>` to confirm which IP serves a share. **Don't assume by elimination** — `.212` looked like the Aperture Mac (live SMB peer) but was a **Control4 controller** (Dropbear, `CONTROL4HOME` workgroup) that ate hours. The real Aperture Mac is `.219`.
+
+**Old Macs need legacy SSH crypto** (and an RSA key — pre-2014 OpenSSH/Dropbear has no ed25519):
+```bash
+# Aperture Mac .219 (OpenSSH 7.8): -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -i ~/.ssh/id_rsa
+# 2008 Mac .216 (OpenSSH 5.2): also -o KexAlgorithms=+diffie-hellman-group1-sha1,diffie-hellman-group14-sha1 \
+#   -o Ciphers=+aes128-cbc,3des-cbc -o MACs=+hmac-sha1
+```
+To authorize my key when it isn't yet: **mount the Mac's disk (SMB/AFP) and append `~/.ssh/id_rsa.pub` to `/Volumes/<disk>/Users/<u>/.ssh/authorized_keys`** — file is writable as that user over the share. (2008 Mac = AFP `/Volumes/Mac2008Snow`; it had 0 NSFs — pure Final Cut box.)
+
 Key locations: loose files under `/volume1/Home Files/Data/Systems Stuff/Old Computers/…`, `/volume1/DSN/…`, `/volume1/XTL/…`. **Install media:** `…/Install Pgms/Windows/notes/{9.0.0,8.5.1,7.0.3}/`. **Notes IDs:** `…/MIS/Notes ID Files/DSN/` (everyone + `CERT.ID`), plus per-user `…/lotus/notes/data/<name>/user.id`.
 
 ## NSFs inside Parallels VMs
@@ -140,11 +153,26 @@ mount -o ro /dev/nbd0p2 /mnt/mvm
 cp "/mnt/mvm/Notes/Data/mail/MKIMMERL.NSF" /tmp/out.nsf      # NOTE: Linux NTFS is CASE-SENSITIVE
 umount /mnt/mvm; qemu-nbd --disconnect /dev/nbd0
 ```
-- **Case-sensitivity trap:** the on-disk path is `/Notes/Data/mail/...` (capital `Data`), not `data`. Use `find -iname` to discover real case.
-- Relay to the XPS via the Mac (`scp` docker-server→Mac→XPS) or set up direct auth. ~30s per GB on the wired LAN.
+- **Case-sensitivity trap:** Linux NTFS is case-sensitive — the on-disk path is `/Notes/Data/mail/...` (capital `Data`). Use `find -type f -iname` to discover real case.
+- **nbd reset between VMs:** back-to-back `--disconnect`/`--connect` leaves nbd0 loading **0 B** (no partitions). Between VMs: `rmmod nbd; modprobe nbd max_part=8`, then **verify `blockdev --getsize64 /dev/nbd0` > 0 before mounting** (retry once if 0). If `partprobe` shows no `nbd0pN`, the parallels partition table is unreadable (one KBL XP disk did this) — fall back to Parallels Mounter or skip.
+- **Root-owned extracts:** if the extract script ran under `sudo`, the copied files are **root-owned** → a later `scp` as `doug` silently fails to read them. `sudo chown -R doug:doug /tmp/vmextract` first.
+- Relay to the XPS via the Mac (`scp` docker-server→Mac→XPS), or add docker-server's key to the XPS (`C:\ProgramData\ssh\administrators_authorized_keys`) for a direct wired push. ~30s per GB.
+- Skip the Mac/Linux VMs (no Notes). DANIELS XP was a 2 MB empty stub; KBL Win8/XP had no Notes data.
 
 ## Encrypted NSFs (active mailboxes)
 Some copies are **locally encrypted** with the owner's ID (active working mailboxes often are; unencrypted *replicas/exports* of the same mailbox also exist and carve fine). Tell-tale: `grep -a -o Subject file.nsf` returns **0** (zero readable strings at all), the body is high-entropy, but the **header is still a valid NSF magic `1a 00 00 04 ...`**. Carving/`strings` is useless on these. **Only the encrypting ID opens it** — run the COM engine with that owner's `.id` + password and it decrypts transparently (e.g. MaggieDSN's 1.16 GB `MKIMMERL.NSF` is encrypted; `maggie.id` opens it). So: encrypted = *more* complete/authoritative, not a dead end — just route it through the engine, never the grep.
+
+## Adding a source / re-consolidating (the 2026-06-12 pipeline)
+The archive is built; to fold in a *new* source (e.g. the 2008 Mac if it ever gets Notes, or a found NSF) follow the same shape — all of it ran from `/tmp/dsncal/` scripts:
+1. **Inventory** the host over SSH (`find -type f -iname '*.nsf' ... -printf '%s|%p'`).
+2. **Classify** data vs system/template (drop `bookmark/names/log/help*/lccon*/*.ntf/...` and `.metadata/.projects` dirs). ~70% is plumbing.
+3. **Hash** the data files (run `md5sum` *on the host*, write to a host-local file; an interrupt-able ssh-pipe loop drops). Push the path list via `ssh "cat > /tmp/x"` (Synology SFTP is chrooted — `scp` to it fails).
+4. **Dedup by content** across all sources → distinct databases; `primary\` = largest of each name, `copies\` = other distinct versions (name them `<base>__<src><ext>`).
+5. **Copy to XPS** (`C:\NotesArchive\{primary,copies}\`) reading source via `ssh cat`/local, scp to XPS, **hash-verify on read**, resumable (skip if dest size already matches).
+6. **MANIFEST.txt** — record every original location of every database.
+7. **Back it up (the hard gate before any delete):** land the archive in docker-server `/home/doug/backups/unified/notes-archive/` (docker-server pulls from XPS), then run `BKP_RESTIC` — static data inherits restic (Synology repo) + USB Tier-3 for free. See `backup-recovery`.
+8. **Verify** every XPS file's MD5 matches a known-good source hash.
+9. **Delete LOOSE originals only** — live Notes folders on Macs + loose NAS copies. **Classify keep-vs-delete:** delete only paths NOT under `#recycle` / `Novell Backup` / `Backups.backupdb` (Time Machine) / inside a VM. **Before deleting each file, confirm its content hash is in the backed-up archive** (belt-and-suspenders on irreplaceable data — the fixer CLAUDE.md 73 GB rule).
 
 ## Gotchas / recovery checklist
 - `ActiveX component can't create object` → you used 64-bit cscript/regsvr32. Use **SysWOW64**.
@@ -153,9 +181,14 @@ Some copies are **locally encrypted** with the owner's ID (active working mailbo
 - Notes GUI ("IBM Notes" / `notes.exe`) → **expected to hang on Win11; ignore it, use COM.**
 - Garbled accents / `sort: Illegal byte sequence` → it's Win-1252; `iconv` to UTF-8, and use `LC_ALL=C` for byte-wise greps.
 - XPS unreachable → it's a headless Plex box; if Jump shows black, a **reboot** restores its display path (Plex auto-recovers). RDP won't help — it's Win11 **Home** (no RDP host).
+- `md5sum` hangs on a `.nsf` → it's a *directory* (Eclipse workspace). Use `find -type f`.
+- qemu-nbd shows `0 B` / no partitions → reset (`rmmod nbd; modprobe nbd max_part=8`) + `blockdev --getsize64` check.
+- `scp` of VM extracts gets nothing → root-owned (sudo). `chown -R doug` first.
+- old-Mac SSH `Bad key types` / `Permission denied` → legacy crypto opts + RSA key (no ed25519); authorize via the mounted disk.
 
 ## Related
-- `notes-archive-vault` memory — project scope, keep/drop list, current state
-- `homelab-synology` — the NAS where the archive lives
+- `notes-archive-vault` memory — project scope, keep/drop list, current state, archive location
+- `backup-recovery` — how the archive is backed up (unified→restic→USB); use to add a source
+- `homelab-synology` — the NAS where the loose sources lived
 - `imaging-expert` — destination for extracted documents
 - `knowledge-architecture` — these archives are *Reference*; import wholesale into a siloed store, don't hand-curate prose
