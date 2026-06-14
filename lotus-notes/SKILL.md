@@ -9,6 +9,8 @@ Doug lived in Lotus Notes for ~25 years (XTL → DSN eras). **As of 2026-06-12 e
 
 Project context, scope decisions, and the keep/drop list live in the **`notes-archive-vault`** memory — read it for the "why" and current state. This skill is the "how".
 
+**Downstream consumer:** the `life-timeline-project` memory — Doug's goal of a unified life timeline (events→photos/docs/emails across XTL, KimmerlyBlacksmith, DSN, Gmail). This skill is its extractor for the Notes-held sources (XTL via `dougXTL.id`, DSN via `user.id`). Calendar export is proven; full *mail* ingest (Form="Memo" + bodies + attachments) is the next primitive to build when that project needs it.
+
 ## The Mac live client (Aperture Mac) — Doug's working environment
 
 As of 2026-06-13 Doug reads his mail in a **fully-working Mac IBM Notes GUI** on the **Aperture Mac (`192.168.20.219`)** — this, not the headless XPS engine, is the live environment. (The XPS COM engine below remains the tool for *scripted* extraction/inventory and for password/identity diagnostics.)
