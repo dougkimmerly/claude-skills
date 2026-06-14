@@ -37,6 +37,21 @@ Old id *snapshots* freeze the password as-of-snapshot, so the *current* remember
 ### Backup (intermittently-on → PUSH)
 `~/bin/notes-backup.sh`: rsync 1 `Archive/`→`notes-archive/`; rsync 2 the rest of the data dir (mail + working dbs + `user.id` + `dougXTL.id` + config, excludes `Archive/`+`log.nsf`)→`aperture-live/` → restic+USB. One-click `~/Desktop/Back Up Notes.command` (adds a restic snapshot); LaunchAgent every 20min when Notes is closed.
 
+## Consolidating / merging mailboxes (proven 2026-06-14)
+
+Doug's mail came in **time-sliced version-copies** (each machine/era kept a different slice; the "current" file is often just the latest slice). Consolidate all copies of one identity's mailbox into a single full-history mailbox:
+
+- **`/tmp/dsncal/merge.vbs` (target, src1, src2, …)** — opens target, builds a `seen` dedup dict from it, then per source: collect docs → dedup → copy. **Dedup key** = `$MessageID`/`InetMessageId`, else `Form + Subject + (Start/Posted/Delivered date)`. Run under an id that opens BOTH target and all sources (e.g. all DSN `douglask` copies open with `DougDSN.id` + the **XTL** password).
+- **Iterate with `db.Search("Form=\"Memo\" | Form=\"Appointment\" | …")`, NOT `db.AllDocuments`.** AllDocuments can include deletion stubs / a corrupt doc that throws **`NotesDocumentCollection: Argument has been deleted`** on `GetNextDocument`. Search by content-forms skips them. (XTL merge survived AllDocuments by luck; DSN's `douglask` had a bad entry and failed twice until switched to Search.)
+- **Two-phase copy** (collect UNIDs in pass 1, then `GetDocumentByUNID`+`CopyToDatabase` in pass 2) — copying during live-cursor iteration can invalidate the cursor.
+- **Overlapping date ranges ≠ duplicate docs — merge EVERY copy.** Dedup handles true overlap; location-variants hold surprising uniques (DSN **Mac** copy added **+5,880** docs the NAS "primary" lacked, and extended mail 2018→2019). Result: XTL `dkimmerl` 2002–2012 (53,637), DSN `douglask` 2010–2019 (24,427).
+- **Unlock an encrypted version-copy with the matrix** (`/tmp/dsncal/matrix_locked.ps1` + `locked_test.vbs`): for each id file × each candidate password, init then `GetDatabase` the target (Nothing = locked). Old files are often keyed to a *different/older* id+password than you'd expect.
+- **Push a big merged NSF back to the Aperture Mac** with `rsync -a --partial --timeout=180 -e "ssh <legacy opts>"` (delta-only — never full-scp 2–3 GB over the slow legacy-SSH link). Back up the live one first (`cp …/mail/x.nsf …/mail/x.nsf.premerge`), Notes CLOSED, then `md5` both ends to verify byte-identical.
+
+### Other mail sources beyond NSF (for the life-timeline project)
+- **Apple Mail imports** (Mac): `~/Library/Mail/V10/<UUID>/Import.mbox/<name>.mbox/` — messages are `.emlx` files in `Data/` subdirs; the `.mbox` itself shows **0 bytes**. Year histogram: `find … -iname '*.emlx' | while read f; do head -80 "$f" | grep -iE -m1 '^date:'; done | grep -oE '(19|20)[0-9]{2}' | sort | uniq -c`. (Found the dead **DSN-Gmail** account this way: 40,098 msgs, native 2020–21, only surviving copy → backed up to `unified/dsn-gmail-mail/`.)
+- **Google Takeout**: multi-part `takeout-*.zip` (each part an independent zip). **Synology has no `unzip`** — use `7z` or `python3 -c "import zipfile"`. Mail can be **deselected** at export time (then `Takeout/Mail/` holds only settings JSON, no `.mbox`).
+
 ## The one thing that works: headless COM on the XPS
 
 | Fact | Value |
