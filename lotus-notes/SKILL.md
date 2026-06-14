@@ -9,6 +9,31 @@ Doug lived in Lotus Notes for ~25 years (XTL → DSN eras). **As of 2026-06-12 e
 
 Project context, scope decisions, and the keep/drop list live in the **`notes-archive-vault`** memory — read it for the "why" and current state. This skill is the "how".
 
+## The Mac live client (Aperture Mac) — Doug's working environment
+
+As of 2026-06-13 Doug reads his mail in a **fully-working Mac IBM Notes GUI** on the **Aperture Mac (`192.168.20.219`)** — this, not the headless XPS engine, is the live environment. (The XPS COM engine below remains the tool for *scripted* extraction/inventory and for password/identity diagnostics.)
+
+- SSH (legacy crypto, OpenSSH 7.8 / macOS 10.13): `ssh -o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa -i ~/.ssh/id_rsa doug@192.168.20.219`.
+- **Config = `~/Library/Preferences/Notes Preferences`** (NOT a `notes.ini` in the data dir). Keys: `Directory=`, `MailServer=`, `MailFile=` (Windows-style backslash, e.g. `mail\douglask.nsf`). **Notes rewrites it on quit → edit only while Notes is CLOSED** (`pgrep -f /Applications/Notes.app/Contents/MacOS`); back up as `.bak-<date>` first.
+- Data dir = `~/Library/Application Support/Lotus Notes Data/`. **Working dbs must sit at the path the workspace/mail bookmarks expect** (e.g. `mail/douglask.nsf`); a db present only under `Archive/` is invisible to those bookmarks → "can't find database / email".
+
+### Two identities (DSN + XTL) — Switch ID, not Locations
+Doug has two identities, each with its own mailbox, **each locally encrypted to that id** (the other id gets `GetDatabase → NULL` — it's encryption, not config):
+
+| Identity | id file | mailbox | msgs | SOPS pw key |
+|---|---|---|---|---|
+| **DSN** (primary) `CN=Douglas Kimmerly/O=DSN` | live `user.id` | `mail/douglask.nsf` | 7066 | `DOUG_ID_PASSWORD` |
+| **XTL** `CN=Doug Kimmerly/O=XTL` | `dougXTL.id` | `mail/dkimmerl.nsf` | 45068 | `XTL_ID_PASSWORD` |
+
+- **Switch via File → Security → Switch ID** → pick id → enter its password → open that mailbox; switch back the same way. **Notes Locations switch only mail file/server, NOT the id** — Switch ID is the only thing that changes identity for decryption.
+- **Expired certs do NOT block local reads.** Both certs are long-expired (DSN 09/2019); cert expiry only blocks live-server auth + re-certification. The id's encryption keys never expire — verified, both expired ids opened their mailboxes. (`CERT.ID` for DSN is in the archive if re-certification is ever wanted — unnecessary.)
+
+### Finding which id + password opens an encrypted NSF
+Old id *snapshots* freeze the password as-of-snapshot, so the *current* remembered password may fail while an *older* one works. On the XPS engine: `xtl_matrix.ps1` (× `xtl_test.vbs`) tries every candidate password × every id file and reports which combo opens the target NSF; `idmap.ps1` maps id files → identity names; `open_test.vbs` tests whether id X can open db Y. (Saved `/tmp/dsncal/`.) Multiple snapshot copies of one identity are interchangeable (same keys).
+
+### Backup (intermittently-on → PUSH)
+`~/bin/notes-backup.sh`: rsync 1 `Archive/`→`notes-archive/`; rsync 2 the rest of the data dir (mail + working dbs + `user.id` + `dougXTL.id` + config, excludes `Archive/`+`log.nsf`)→`aperture-live/` → restic+USB. One-click `~/Desktop/Back Up Notes.command` (adds a restic snapshot); LaunchAgent every 20min when Notes is closed.
+
 ## The one thing that works: headless COM on the XPS
 
 | Fact | Value |
