@@ -52,6 +52,15 @@ Doug's mail came in **time-sliced version-copies** (each machine/era kept a diff
 - **Apple Mail imports** (Mac): `~/Library/Mail/V10/<UUID>/Import.mbox/<name>.mbox/` — messages are `.emlx` files in `Data/` subdirs; the `.mbox` itself shows **0 bytes**. Year histogram: `find … -iname '*.emlx' | while read f; do head -80 "$f" | grep -iE -m1 '^date:'; done | grep -oE '(19|20)[0-9]{2}' | sort | uniq -c`. (Found the dead **DSN-Gmail** account this way: 40,098 msgs, native 2020–21, only surviving copy → backed up to `unified/dsn-gmail-mail/`.)
 - **Google Takeout**: multi-part `takeout-*.zip` (each part an independent zip). **Synology has no `unzip`** — use `7z` or `python3 -c "import zipfile"`. Mail can be **deselected** at export time (then `Takeout/Mail/` holds only settings JSON, no `.mbox`).
 
+## Structured mail extraction → postgres (`mail.message`, the life-timeline store)
+
+Proven 2026-06-14: extracted 69,965 Notes messages (XTL 48,389 + DSN 21,576) + 20,055 attachments into the shared `mail.message` table for the life-timeline crawler. Recipe (scripts in `/tmp/dsncal/`):
+- **Bodies** (`extract_mail.vbs`): `db.Search("Form=""Memo"" | Form=""Reply"" | Form=""ReplyWithHistory""")`; per doc emit a **JSON line** — UNID, `PostedDate`/`DeliveredDate`→`LSGMTTime` ISO-Z, From/INetFrom, SendTo/CopyTo arrays, Subject, `Body` via `GetUnformattedText()` (cap 200k). Write UTF-8 with **`ADODB.Stream` charset utf-8** (emits a BOM — strip line 1 on load). JSON-escape with a RegExp control-char strip (don't loop char-by-char — too slow at 70k docs).
+- **Attachments** (`extract_attach.vbs`): per doc, `s.Evaluate("@AttachmentNames", doc)`; for each name `doc.GetAttachment(name).ExtractFile(path)`. Notes UNID = filesystem-safe msgkey. tar on Windows (`tar.exe`/bsdtar, UTF-8) → pull to docker-server → extract into the backup root → restic+USB.
+- **Load** (postgres pg16): pipe `CREATE TEMP … ; \copy … FROM STDIN (FORMAT csv, QUOTE E'\x01', DELIMITER E'\x02') ; <data> ; \. ; INSERT…` as **one stdin stream** to `docker exec -i … psql` (NOT `-f` + piped stdin — there `\copy FROM STDIN` reads the *script's* next lines, not your data). Guard malformed lines with `WHERE raw IS JSON` (pg16). Connect as `homelab_admin` (no `postgres` superuser exists here; client-side `\copy`, not server `COPY`).
+- **VBScript gotchas:** it's **case-insensitive** → `MAN` and `man` collide ("Name redefined"); declare all `Dim`s once at top; `Option Explicit`.
+- ⚠️ **`mail.message` is shared by multiple writers — NEVER `TRUNCATE`/`DROP` it** (a Notes load wiped the timeline CC's 40k dsn-gmail rows once). Loads are additive (`ON CONFLICT DO NOTHING`); reload/update one source only via `… WHERE source_system='notes-xtl'` etc. Convention lives in `life-timeline/docs/attachments.md` + `notes-mail-extraction.md`.
+
 ## The one thing that works: headless COM on the XPS
 
 | Fact | Value |
