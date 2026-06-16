@@ -48,6 +48,9 @@ Family
 		Anniversary
 ```
 
+### Purge unused keywords
+**Metadata menu → Purge Unused Keywords** — removes every keyword no longer applied to any photo (count 0) in one shot. **All-or-nothing** (no per-keyword picking; also removes intentional empty placeholders). Keeps keywords still used by ≥1 photo, and keeps parents whose children are still used. Run it *after* deleting a batch of photos to sweep up the keywords that were only on them. (Preview what would go: query the catalog for keywords whose image count is 0 before running.)
+
 ## Map module (geotagging) — must be online (Google map)
 - **Place photos:** drag from Filmstrip onto the map, or right-click a location > add selected; photos with GPS appear as pins automatically.
 - **GPS fields** in the Metadata panel (Location / EXIF and IPTC presets): paste `lat,long`; Altitude, Direction, and IPTC Sublocation/City/State/Country/ISO are editable.

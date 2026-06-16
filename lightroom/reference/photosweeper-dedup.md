@@ -12,6 +12,7 @@ PhotoSweeper by Overmacs (overmacs.com) — the macOS duplicate finder this proj
 ## How it reads the catalog
 - Add the Lightroom catalog as a source: open the **Media Browser** (toolbar) → **+** → select the Lightroom library/catalog → **drag** the photos/folders to compare into the comparison area. You can scope to specific LR folders.
 - ⚠️ **Lightroom must be CLOSED** during the run — PhotoSweeper reads/writes the catalog's SQLite DB directly and LR locks it while open ("Lightroom application must be closed until removal is finished"). **Back up the `.lrcat` first** (it edits in place).
+- ⚠️ **A re-run can silently exclude a previous run's marked photos.** PhotoSweeper 5.5 has a documented **"ignore rejected Adobe Lightroom photos" import option** that keys on the **Reject flag**; there is no *documented* collection-based exclusion. Observed 2026-06: a fresh full re-import came in at `catalog_count − trash_collection_count`, and **un-flagging alone did not re-include them** (whether the lever is the flag, the collection, or import-timing is ambiguous). **Reliable reset for a clean re-run: un-flag the rejects AND empty the `Trash (PhotoSweeper)` collection, then re-import with Lightroom closed.** Note re-import is the *whole* catalog again (can take hours over a NAS).
 - It analyzes actual image **bitmaps** (reads originals / LR previews), not just file attributes.
 - NAS note: Overmacs docs don't specifically cover network-hosted *catalogs*; Doug's `.lrcat` is **local** (fine). Ensure the **NAS is mounted** so originals are readable during the scan.
 
@@ -51,6 +52,23 @@ When the source is Lightroom and you press **Trash Marked**, PhotoSweeper does *
 9. Optionally delete the empty `Trash (PhotoSweeper)` collection.
 
 This dedups the **catalog**; disk copies remain and are reconciled separately (Phase 3 bulk cleanup on the NAS).
+
+## Reading PhotoSweeper's session / recovering pairs (advanced)
+
+PhotoSweeper (App Store build) is **sandboxed** — its working data lives in its container:
+
+- **Session library:** `~/Library/Containers/com.overmacs.photosweeper/Data/Library/Application Support/PhotoSweeper/Session/Library.pslib` — a **SQLite database** (copy it first, query read-only). Tables:
+  - `PSFile` — `fileID`, **`filePath`** (full path), `fileName`, `fileType`, `fileSize`, `fileLabel` (=color label), `fileFlags`, `parentLibraryItemID` (**unique per file → maps to the LR item, NOT a group**), `aestheticScore`.
+  - `PSFileInfo` — rich per-file: `width`/`height`, `dateTimeOriginal`, `rating`, **`keywords`**, **`GPSLatitude`/`GPSLongitude`/`…Ref`**, camera fields, `duration`/`frameRate` (video).
+  - `PSFolder`, `PSLibrary`, `PSAdminData` (just a schema `version`).
+- **Run history:** `…/Application Support/PhotoSweeper/Statistics.plist` → `PSSessions` array, each with `Freed<Source>ImageCount`/`Size` (e.g. `FreedLightroomImageCount`) + start/end dates — use to see how many each run trashed (e.g. a filename run vs a like-pics run).
+- `folderBookmark`/`libraryBookmark` are security-scoped-bookmark BLOBs (sandbox), not plain paths.
+
+⚠️ **The duplicate GROUPS are NEVER persisted to disk — at ANY stage — and cannot be extracted from PhotoSweeper.** Verified via the manual + Mach-O symbol inspection of `/Applications/PhotoSweeper.app`: grouping is a purely in-memory runtime model (`MCCompareGroup`/`MCGroup`/`MCGroupItem`); marks are in-memory too (`isMarked`/`markedItems`/`numberOfKeptItems`). The Session `Library.pslib` stores only the **file list + security-scoped bookmarks + cached reduced bitmaps** — **no group/cluster/match column, no join table, no blob**; `fileFlags`/`fileLabel` carry no documented mark-group semantics. "Restore Last Session" **re-derives** groups from the cached bitmaps, it does not read stored groups. There is **no saveable document, no export/report/CSV, no AppleScript dictionary (no `.sdef`, no `NSAppleScriptEnabled`), no CLI.** Conclusion: you cannot read keeper↔reject pairings out of PhotoSweeper — not even from a live, post-compare, pre-trash session. (Don't waste a run trying.)
+- **The only durable artifact of a run is the Lightroom side:** the `Trash (PhotoSweeper)` collection + Reject flag = the **to-delete SET**, NOT the group-by-group pairing.
+- **To pair reject→keeper (e.g. for metadata transfer), reconstruct from the LR catalog** by `captureTime` + filename stem (+ dimensions / content hash). Division of labour: **PhotoSweeper does the perceptual dedup; the catalog gives the pairs.** The LR `Trash (PhotoSweeper)` collection = the latest run's rejects.
+
+**Transferring a reject's metadata to its keeper** (e.g. GPS the keeper lacks because a higher-res raw was kept over a GPS-tagged JPEG): write to the keeper's XMP sidecar with exiftool, then LR **Metadata → Read Metadata from File**. **GPS gotcha:** use plain `-GPSLatitude=<abs> -GPSLatitudeRef=N|S -GPSLongitude=<abs> -GPSLongitudeRef=E|W` — **NOT** `-XMP-exif:GPSLatitudeRef=…` (that Ref sub-tag doesn't exist in XMP → exiftool silently drops the hemisphere and writes the wrong sign).
 
 ## Sources
 overmacs.com (homepage, manual PDF, ?p=releasenotes); Mac App Store id463362050 / id506150103; cisdem.com & northlight-images.co.uk & macworld reviews; lightroomqueen.com (undo Trash (PhotoSweeper)); jkost.com (Remove vs Delete).
