@@ -9,7 +9,7 @@ Doug lived in Lotus Notes for ~25 years (XTL → DSN eras). **As of 2026-06-12 e
 
 Project context, scope decisions, and the keep/drop list live in the **`notes-archive-vault`** memory — read it for the "why" and current state. This skill is the "how".
 
-**Downstream consumer:** the `life-timeline-project` memory — Doug's goal of a unified life timeline (events→photos/docs/emails across XTL, KimmerlyBlacksmith, DSN, Gmail). This skill is its extractor for the Notes-held sources (XTL via `dougXTL.id`, DSN via `user.id`). Calendar export is proven; full *mail* ingest (Form="Memo" + bodies + attachments) is the next primitive to build when that project needs it.
+**Downstream consumer:** the `life-timeline-project` memory + the **`life-timeline` skill** (the data-pipeline side) — Doug's unified life timeline (events→photos/docs/emails across XTL, KimmerlyBlacksmith, DSN, Gmail, **Maggie/MKIMMERL**). This skill is its extractor for the Notes-held sources. Calendar export AND full *mail* ingest (Form="Memo" + bodies + attachments → `mail.message`) are both **proven/done** (XTL via `dougXTL.id`, DSN via `user.id`, **Maggie's MKIMMERL via `MAGGIE_ID_PASSWORD`** — 2026-06-16, source `mkimmerl`/owner `Maggie`, 8,158 msgs; her mail was 3 fragmented copies merged). Attachments now feed the life-timeline's eTicket/folio PDF cost parsers.
 
 ## The Mac live client (Aperture Mac) — Doug's working environment
 
