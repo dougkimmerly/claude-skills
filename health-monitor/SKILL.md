@@ -165,6 +165,7 @@ curl -I http://service_url
 - Wrong check_url in NetBox (check for redirects - use final URL path)
 - Service behind VPN (not accessible from dk400)
 - Check timeout too short
+- **Flakey primary NIC on a multi-homed host.** Ping checks without a `check_url` fall back to the device's `primary_ip4`. If `primary_ip4` is an unreliable interface (e.g. WiFi on a box that's also wired), the check false-alarms DOWN while the host is up on its other NIC. Fix: point `primary_ip4` at the reliable interface. (55videoserver 2026-06-13: ~13k false DOWNs because primary was WiFi `.201`; set primary to Ethernet `.12` — both NICs stay assigned, the flakey one just isn't the up/down signal.)
 
 **Error message interpretation (since Jan 2026):**
 - `Device unreachable: {host}` → Ping failed, likely network/power issue
@@ -185,6 +186,19 @@ curl -X PATCH -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/js
 ```
 
 **Why not delete:** Keeps historical context. Health_check skips non-active VMs automatically.
+
+### 3b. SignalK webapp discovery drift ("webapp missing on <SK server>")
+
+`check_signalk_webapp_discovery()` (in `health_check.py`) compares every NetBox `ipam_service` attached to a SignalK VM against that server's live `/skServer/webapps`, raising a **"missing"** issue for any NetBox service not present on the server.
+
+**Diagnose** — establish ground truth before touching NetBox:
+```bash
+# what the probe actually compares against (the VM's check_url host; strip /admin)
+curl -s http://<sk-host>/skServer/webapps | python3 -c 'import sys,json;[print(w["name"]) for w in json.load(sys.stdin)]' | sort
+# what NetBox thinks is on that VM
+psql ... -c "SELECT id,name FROM netbox.ipam_service WHERE parent_object_id=<vm_id> ORDER BY name;"
+```
+A **"missing" webapp means it was retired or moved** off that server (NetBox is stale) — not that it crashed. Reconcile NetBox to reality: remove the stale `ipam_service`, or move it to the SK VM that now hosts it. **Caveat:** the probe has no *retired* concept, so a retired webapp re-flags every cycle until its service record is removed — which conflicts with mark-don't-delete (tracked as enhancement #746: make the probe skip a retired-tagged service). Worked example 2026-06-13: 5 Nav Net webapps (boat-log-app, crew-checklist, passage-planner, sail-work-planner, signalk-maintenance-jobs) moved to centralsk:3000 / rewritten+retired; removing the 5 stale services stopped ~190k false "missing" occurrences.
 
 ### 4. Duplicate monitoring (container_health vs health_check)
 
