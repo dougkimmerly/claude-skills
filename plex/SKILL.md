@@ -77,6 +77,75 @@ watched on the shared owner account.
   exactly why the Shows app keeps its *own* watchlist in Postgres and uses local
   scrobble instead of the Plex watchlist.
 
+## Troubleshooting playback (error `s1001 (Network)` / "won't play")
+
+`s1001` in the web client is a **generic** symptom — it just means the player
+couldn't start a stream. The usual real cause is that **Plex can't read the file**,
+so it never analyzed it. Diagnostic chain:
+
+1. **Check the item's media metadata.** `GET /library/metadata/<ratingKey>` — if
+   `<Media>` shows `container`/`videoCodec`/`width` all empty (and no `<Stream>`
+   children), Plex has the file *listed* (it can `stat` it) but **never read its
+   contents to analyze**. That's the tell.
+2. **Check file permissions on the NAS.** Media lives on the Synology
+   (`192.168.20.16`) under `/volume1/Home Files/Media/...`, served to the
+   videoserver as the SMB share `\\Blackhole55\Home Files`. Plex reads it over SMB
+   as a **non-owner**, so the file must be readable by group/other.
+   - Transcoder/Arr output is owned `home:users` mode `0777` → fine.
+   - Files **copied** onto the NAS (e.g. from a Mac over SMB/AFP) can land owned
+     `doug` mode `-rw--w--w-` (**no read bit for o/g**) → Plex can't read →
+     empty media → `s1001`. (2026-06-17: 4 Home-Movies files copied during a
+     transcode session had this; `Currans s1e5 BillsBBQ` was the reported one.)
+   - Find offenders: `find "/volume1/Home Files/Media/<dir>" -type f ! -perm -o+r | grep -v @eaDir`
+   - Fix: `chmod 0777 "<file>"` (matches the tree convention), then re-analyze:
+     `PUT /library/metadata/<ratingKey>/analyze` and confirm metadata now populates.
+3. If perms are fine, confirm the file itself is sound with `ffmpeg -i` on the
+   Synology (`/usr/bin/ffmpeg`; note **no `ffprobe`** on that box, and its build
+   lacks an h264 *decoder* so "Decoder not found" is harmless — look at the
+   `Input #0 ... Duration/Stream` header lines instead).
+
+## Recovering a downed Plex Media Server (Windows host)
+
+Since 2026-06-17 (ADR 0028) PMS runs **headless** from the Task Scheduler task
+**`PlexMediaServer-Headless`** — runs whether logged on or not, as `doug`,
+`LogonType=Password`, `RunLevel=Highest`, in **session 0**. Triggers: `AtStartup`
++ a 5-min watchdog that re-runs the guard `C:\ProgramData\plex-ensure.ps1` (starts
+PMS only if not already running) + `RestartCount=3` backstop. So a crash now
+self-heals within ~5 min and survives reboot **without any interactive login**.
+`Plex Update Service` is a separate, unrelated service. (`doug`'s profile folder is
+`C:\Users\8960` — don't be thrown by the path.)
+
+- Confirm state: `tasklist | findstr /I Plex` (look for `Plex Media Server.exe`);
+  `Test-NetConnection localhost -Port 32400`. PMS shows `SessionId 0` now.
+- **Force a restart immediately** (don't wait for the watchdog):
+  `schtasks /Run /TN PlexMediaServer-Headless` (or `Start-ScheduledTask`). The
+  guard relaunches PMS if it's down; ~15–30 s to open 32400 (`/identity` 503→200).
+- Task config / re-register lives in **ADR 0028**; password is SOPS
+  `secrets/home/videoserver.sops.yaml → WIN_DOUG_PASSWORD` (inject via stdin, never
+  echo). If you ever rebuild the task, set the repetition by **borrowing** a working
+  `.Repetition` object — `New-ScheduledTaskTrigger`'s repetition args don't persist
+  on their own.
+
+### Why the credential/token detail matters (the trap we hit)
+
+PMS reaches the media on the Synology (`\\Blackhole55\Home Files` = `192.168.20.16`)
+by **NTLM pass-through from its logon token** — there is **no stored `cmdkey`**
+(`cmdkey /list` = NONE). The token must carry `doug`'s password:
+
+- The headless task's **Password logon** carries it → SMB works (verified by a live
+  206 byte-range read from session 0).
+- A **network logon** (plain SSH) or a **password-less scheduled task** (**S4U**
+  token) does **not** → every file access fails `system:1326` (ERROR_LOGON_FAILURE)
+  → users see **"Please check that the file exists and the necessary drive is
+  mounted"** (distinct from `s1001`). So **never** launch PMS via a bare `ssh …
+  "Plex Media Server.exe"` or an S4U task — use `PlexMediaServer-Headless`.
+- You also can't pre-seed a `cmdkey`/`CredWrite` from SSH — both blocked from a
+  network logon (`CredWrite` → err `1312`).
+
+Last-resort: **reboot** (`AutoAdminLogon` is still on; the boot trigger starts PMS).
+NB: triggering `…/analyze` on **multi-GB** files can itself take PMS down — do them
+one at a time.
+
 ## Who talks to Plex
 
 - **`entertainment`** — Kometa + the Arr pipeline that feeds the library; franchise sort-titles. Needs the **owner** token.
