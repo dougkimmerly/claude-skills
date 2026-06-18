@@ -11,6 +11,8 @@ Project context, scope decisions, and the keep/drop list live in the **`notes-ar
 
 **Downstream consumer:** the `life-timeline-project` memory + the **`life-timeline` skill** (the data-pipeline side) — Doug's unified life timeline (events→photos/docs/emails across XTL, KimmerlyBlacksmith, DSN, Gmail, **Maggie/MKIMMERL**). This skill is its extractor for the Notes-held sources. Calendar export AND full *mail* ingest (Form="Memo" + bodies + attachments → `mail.message`) are both **proven/done** (XTL via `dougXTL.id`, DSN via `user.id`, **Maggie's MKIMMERL via `MAGGIE_ID_PASSWORD`** — 2026-06-16, source `mkimmerl`/owner `Maggie`, 8,158 msgs; her mail was 3 fragmented copies merged). Attachments now feed the life-timeline's eTicket/folio PDF cost parsers.
 
+> **⚑ CANONICAL EXTRACTORS NOW LIVE IN GIT (2026-06-18):** `~/Programming/dkSRC/apps/archive/pipeline/notes/` — `extract_docs`, `extract_mail`, `extract_cal`, `extract_attach`, `validate_id` (`.vbs`+`.ps1`), `merge.vbs` — moved out of ephemeral `/tmp/dsncal/`. The **Archive platform** (`apps/archive`, ADR 0001) is now the umbrella consumer (domains dsn/kbl/xtl/personal); use it, not `/tmp`, for the current scripts.
+
 ## The Mac live client (Aperture Mac) — Doug's working environment
 
 As of 2026-06-13 Doug reads his mail in a **fully-working Mac IBM Notes GUI** on the **Aperture Mac (`192.168.20.219`)** — this, not the headless XPS engine, is the live environment. (The XPS COM engine below remains the tool for *scripted* extraction/inventory and for password/identity diagnostics.)
@@ -61,6 +63,18 @@ Proven 2026-06-14: extracted 69,965 Notes messages (XTL 48,389 + DSN 21,576) + 2
 - **VBScript gotchas:** it's **case-insensitive** → `MAN` and `man` collide ("Name redefined"); declare all `Dim`s once at top; `Option Explicit`.
 - **Set `owner` on every insert** (`'Doug'`/`'Maggie'`/`'KimmerlyBlacksmith'` — the *mailbox* person, ADR 0009) or the row lands `owner=NULL` and breaks the per-person views. Multi-copy mailboxes (e.g. Maggie's `MKIMMERL`: 3 complementary-era copies, all decrypt with `maggie.id`) must be **merged deduped first** — they're NOT pre-consolidated despite what a brief may say; extracting one copy drops whole years.
 - ⚠️ **`mail.message` is shared by multiple writers — NEVER `TRUNCATE`/`DROP` it** (a Notes load wiped the timeline CC's 40k dsn-gmail rows once). Loads are additive (`ON CONFLICT DO NOTHING`); reload/update one source only via `… WHERE source_system='notes-xtl'` etc. Convention lives in `life-timeline/docs/attachments.md` + `notes-mail-extraction.md`.
+
+## Generic document extraction + credential probing (2026-06-18, DSN/Archive)
+
+Beyond mail/calendar, **whole document DBs** (DSNGENER, DSNLet, SALESMAN, the NAS docs, A_JKNOX) extract via **`extract_docs.vbs`** (`apps/archive/pipeline/notes/`): iterate `db.AllDocuments`, emit form/subject/body/date/attachments JSONL. 5,452 DSN docs loaded this way → `dsn.document` (the Archive corpus path; supersedes "feed to imaging" for that store).
+- **`doc.Created` is a Date *variant*, NOT a NotesDateTime object** — format it directly (`If IsDate(d) Then Year(d)&"-"&…`). The `.LSGMTTime` path (correct for *item* DateTimeValues like `StartDateTime`) returns the **1899-12-30 epoch** on a document property — silently dated 498 docs to 1899 before the fix.
+- **Body fallback:** if `GetFirstItem("Body")` is empty, concatenate non-`$` text items (`itm.Text`) — catches form-field docs with no rich-text body.
+
+### Cheap credential probe (no full matrix)
+Run the proven `extract_docs.ps1` against ANY **dummy** local NSF with a candidate id+password and read the result: **`NULL_DB` = auth SUCCEEDED** (id unlocked, just couldn't open *that* db) · **`Wrong Password` = bad pw** · **`Could not open the ID file` = id path / PATH wrong, NOT a password verdict.** Faster than `matrix_locked` for a few candidates; validated vs known-good `maggie.id`/`DougDSN.id`.
+
+### Notes-id era mismatch (the DSN-mailbox-unlock dead end)
+The MIS id repo `…/MIS/Notes ID Files/DSN/` holds **2002/2013-vintage** ids; *current* per-user ids live in home dirs (`USERS/<name>/NOTES/USER.ID`). A later-era password won't open an earlier id copy (a password change re-encrypts the id; old copies keep the old pw) → "Wrong Password" on every copy. Doug's per-person pws (`secrets/home/dsn-ids.sops.yaml`: keys sue/drew/chris/… + a `notes_server` key) are newer and/or **network/email** pws ≠ Notes-id pws → Drew's/Christine's mailboxes stayed locked; Audrey/Mike Frith mailboxes aren't in the backup at all. (The server/admin Notes pw came from the sensitive logins doc on the DSN share — values live in SOPS / that doc only; **never put credential values in skills, memory, commits, or chat**.)
 
 ## The one thing that works: headless COM on the XPS
 
@@ -238,6 +252,8 @@ The archive is built; to fold in a *new* source (e.g. the 2008 Mac if it ever ge
 - qemu-nbd shows `0 B` / no partitions → reset (`rmmod nbd; modprobe nbd max_part=8`) + `blockdev --getsize64` check.
 - `scp` of VM extracts gets nothing → root-owned (sudo). `chown -R doug` first.
 - old-Mac SSH `Bad key types` / `Permission denied` → legacy crypto opts + RSA key (no ed25519); authorize via the mounted disk.
+- `Could not open the ID file` **even with the correct password** → the Notes program dir isn't on the cscript process's `$env:PATH` (C-engine DLLs can't load). The `.ps1` MUST do `$env:PATH="$base;"+$env:PATH`. This is NOT a password error.
+- All extracted dates land on **1899-12-30** → you called `.LSGMTTime` on `doc.Created` (a Date variant). Format it directly; reserve `.DateTimeValue.LSGMTTime` for item values like `StartDateTime`.
 
 ## Related
 - `notes-archive-vault` memory — project scope, keep/drop list, current state, archive location
