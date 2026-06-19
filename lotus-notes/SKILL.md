@@ -168,7 +168,7 @@ Set col = db.Search("Form = ""Appointment"" | Form = ""Notice""", Nothing, 0)
 - Notes writes **Windows-1252**, not UTF-8 → convert before import: `iconv -f WINDOWS-1252 -t UTF-8 in.ics > out.ics`.
 - Then run the same **noteworthy-events cleanup** used for Doug's calendar: parse VEVENTs, **collapse any SUMMARY appearing >4× to its earliest dated instance** (kills repeated birthdays/anniversaries/payment reminders), sort by DTSTART. Stage the result in `~/Downloads/` for one-click Google Calendar import into a dedicated archive calendar.
 
-Mail/document extraction follows the same engine pattern (iterate views/documents, pull items, export); document DBs (`xtldocs`, `DSNGENER`, DSN docs) are best fed into the **`imaging-expert`** service rather than re-homed as NSFs.
+Mail/document extraction follows the same engine pattern (iterate views/documents, pull items, export); document DBs (`xtldocs`, `DSNGENER`, DSN docs) now feed the **Archive corpus** (`extract_docs`/`extract_attach` → `load_docs.py` → `<domain>.document` → `ingest.py`; see the **[[archive]]** skill), NOT imaging — supersedes the old "feed to imaging-expert" guidance. **Still un-extracted (parked):** the big DSN Notes doc DBs on the XPS — `corresp.nsf` (4 GB), `Carriers.nsf` (2.4 GB), `library`, `MISMANUA`, `Financia`/`accounts` (confidential), etc. (do docs + attachments). Full list in archive `docs/STATE.md`.
 
 ## Finding NSFs
 
@@ -259,5 +259,5 @@ The archive is built; to fold in a *new* source (e.g. the 2008 Mac if it ever ge
 - `notes-archive-vault` memory — project scope, keep/drop list, current state, archive location
 - `backup-recovery` — how the archive is backed up (unified→restic→USB); use to add a source
 - `homelab-synology` — the NAS where the loose sources lived
-- `imaging-expert` — destination for extracted documents
+- [[archive]] — destination for extracted DSN/XTL documents (the corpus + event pipeline); `imaging-expert` — boat/home document store (separate; converging per ADR 0012)
 - `knowledge-architecture` — these archives are *Reference*; import wholesale into a siloed store, don't hand-curate prose
