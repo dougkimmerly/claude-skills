@@ -189,6 +189,19 @@ GET    /search/semantic?q=...          Semantic search via pgvector + Ollama emb
                                        Optional: &app=&category=&limit=
 ```
 
+### Unified ask (`POST /ask`) — boat docs + life/business archive (ADR 0012)
+
+On **home** (`ASK_INCLUDE_ARCHIVE=true`, owner role only) `/ask` federates the **archive corpus** (`apps/archive` — `corpus.chunk` + the structured **event tables** `dsn.event`/`xtl.event`/`kbl.event`/`timeline.life_event`) alongside imaging's `document_chunks`. One question reaches boat documents AND Doug's life/business history. The boat node has no archive, so its `/ask` is boat-only.
+
+- **Two retrieval layers, both needed.** Chunks (pgvector, prose/detail) + structured events (FTS, facts/enumeration). The response carries **`mode: cloud | local | local-unavailable`**.
+- **Sensitivity routing (Stage 3).** If confidential material is among the top-K strong evidence → answer with a LOCAL model (Ollama `qwen2.5`, `OLLAMA_URL`/`LOCAL_ANSWER_MODEL`) — never the cloud. Else cloud Claude. **Cloud-never is a chokepoint**: `generateAnswer` strips `sensitivity==='confidential'` chunks before any Claude call, so a routing miss can't leak. Events' sensitivity is *derived* (`evidence` UNID → document → `corpus.chunk.sensitivity`), defaulting to confidential when unresolved.
+- **Grants (home):** `fixer` needs `SELECT` on `corpus.chunk`/`chunk_safe`, the four event tables, and `SELECT (id, source_unid)` on `dsn/xtl.document`. Missing grants → `searchArchive*` silently returns `[]` (errors are caught).
+
+**Diagnostics when `/ask` answers poorly** (see `[[feedback-unified-ask-lessons]]`):
+- *Incomplete "list/when/where all X" answer* → it's the **structured-events** layer, not the chunks. Check the log line `RAG archive events: N matched → M unique`; if low, the FTS query or the retrieval `LIMIT`/dedupe is the cap (chunks alone can't enumerate across many years).
+- *A fact is missing* → tell a **retrieval gap from a data gap**: query the corpus directly (`SELECT date_part('year',doc_date),count(*) FROM corpus.chunk WHERE text ILIKE '%…%' GROUP BY 1`). If the data isn't there, answer honestly — don't tune retrieval to invent it.
+- *`mode: local-unavailable`* → the Ollama host is down/busy (check each `OLLAMA_URL` host's `/api/tags` for a chat model). Confidential-routed questions have no cloud fallback by design.
+
 ### Scan Sessions
 
 ```
