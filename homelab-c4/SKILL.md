@@ -1,1 +1,0 @@
-/Users/doug/Programming/dkSRC/infrastructure/homelab/.claude/skills/c4/skill.md
