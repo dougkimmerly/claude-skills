@@ -68,7 +68,7 @@ The filename label is a **lie until proven otherwise.** Both `dsc-monitor.py` (s
 
 | Channel | Frequency | Use | Demod port | Common consumer |
 |---|---|---|---|---|
-| ch10 | 156.500 MHz | cruisers hailing / **morning net 8am local** | TCP :7010 (PCM 16 kHz s16 mono) | `capture.py` VOX |
+| ch10 | 156.500 MHz | cruisers hailing / **morning net 8am local** | TCP :7010 (PCM 16 kHz s16 mono) | `ch10-recorder.service` (continuous 10-min wavs, added 2026-06-23) — also `capture.py` if run |
 | ch13 | 156.650 MHz | (center freq, not a useful demod — DC spike is here) | n/a — used as LO reference | — |
 | ch16 | 156.800 MHz | international distress / calling | TCP :7016 (PCM 16 kHz s16 mono) | `dsc-monitor.py` post-DSC voice recorder |
 | ch70 | 156.525 MHz | DSC (digital selective calling) | TCP :7070 (JSON lines: `{power_dbfs, timestamp}`) | `dsc-monitor.py` trigger |
@@ -84,7 +84,8 @@ All on centralsk (192.168.22.15), all under `/opt/vhf-transcriber/`. Run as user
 | `sdr-receiver.py` | RTL-SDR multi-channel demodulator. `CENTER_HZ=156_650_000`, `CH10_HZ`, `CH16_HZ`, `CH70_HZ` constants near top. `--center` and `--gain` flags. Reads raw IQ from `rtl_sdr` subprocess, fans out to TCP ports. |
 | `capture.py` | VOX-gated audio capture. Reads `sdrPort` from `config.json` (default 7010 = ch10). Triggers when RMS crosses `vox.voxThreshold` (default 0.003). Writes vox clips AND can write continuous wavs (called from main.py). |
 | `dsc-monitor.py` | Watches port 7070 for DSC power activity. On detect, records ch16 voice (port 7016) to `/opt/vhf-transcriber/dsc-recordings/<date>/HHMMSS-ch16.wav`. **The `-ch16.wav` suffix is hardcoded; it's correct here.** |
-| `main.py` | Service orchestrator. Spawns sdr-receiver, capture, dsc-monitor as needed. |
+| `ch10-recorder.py` | Continuous ch10 (port 7010) → `dsc-recordings/<date>/HHMMSS-ch10.wav`, 10-min rotation. Added 2026-06-23 because the morning net is on ch10 and dsc-monitor was the only consumer of the SDR fan-out — meaning **nothing was capturing ch10** until this. Runs as `ch10-recorder.service`. |
+| `main.py` | Service orchestrator. Spawns sdr-receiver, capture, dsc-monitor as needed. Note: as of 2026-06-23 the running setup is NOT main.py — sdr-receiver, dsc-monitor, and ch10-recorder are all individual system services. |
 | `config.json` | Active config. **`audio.sdrPort` selects which channel capture.py listens to.** `vox.voxThreshold` gates capture sensitivity. `whisper.model` was the boat-CPU fallback (now stopped in stored mode). |
 
 systemd: `systemctl --user status vhf-transcriber.service` (it's a [[stored-boat]] CREWED-ONLY service — stopped while the boat is stored; home GPU takes over).
@@ -118,6 +119,33 @@ ssh doug@192.168.22.15 'ps -ef | grep rtl_sdr | grep -v grep'
 ssh doug@192.168.22.15 'grep sdrPort /opt/vhf-transcriber/config.json'
 # 7010 = ch10, 7016 = ch16. Filename labels mean nothing here.
 ```
+
+### Is the wav real speech, or constant noise? (the RMS-variance test)
+
+The single-RMS check tells you "audio present or absent." It does NOT tell you "speech or noise" — radio noise can be just as loud as speech. To distinguish, look at RMS over short windows. **Speech swings dramatically** (RMS ~200 in silence gaps → ~6000+ during transmission). **Constant noise is flat** (RMS within ~5% across all windows). If RMS is uniform AND `max=32768` every window, you're seeing a saturated/clipped front-end — antenna disconnected, gain too high, or upstream RF chain broken.
+
+```bash
+F="/home/doug/backups/vhf-recordings/<date>/<file>.wav"
+ssh doug@192.168.20.19 "python3 -c \"
+import wave, audioop
+w = wave.open('$F','rb'); sr=w.getframerate(); sw=w.getsampwidth()
+data=w.readframes(w.getnframes())
+chunk=sr*3*sw
+for i in range(0, len(data), chunk):
+    c=data[i:i+chunk]
+    if len(c)<chunk: break
+    print(f't={i//(sr*sw):>2}-{(i//(sr*sw))+3:>2}s rms={audioop.rms(c,sw):>6} max={audioop.max(c,sw):>5}')
+\""
+```
+
+Worked example, 2026-06-23 ch10 wav (front-end was broken):
+```
+t= 0- 3s rms= 10194 max=32768
+t= 3- 6s rms= 10068 max=32768
+t= 6- 9s rms= 10088 max=32768
+...
+```
+Uniform RMS within 3% across the whole clip + every window clipping = **RF chain issue**, not a software/channel/VAD problem. Software pipeline is fine; antenna or gain is broken.
 
 ### Is a wav silent, noisy, or real speech?
 
