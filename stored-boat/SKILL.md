@@ -9,6 +9,8 @@ description: Stored-boat mode for Distant Shores II — the vessel-mode flag (cr
 
 **Authoritative plan doc:** `fixer/docs/runbooks/stored-boat-plan.md` — full resilience matrix (sections A–E), 45+ open items, architectural decisions. Read that before proposing new stored-mode work.
 
+**▶ On boat-work resume (next attended visit), FIRST read** the "DO WHEN ATTENDED AGAIN" section at the top of the plan doc. It is the canonical register of deferred boat-side actions (deploys, restarts, schema changes that aren't safe to do remote). Tick items only after performing them aboard. Any session that defers a boat action MUST add it there with date + why + how-to-verify.
+
 ---
 
 ## Stored-mode WAN topology
