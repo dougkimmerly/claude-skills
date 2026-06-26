@@ -51,6 +51,17 @@ Sensitivity: `ingest.py` classifies (confidential by source/subject; ADR 0001), 
 - **psql JSON output: parse with `split("\n")`, NOT `splitlines()`** — chunk text holds raw `\x0b`/`\x0c`/`\x85` that over-split. Dump JSONL with `-tA` + `row_to_json` (not `\copy ... to stdout`, which double-escapes).
 - **NEVER print harvested credential values to chat** — decrypt to a local 0600 file for review (Doug corrected this; see [[feedback-never-echo-secrets]]).
 
+## Render a styled life-history PDF (the "make me a booklet" ask)
+Doug periodically asks for a polished year-by-year listing of some thread (Christmas parties, home dinner parties, trips…). The reproducible recipe — reuse it so every booklet matches:
+1. **Derive the list from the DB, don't trust one source.** Find the spine doc if any (e.g. the DSN party history is the single doc `dsn.document` id `4752`), then cross-check + extend with `timeline.life_event` / `<domain>.event`. **Dedup the extraction's near-identical rows** (same date arrives 3–8×) and drop away-events + noise. `people` is a Postgres **array** (`array_to_string(people,', ')`); event `description` is often empty — the menu / color lives in the source **`evidence` → `mail.message`** rows, so fetch those for detail.
+2. **Author HTML from the shared template** `assets/history-doc-template.html` (in this skill dir) — navy Playfair headings, gold subheads, cream intro box, year sections, `Who:` / `Served:` labels, gold "pill" badges. Matches the originals on Doug's Desktop.
+3. **Render via Chrome headless** (the originals were Skia/PDF — same engine):
+   ```
+   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --disable-gpu \
+     --no-pdf-header-footer --print-to-pdf="$HOME/Desktop/Name.pdf" "file:///tmp/dsncal/name.html"
+   ```
+   Fonts load from Google Fonts (Chrome fetches online); the cert/`Failed parsing extensions` stderr line is harmless. Deliver the **PDF to `~/Desktop`**; keep the `.html` source beside it for re-edits.
+
 ## Budget discipline (it's the real constraint)
 Cloud sonnet agents are cheap (~$0.008/source) and the Sonnet weekly limit is roomy, but the **usage-credit pool (CA$, resets ~monthly)** and the **Opus orchestration session window** are what bind — long >150k-context Opus sessions are the burn, not the agents. So: cloud only on high-value recency-ordered slices, lean local for bulk, **keep Opus sessions short** (`/clear` between tasks; the slice runbook survives a clear).
 

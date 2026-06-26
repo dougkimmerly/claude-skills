@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<!--
+  Archive life-history booklet template (see SKILL.md "Render a styled life-history PDF").
+  Render:  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless --disable-gpu \
+             --no-pdf-header-footer --print-to-pdf="$HOME/Desktop/TITLE.pdf" "file:///tmp/dsncal/this.html"
+  Two entry styles are shown below: (A) venue-subhead style (Christmas-parties booklet),
+  (B) Who/Served style (home-dinners booklet). Keep one, delete the other. Replace the demo content.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TITLE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,700;0,900;1,500&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#1f3a5f; --gold:#a8791f; --cream:#f7f1e7; --cream-border:#c89b3c;
+    --ink:#2b2b2b; --rule:#e2ddd4; --muted:#8a8a8a;
+  }
+  @page{ size: letter; margin: 22mm 20mm 18mm 20mm; }
+  *{ box-sizing:border-box; }
+  body{ font-family:"PT Serif", Georgia, serif; color:var(--ink); line-height:1.5; font-size:12.5pt; margin:0; }
+  h1{ font-family:"Playfair Display", Georgia, serif; font-weight:900; color:var(--navy); text-align:center; font-size:33pt; letter-spacing:.5px; margin:6pt 0 10pt; }
+  .subtitle{ font-family:"Playfair Display", Georgia, serif; font-style:italic; color:var(--gold); text-align:center; font-size:15pt; margin:0; }
+  .org{ font-family:"Playfair Display", Georgia, serif; font-style:italic; color:var(--gold); text-align:center; font-size:12pt; margin:2pt 0 0; }
+  .compiled{ text-align:center; color:var(--muted); text-transform:uppercase; letter-spacing:2.5px; font-size:8.5pt; margin:10pt 0 0; }
+  .titlerule{ border:none; border-top:2.5px solid var(--gold); margin:12pt 0 14pt; }
+  .intro{ background:var(--cream); border-left:5px solid var(--cream-border); padding:13pt 16pt; margin:0 0 18pt; font-size:11.5pt; line-height:1.55; }
+  .intro em{ font-style:italic; }
+  .yearhead{ font-family:"Playfair Display", Georgia, serif; font-weight:700; color:var(--navy); font-size:19pt; margin:16pt 0 8pt; border-bottom:1px solid var(--rule); padding-bottom:3pt; }
+  .entry{ margin:0 0 11pt; page-break-inside:avoid; }
+  .occasion,.venue{ font-family:"Playfair Display", Georgia, serif; font-weight:700; color:var(--gold); font-size:12pt; margin:0 0 2pt; }
+  .date{ color:var(--navy); font-weight:700; }
+  .line,.desc{ margin:1pt 0 0; font-size:11.5pt; }
+  .label{ font-variant:small-caps; letter-spacing:.5px; color:var(--navy); font-weight:700; font-size:10pt; }
+  .na{ color:var(--muted); font-style:italic; }
+  .muted{ color:var(--muted); font-weight:700; }
+  .pill{ display:inline-block; background:var(--gold); color:#fff; font-family:"PT Serif", Georgia, serif; font-weight:700; font-size:8.5pt; letter-spacing:.5px; padding:2px 9px; border-radius:11px; vertical-align:middle; margin-left:6pt; }
+  hr.sep{ border:none; border-top:1px solid var(--rule); margin:11pt 0 0; }
+  .footer{ text-align:center; color:var(--muted); font-style:italic; font-size:9pt; line-height:1.5; margin-top:20pt; padding-top:6pt; border-top:1px solid var(--rule); }
+</style>
+</head>
+<body>
+
+  <h1>TITLE</h1>
+  <p class="subtitle">A History, YYYY &ndash; YYYY</p>
+  <p class="org">Subtitle / location line</p>
+  <p class="compiled">Compiled from the document &amp; email archive</p>
+  <hr class="titlerule">
+
+  <div class="intro">
+    One-paragraph framing — what this is, the recurring cast, where the record is strong vs.
+    silent (note coverage <em>gaps</em> honestly).
+  </div>
+
+  <!-- STYLE A: venue-subhead entry (one per year) -->
+  <div class="entry">
+    <div class="venue">Venue or headline <span class="pill">badge</span></div>
+    <p class="desc">A sentence or two of color.</p>
+  </div>
+  <hr class="sep">
+
+  <!-- STYLE B: year section with Who/Served lines -->
+  <div class="yearhead">YYYY</div>
+  <div class="entry">
+    <div class="occasion">Occasion</div>
+    <p class="line"><span class="date">Month D.</span> <span class="label">Who:</span> guests. &nbsp; <span class="label">Served:</span> <span class="na">not recorded</span>.</p>
+  </div>
+
+  <div class="footer">
+    Generated from the archive · facts as recorded; gaps noted where the archive is silent.
+  </div>
+
+</body>
+</html>
