@@ -1,1 +1,0 @@
-/Users/doug/Programming/dkSRC/infrastructure/homelab/.claude/skills/houserouter/skill.md

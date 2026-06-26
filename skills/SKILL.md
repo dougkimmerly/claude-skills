@@ -28,12 +28,42 @@ This is the meta-skill. It captures how skills are laid out, maintained, and dis
 
 **Universal (`~/.claude/skills/`)** — things any CC session might need:
 - Operating principles (`adr`, `write-doc`, `knowledge-architecture`, this skill)
-- Shared infrastructure skills (`netbox`, `bitwarden`, `health-monitor`, `robot`, `discovery`, `mbb300`, `imaging-expert`)
+- Shared infrastructure skills (`netbox`, `robot`, `health-monitor`, `discovery`, `secrets`, `imaging-expert`, `postgres-replication`)
 
 **Project-scoped** — things tied to one repo's schema, workflow, or code paths:
 - Fixer owns `issue-review` and `issues` because they're specifically about the `fixer.*` Postgres schema.
 
 The test: if the skill would become wrong the moment someone opened it from a different project, it's project-scoped. If it'd still be correct, it's universal.
+
+## How a universal skill is physically exposed
+
+A universal skill reaches `~/.claude/skills/` in one of two physical forms. Choose by asking *does a repo own this skill?*
+
+| Form | When | Backed up by |
+|---|---|---|
+| **Real file** under `~/.claude/skills/<name>/` | the skill has **no owning repo** — cross-cutting know-how (`adr`, `write-doc`, `knowledge-architecture`, `skills`, `netbox`, `secrets`, `robot`, `health-monitor`, `tailscale`, …) | `claude-skills` (commit it — ADR 0022) |
+| **Symlink** `~/.claude/skills/<name>` → `<repo>/.claude/skills/<x>` | the skill is **owned by a repo** (ships with that code) but is broadly useful enough to load everywhere | the **owning repo** |
+
+**Never expose a repo-owned skill by copying it.** A copy drifts the instant either side is edited. The 2026-06-26 audit found nine `homelab-*` real-dir copies that had silently diverged from the homelab repo (the repo had grown `references/`, `config/`, and setup docs the copies never received). All were converted to symlinks. The rule: **if a skill has a repo home, symlink it — never `cp`.**
+
+**Symlink the whole skill _directory_**, not just `SKILL.md` — that carries any `references/`, `config/`, or backup files along (e.g. `homelab-centralsk` ships five reference docs).
+
+### Naming / prefix rule
+
+The exposed name = the symlink's directory name. (Skills with no `name:` frontmatter are named after their directory; an explicit `name:` must match it.)
+
+- Skills from the **multi-skill `homelab` repo** get a **`homelab-` prefix** (`homelab-centralsk`, `homelab-dk400`, `homelab-c4`, `homelab-rogers-gateway`, …) — their bare names (`centralsk`, `dk400`, `c4`, `synology`) are generic and would collide.
+- Single-skill repos and already-distinct names need **no prefix** (`hardware-roadmap`, `voice-assistant`, `central-signalk`).
+- Real-file universals keep their own distinct name (`tailscale`, `netbox`, `secrets`).
+
+### Same name, two skills — deliberate, not drift
+
+A universal real-file skill and a project-scoped skill may share a name *on purpose*, at different altitudes. Keep them cross-referenced so they don't silently diverge:
+
+- **`tailscale`** — universal real file = the deep cross-site failure-mode reference; `homelab/tailscale` = a thin `context: fork` operational pointer that links back to it.
+- **`central-signalk`** — universal real file = cross-site SK *diagnostic* entry-point; `cruising-app/central-signalk` = the full vessel *install* reference. Each points at the other.
+
+This is not a copy. A copy is identical content in two places (forbidden); these are distinct-altitude docs that reference each other (fine).
 
 ## When to create, update, or skip
 

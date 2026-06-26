@@ -8,6 +8,8 @@ SignalK runs on centralsk under user-mode systemd. It is the single authoritativ
 
 For host-level concerns (hardware, services, network) see `homelab-centralsk`. This skill is just SK itself.
 
+> **This is the cross-site diagnostic entry-point** (for use from any repo when SK looks wrong). The **full install reference** — every provider, plugin, path catalogue, and vessel-specific wiring detail — lives in the project-scoped `central-signalk` skill in the **cruising-app** repo (`boat/cruising-app/.claude/skills/central-signalk/`), which loads when working in that repo. Keep deep install/config detail there; keep cross-site diagnostics here.
+
 ## Architecture quick-map
 
 ```
