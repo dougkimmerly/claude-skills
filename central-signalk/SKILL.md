@@ -52,6 +52,21 @@ sudo -u doug XDG_RUNTIME_DIR=/run/user/1000 journalctl --user -u signalk -f
 
 Service unit has `StartLimitIntervalSec=60 StartLimitBurst=3` to cap SEGV-loops. After 3 restarts in 60s the unit goes to `failed`, which `sk-segv-watchdog.timer` (every 5 min) detects and runs `boot-self-heal` on. See `[[centralsk_bitrot_recovery]]` memory for details.
 
+### ⚠️ `systemctl restart signalk` alone does NOT reliably reload code — orphan trap (2026-06-27)
+
+The unit's launcher spawns the real `signalk-server` which **reparents to init (`ppid=1`)**; systemd's `MainPID` is only the launcher. So a plain `restart` starts a *new* server that can't bind port 3000 — the orphaned old one still holds it (`EADDRINUSE` / `Cannot lock port` in the journal) — and the **old code keeps serving**. Found 2026-06-27: a **4-day orphan** served stale plugin code through two "successful" restarts (new plugin file on disk + symlinked, but the cache never changed). Diagnose: `ps -o pid,ppid,etime -C node | grep "signalk-server -c"` (look for an old `ppid=1`), and `ss -ltnp | grep :3000` (who really holds it).
+
+**Always clean-restart to pick up plugin/code changes:**
+```bash
+export XDG_RUNTIME_DIR=/run/user/1000
+systemctl --user stop signalk
+pkill -9 -f "signalk-server -c"            # kill the orphan
+pgrep -af "signalk-server -c" || echo none  # must be none
+systemctl --user start signalk
+# verify: ONE fresh server holds :3000, battery SoC/position still flow, change is live
+```
+A clean restart re-runs each plugin's startup fetch, so caches (e.g. openweather `/openweather/weather-cache`) repopulate within a minute. Durable fix for the orphan (unit `KillMode`/`Type` so restart cycles the real server) is tracked as a fixer task, not yet applied.
+
 ## Diagnostic chain — when paths are missing
 
 When `curl http://localhost:3000/signalk/v1/api/vessels/self/<path>` returns 404 or stale data, work the chain from the wire backwards:
