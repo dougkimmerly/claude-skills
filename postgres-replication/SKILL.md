@@ -247,9 +247,10 @@ Logical replication does NOT carry DDL. When a column is added to `cruising.jobs
 
 If a NEW table is added to centralsk's `cruising` schema that should replicate:
 
-1. `pg_dump -s -t <schema>.<newtable>` on centralsk → apply on home.
-2. `ALTER PUBLICATION <schema>_pub ADD TABLE <schema>.<newtable>` on centralsk.
-3. `ALTER SUBSCRIPTION <schema>_sub REFRESH PUBLICATION` on home.
+1. Create the table on home FIRST (apply the same DDL — `pg_dump -s -t <schema>.<newtable>` from centralsk, or the migration file). The subscriber needs the table to exist before sync, or the copy errors.
+2. `ALTER PUBLICATION <schema>_pub ADD TABLE <schema>.<newtable>` on centralsk — **run as `postgres`, the publication OWNER, NOT `dk400`** (dk400 errors `must be owner of publication cruising_pub`).
+3. **`GRANT SELECT ON <schema>.<newtable> TO replicator` on centralsk** — easy to miss. The `replicator` role copies the table during initial sync; without SELECT the sync worker crash-loops `ERROR: could not start initial contents copy ... permission denied for table <newtable>` and the table stays stuck in `d` forever. The `ALTER DEFAULT PRIVILEGES … GRANT SELECT TO replicator` from setup does NOT cover tables created by `dk400` (it was scoped to a different creator role), so new `dk400`-created tables need an explicit grant. (This looks exactly like a zombie sync worker — check the home Postgres log `docker logs dk400-postgres | grep "permission denied"` before assuming a zombie.)
+4. `ALTER SUBSCRIPTION <schema>_sub REFRESH PUBLICATION` on home (as `homelab_admin`, its own `-c`). Empty table → reaches `r` within seconds once the grant is in place.
 
 If a table is added but should NOT replicate (e.g. new raw-telemetry table per ADR 0008 summary-shipping pattern), do nothing — the explicit publication list keeps it out by default.
 
