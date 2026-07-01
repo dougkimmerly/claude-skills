@@ -604,3 +604,10 @@ Name+size cannot dedup music (re-tags, format, accents). `musiclib.tracks` has c
   department; (5) duplicate content-folder names across departments. Output is the cleanup work-list —
   re-run after a remediation pass to measure progress. Reads the cached NAS index, so reindex first.
 - `--keep-deleted` is mandatory on targeted reindex or it prunes the rest of the index.
+
+### Handoff from fixer (`drive-salvage`) — mark retrievals completed
+Fixer extracts old drives/VMs and stages useful files into `_DriveRescue/<folder>/`, logging each as a row
+in **`/Volumes/Home Files/_DriveRescue/RETRIEVAL-LOG.md`** (status `staged`). When you finish draining a
+`_DriveRescue/<folder>/` into canonical homes, **set that row's Status to `completed` + fill the Completed
+date** — that's the signal the source drive is fully processed and safe to wipe. The folder name is the
+handoff key. Don't wipe/clear a folder whose row you haven't marked `completed`.
