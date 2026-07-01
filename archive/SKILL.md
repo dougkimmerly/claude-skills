@@ -1,6 +1,6 @@
 ---
 name: archive
-description: Operate the Archive platform — Doug's local-first RAG + event-extraction engine that reconstructs his life and his companies' histories (DSN, XTL, KBL) from a ~990k-chunk corpus of documents + email in dk400-postgres. Use to query the corpus (rag.py), run cloud/local event-extraction slices into timeline.life_event / <domain>.event, ingest new documents or mail, or diagnose the HNSW/embedding pipeline. The "how-to" for the [[archive-corpus-build]] memory; sibling of [[life-timeline]] (the personal-domain timeline) and downstream of [[lotus-notes]] (Notes extraction). Lives in apps/archive; current state is docs/STATE.md.
+description: Operate the Archive platform — Doug's local-first RAG + event-extraction engine that reconstructs his life and his companies' histories (DSN, XTL, KBL) from a ~1.04M-chunk corpus of documents + email in dk400-postgres. Use to query the corpus (rag.py), run cloud/local event-extraction slices into timeline.life_event / <domain>.event, ingest new documents or mail, or diagnose the HNSW/embedding pipeline. The "how-to" for the [[archive-corpus-build]] memory; sibling of [[life-timeline]] (the personal-domain timeline) and downstream of [[lotus-notes]] (Notes extraction). Lives in apps/archive; current state is docs/STATE.md.
 metadata:
   type: skill
 ---
@@ -12,7 +12,7 @@ Reconstructs Doug's life + the entities that ran through it (DSN = Direct Servic
 ## Where everything is
 - **DB**: `dk400-postgres` via `ssh 192.168.20.19 docker exec -i dk400-postgres psql -U homelab_admin -d dk400`. **No TCP** — always through docker exec. Pipe SQL via **stdin** (a `-c` with parens gets mangled by the remote shell).
 - **Compute**: Ollama on the XPS `192.168.20.12` — `nomic-embed-text` (768-dim embeddings) + `qwen2.5:7b-instruct` (local extraction/triage). Reachable over HTTP from the Mac. Free, off the Claude meter.
-- **Code**: `pipeline/` — `ingest.py` (docs+email → corpus.chunk), `rag.py` (query), `slice.py` + `workflows/event-slice.js` (cloud event slices), `extract.py`/`triage.py` (local), `build_signal.sql` (signal/noise), `load_docs.py`, `notes/` (NSF extractors). `pipeline/README.md` has the per-tool detail.
+- **Code**: `pipeline/` — `ingest.py` (docs+email → corpus.chunk), `rag.py` (query), `slice.py` (`stage`/`stage-uncited`/`load`) + `workflows/event-slice.js` (cloud event slices), `extract.py`/`triage.py`/`qc.py`/`reextract.py` (local + QC), `ocr.py` (`run`/`--mode xls`/`recover` path-repair), `intake.py` (old-drive dedup), `palm_dat.py` (Palm PDA), `build_signal.sql` (signal/noise), `load_docs.py`, `notes/` (NSF extractors). `pipeline/README.md` has the per-tool detail.
 
 ## Query the corpus (RAG)
 ```bash
@@ -32,7 +32,23 @@ Workflow({scriptPath: "pipeline/workflows/event-slice.js"})
 # 3. load (path printed when the workflow task completes):
 python3 pipeline/slice.py load <workflow-task-output-file>
 ```
-Routing is automatic: personal-domain → `timeline.life_event`; business-domain → `<domain>.event` by the event's `personal` flag. Knobs: `--domains personal|dsn|xtl|kbl`, `--kind any|mail|doc`, `--order recency|score|docsfirst`, `--offset N`. **Economics: ~1000 sources / 50 sonnet agents / ~$8 (CA$10) / ~0.25–0.31 events/source.** Unmined high-value pools: **DSN business mail (68k, biggest)**, more personal-recent, XTL/KBL mail.
+Routing is automatic: personal-domain → `timeline.life_event`; business-domain → `<domain>.event` by the event's `personal` flag. Knobs: `--domains personal|dsn|xtl|kbl`, `--kind any|mail|doc`, `--order recency|score|docsfirst`, `--offset N`. **Economics: ~1000 sources / 50 sonnet agents / ~$8 (CA$10) / ~0.25–0.31 events/source.** Unmined high-value pools: **DSN business mail (68k, biggest)**, more personal-recent, XTL/KBL mail. **Batch math: `event-slice.js` reads `/tmp/slice_NN.jsonl` at 20 sources/agent → pass `args = ceil(sources/20)` or it silently processes only the default 50.** **Budget: SIZE BY INPUT+OUTPUT (dense docs ran ~13M tok / 3,500 sources; a pass once blew a 30M cap because input was under-counted).**
+
+### Finish the DOC backlog — uncited docs + the `archive.extract_attempt` ledger
+The `dsn.document` corpus is fully event-attempted (2026-06-27). To sweep any *new* docs, use the ledger, NOT a raw "uncited" query — **"uncited by any event" conflates never-processed with processed-but-event-less** (tax returns, price lists), so event-less docs re-stage forever. `archive.extract_attempt(source_ref, attempted_at, method)` records every STAGED source regardless of yield.
+```bash
+python3 pipeline/slice.py stage-uncited --domain dsn --source-dbs '<csv of dsn.document.source_db>' --limit 3500
+Workflow({scriptPath: "pipeline/workflows/event-slice.js", args: <ceil(N/20)>})
+python3 pipeline/slice.py load <out>   # stamps the whole staged set into the ledger
+python3 pipeline/dedup_events.py --apply
+```
+`stage-uncited` picks docs no event cites (all 3 evidence forms: `dsn.document:id`, `nas:<source_unid>`, raw UNID) AND not already in the ledger, densest-first. `--domain xtl` for `xtldocs` (routes to xtl.event). **Gotcha: the ledger stamp in `slice.py load` MUST run before `extract.stage_load()` — that fn ends in `sys.exit()`, so anything after it is dead code.**
+
+### Recover NO-TEXT docs — it's PATH-REPAIR, not OCR
+"Image-only" / no-`body_text` docs are usually **0-byte placeholders** at their indexed `source_unid` (a Synology sync artifact) while the real content sits at a **sibling NAS path with the same basename** (the intake content-dedup finding). `pipeline/ocr.py recover` builds a basename→largest-non-zero-path index, pulls the real copy, extracts by form (pdf→pdftotext/tesseract-OCR, **ppt→LibreOffice `--headless --convert-to pdf`→pdftotext**, doc/docx→textutil w/ LibreOffice fallback, xls→xlrd w/ LibreOffice fallback for legacy variants). Then embed the fills (`ingest.py dump --new-only`→prepare→embed→load; small adds insert into the existing HNSW, no rebuild) and event-extract via `stage-uncited`. Needs LibreOffice (`brew install --cask libreoffice`; `_soffice()` finds it).
+
+### Palm PDA data (`palm_dat.py`)
+Doug's Palm Desktop backup (`/volume1/Home Files/Data/Documents/Personal/Palm/KimmerD`, ~1999-2002) is proprietary `.dat`/`.bak` binary. `pipeline/palm_dat.py` parses datebook/memo/todo (type-3/1 = begin/end UNIX-u32 datetimes, type-5 = length-prefixed strings; validate decoded dates against known holidays) → dated `personal` slice sources → `event-slice.js` → life_event. `address.bak` (contacts) + `Note Pad.BAK` (graffiti) left unparsed.
 
 ## Ingest new documents or mail → corpus.chunk
 ```bash
