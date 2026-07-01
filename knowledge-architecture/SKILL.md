@@ -99,3 +99,12 @@ Most placements are clear. A few are not.
 These principles stay true only with discipline — yours during authoring, the review process during PRs, and eventually a mechanical audit that scans docs for state-shaped content (embedded IPs, hostnames, ports, versions) and flags drift.
 
 Until that audit exists, the only guardrail is asking the question *every* time before writing. This is what the `write-doc` skill exists to force.
+
+## Physical placement: repos, skills, tools, and cross-cutting coupling
+
+The four homes say *what kind* of knowledge something is; this says *which artifact* holds it and how artifacts that span homes interact. Full decision: **dkSRC workshop ADR 0040** (`~/Programming/dkSRC/docs/decisions/0040`). The gist:
+
+- **Three units, one job each.** A **repo** owns a *thing* (code, schema, deployment, its ADRs — living knowledge). A **skill** owns the *know-how to operate a thing* (experiential). A **tool** is code in a repo that does the work. "Repo or skill?" is a false choice — most systems need both.
+- **Earns its own repo** if it has *independent deployment*, *distinct authority + data-model*, or an *isolation boundary* (PII/security). Otherwise it's a feature of an existing repo. A capability housed in a repo whose *domain it doesn't share* is mis-homed (e.g. a data discipline inside an ops repo).
+- **Skill placement:** default project-scoped (co-versioned, ships in the PR); go global (`~/.claude/skills`) only when operated from outside its repo or it's a cross-cutting discipline.
+- **Cross-cutting concerns — prefer the loosest coupling that works:** **Contract** (a documented rule/schema each side implements; no shared code — e.g. a sensitivity policy, a filing taxonomy) → **Substrate** (a shared service/DB via API/schema convention) → **Library** (imported code; only when a second consumer needs the logic, not just the rule). Tighten only when the looser layer demonstrably fails. **A global skill + an ADR is how you hold a contract without code coupling.**
