@@ -53,8 +53,21 @@ When new scans are in `_ScanInbox/` (or to (re)index the tree). All tools in `~/
    `python3 tools/audit-health.py` (verify naming date-first + folder matches classification, by hash).
 6. **Distill (QC)** — you are the quality check: the tenant is ~95% right (watch dates!). Read the richer new
    docs and fold the precise clinical facts into the `_Records/*.md`.
+7. **Expenses (tax, 2026+)** — for any newly-filed **receipt / pharmacy / dental / optometry / procedure / device**
+   doc dated in the **current or a future year**, read its patient-paid (unreimbursed, after-insurance) line items
+   and append one row per line to `_Expenses/<year>-medical-expenses.csv` (schema in `_Expenses/README.md`;
+   dedup by `source_doc`; OHIP-covered = skip; flag uncertain eligibility `maybe`). Pre-2026 years are NOT
+   accumulated (existing hand-made tax bundles cover them).
 
 Run `sync-nas-paths.py` + `audit-health.py` after ANY manual move/rename to keep the two stores coherent.
+
+## Produce year-end medical-expense tax receipts (2026+)
+The store is the source of truth for the **CRA Medical Expense Tax Credit**. Line items accumulate in
+`Personal/Health/_Expenses/<year>-medical-expenses.csv` (pipeline step 7). At year-end (or on request):
+`python3 tools/med-expense-report.py <year> [--open]` → renders an itemized summary (totals by CRA category +
+by person + grand total, `⚠` on `maybe` lines, CRA 12-month-window/spouse-pooling/threshold reminders) to
+`Personal/Taxes/<year>/Medical/<year> Medical Expense Summary (Kimmerly).pdf` (+ `.md`). Only the **unreimbursed
+patient-paid** amount is claimable. Home-only (medical + financial). Verify against receipts before filing.
 
 ## Answer a question
 Read the canonical `_Records` file that owns the fact (don't guess): meds→`medications.md`, conditions→
