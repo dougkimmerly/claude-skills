@@ -574,6 +574,28 @@ ALTER TABLE qsys._mytable
 
 **Prevention:** Always use `TIMESTAMPTZ` for timestamp columns, never `TIMESTAMP`.
 
+### 16. Robot downtime silently skips scheduled slots (no backfill)
+
+**Symptoms:** Jobs with `*DAILY`/`*WEEKLY` schedules simply didn't run for a day; `next_run` points at tomorrow; no errors anywhere.
+
+**Cause:** Celery Beat does NOT backfill crontab slots missed while it was down or restarting. On startup it computes the *next* future slot and moves on. A restart at 09:00 means every job scheduled between the outage start and 09:00 is skipped until its next cycle.
+
+**Also note:** recreating the dk400 container (`docker compose up -d --build`) wipes `docker logs`, destroying the evidence of what did or didn't fire before the restart.
+
+**Check** which jobs missed their slot:
+```sql
+SELECT name, frequency, schedule_time, last_run, next_run
+FROM qsys._jobscde
+WHERE status = '*ACTIVE'
+  AND last_run < NOW() - INTERVAL '1 day'
+  AND frequency IN ('*DAILY', '*WEEKLY')
+ORDER BY last_run;
+```
+
+**Fix:** Manually trigger the missed programs (see "Trigger a program manually" above), or run the underlying command directly in the target service's container. Note `_jobscde.last_run` only updates for runs dispatched through Robot — a direct backfill leaves `last_run` stale until the next scheduled run.
+
+**When this was found:** 2026-07-02 — robot down overnight skipped the VIA Rail nightly calendar scans and morning fare sweeps; combined with a crashing probe command, a VIA release window passed unobserved (a newly released date's Prestige was sold out by the time we caught up).
+
 ## Database Permission Changes
 
 **CRITICAL: Before changing table ownership or permissions:**
