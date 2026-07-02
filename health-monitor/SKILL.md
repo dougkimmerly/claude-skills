@@ -79,6 +79,14 @@ last_alert_at TIMESTAMPTZ
 
 ## Diagnostic Steps
 
+**Before declaring any host "down": one failed ping probe is NOT an outage.**
+Flaky-WiFi devices (e.g. the MagicMirror Pi) show 100% loss during dropout
+windows and answer minutes later with wild RTT jitter (16–225 ms). Retry over
+several minutes, test from a second vantage point (Mac AND docker-server), and
+check `qsys._healthchk_status.last_status_change` for the real streak before
+inferring duration. Burned 2026-07-02: one failed probe + two separate transient
+job failures got chained into a wrong "down 30+ hours, needs power cycle".
+
 ### Step 1: Check if health_check is running
 
 ```bash
