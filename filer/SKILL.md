@@ -17,6 +17,33 @@ Never move or delete anything without approval. The structure emerges from what'
 
 ---
 
+## ⚠️ Cardinal rule: NEVER DELETE. MOVE ONLY.
+
+Learned the hard way, 2026-07-02, mid-`_DriveRescue` drain: filer deleted ~350+ files it judged
+"junk" (installers, app caches, a Google Drive export zip never opened first) before Doug corrected
+this. One deleted zip held 4 real medical records; fixer was able to restore it, but most of what
+was deleted is gone for good. **"Confirmed junk" is still a judgment call, and judgment calls are
+wrong often enough that deletion must never be the tool.**
+
+- **Nothing gets `rm`'d or `unlink()`'d. Ever. Not junk, not exact-hash duplicates, not an empty
+  zip shell after its contents are safely extracted and filed.** Every file object gets *moved*
+  somewhere.
+- Anything that looks like junk (installers, app caches, empty library-database shells, stock
+  software samples) goes to **`_to-sort/Quarantine/<drive-rescue-folder>/`** — Doug reviews and
+  clears it himself. This is a peer of `_to-sort/` and `_duplicates/` as a third standing staging
+  folder for every filing project.
+- Confirmed exact-hash duplicates of content already filed still go through `_duplicates/` (staged,
+  logged in `DUPLICATES-LOG.csv`), never straight deletion — that convention already existed and is
+  unaffected by this rule; what changed is that *unrecognized/junk* files now also get a landing
+  spot instead of being destroored.
+- **Any helper script that calls `.unlink()` or `rm` on a "junk" branch is a bug.** Route it to a
+  `QUAR_ROOT` / Quarantine destination instead — see the standard helpers below.
+- **Every zip/archive gets opened and its contents inspected before any decision is made about it**
+  — `unzip -l` at minimum, extract-and-look if the name doesn't make the contents obvious. A zip
+  named after a generic download can hold anything; judge by content, never by filename alone.
+
+---
+
 ## ⚠️ The cardinal failure mode: box-relocation ≠ content-filing
 
 The single biggest way a filing pass goes wrong is **moving a folder whole instead of filing its
@@ -99,12 +126,13 @@ Execute the approved structure. Then capture any new rule so the next session do
 Before asking what department or subject something belongs to, two questions always come first:
 
 ### Is it junk / app artifact?
-Drop these everywhere — they are never business records:
+**Quarantine these everywhere — never delete (see cardinal rule above)** — they are never business
+records, but they still go to `_to-sort/Quarantine/<folder>/`, not `rm`:
 - `._*` AppleDouble sidecars, `.DS_Store`, `desktop.ini`, `Thumbs.db`, `Icon\r`, `.localized`
 - QB app data: `.TLG`, `.ND`, `.SearchIndex/`, `_MigrationReport.xml` (READ first — it can reveal other companies), `QuickBooksAutoDataRecovery/`, `Restored_<co>_Files/`, `QuickBooks Letter Templates/`, `<co> - Images/`
 - Notes client junk: `.nbf`, `.njf`, `.hst`, `.dmp`, `.ncf`, `.mod`, `Cache.NDK`
 - App temp/config: `.ini`, `.tmp`, lock files, crash dumps, `segments.gen`
-- **Drop only after the real data they accompany is confirmed safely filed.**
+- **Quarantine only after the real data they accompany is confirmed safely filed.**
 
 ### Is it a managed-library type?
 These have a system that owns them — hand off, don't file into subject folders:
@@ -120,6 +148,44 @@ These have a system that owns them — hand off, don't file into subject folders
 | Notes `.id` files | ID vault | Never discard; catalog to `notes-id-vault/` |
 
 **Logo / graphic asset images** (company logos, route maps, presentation graphics) are **document assets**, not photos — they stay in their department folder (e.g. Sales/Marketing), not PhotoReorg. Distinction: if it was created for use in a document/presentation, it's an asset; if it was taken with a camera or records an event, it's a photo/video.
+
+**Apple Photos/iPhoto/Aperture libraries** (`.photoslibrary`/`.photolibrary`/`.aplibrary`) — extract, don't
+relocate whole. The internal folder structure (`originals/<hex-bucket>/` or `Masters/<uuid>/`) carries no
+useful hint, so folder-structure-as-hint doesn't apply here the way it does for a plain photo dump:
+1. If the library already uses `Masters/<year>/<month>/<day>/` (older Aperture/Photos format), that IS a
+   usable date structure — dedup + move preserving it directly, no extra tooling needed.
+2. If it uses `originals/<hex-bucket>/<uuid>.ext` (newer Photos.app format), there's no natural structure
+   to preserve — batch-extract capture dates with `exiftool -r -j -DateTimeOriginal -CreateDate -FileName
+   -Directory <originals-dir>` (one bulk call, NOT one exiftool invocation per file — over SMB that's the
+   difference between minutes and hours for thousands of files), then move into
+   `PhotoReorg/<source>/<library-name>/<YYYY-MM>/`. Files with no EXIF date (common for Photos-derivative
+   JPEGs vs HEIC/MOV originals) go to an `unknown-date/` bucket — still preserved, just not date-sorted.
+3. The `database/`, `private/`, lock files are the app's internal SQLite/cache — no photo content, always
+   safe to Quarantine (not delete, see cardinal rule above) once the real files are extracted.
+
+**Video-editing project bundles** (Final Cut `.fcpbundle`, iMovie `.imovielibrary`/`Final Cut Events`/
+`iMovie Events.localized`/`.rcproject`) — **preserve intact as a unit, do NOT hand-extract "the real
+files."** These aren't a media dump with a few cache files mixed in — the edit itself (timeline, cuts,
+titles) lives in project metadata that's meaningless without the rest of the bundle, and — the load-bearing
+finding, 2026-07-02 — a bundle's `Proxies/` folder can be the **only surviving copy** of a clip if the
+original Event footage was deleted after a proxy-only edit was made (confirmed on a real `Sailing 2013`
+project: its proxy had no corresponding full-quality original anywhere else in the bundle). Heuristically
+stripping "throwaway" proxies/caches by file type risks permanently losing footage that looks redundant but
+isn't. Move the whole bundle (`Untitled.fcpbundle`, `Final Cut/`, `iMovie Library.imovielibrary`,
+`iMovie Theater.theater`) into `PhotoReorg/<source>/` as-is; a later video-literate pass (open in
+FCP/iMovie, or `ffprobe` every asset) can do the real extraction. The one thing worth doing before parking
+it: pull out any *already-rendered, finished* export (an `Output.aif`/`.mov` sitting outside `Proxies/`)
+since that's unambiguously real content, not a project internal.
+
+**GarageBand `.band` projects** — a genuine ambiguity, not resolved by file type. GarageBand auto-creates
+demo projects from its "Magic GarageBand" genre templates (literally named after the genre: `Rock`,
+`Rock 2`, `Funk`, `Latin`, `Slow Blues`, etc.) plus a default blank project literally named `My Song`. A
+folder full of `.band` projects **all created at the identical timestamp** is the tell that they're
+untouched stock templates, not real compositions — but a same-timestamp batch can still contain one
+genuine creative work mixed in (confirmed: a `DSN.band` in that exact batch had a real 98-second rendered
+`Output.aif`, not template noise). Check for an `Output/` folder with real audio before judging the batch;
+extract any genuine render as a music file, then park the raw project folders (loops + `projectData`, no
+rendered output) in `_to-sort/` flagged for Doug rather than guessing keep-or-drop.
 
 Everything else is a document → proceed to entity + department filing.
 
@@ -371,9 +437,12 @@ unique = [(s,p) for p,s in folderfiles if (os.path.basename(p).lower(),s) not in
 
 ## Standard Python helpers — copy these into every filing script
 
-**NEVER call `src.unlink()` to drop a duplicate. Always use `dup_drop()`.** Scripts that skip
-this helper will silently destroy files that should be recoverable. The helpers below are the
-canonical implementation — paste them verbatim into every script.
+**NEVER call `src.unlink()` or `os.remove()` for ANY reason — not a duplicate, not confirmed junk,
+not an empty already-processed zip shell.** Use `dup_drop()` for duplicates and `quarantine()` for
+everything else that looks disposable. See the cardinal rule at the top of this file — this was
+violated mid-session on 2026-07-02 and cost real (mostly-recoverable, one exception) data. Scripts
+that skip these helpers will silently destroy files that should be recoverable. The helpers below
+are the canonical implementation — paste them verbatim into every script.
 
 **DUPLICATES-LOG schema is PINNED at 5 columns** — `file,dup_path,canonical_path,size_bytes,verified`,
 matching what every prior session actually wrote to disk. A latent bug bit us 2026-06-29: an earlier
@@ -441,6 +510,24 @@ def write_dup_log():
             w.writeheader()
         w.writerows(_dup_rows)
     print(f"\nDUPLICATES-LOG: {len(_dup_rows)} rows appended -> {DUP_LOG}")
+
+QUARANTINE_ROOT = Path('/Volumes/Home Files/_to-sort/Quarantine')  # peer of _to-sort/ and _duplicates/
+
+def quarantine(src: Path, drive_rescue_folder: str, reason: str = ''):
+    """Move src (confirmed junk / app cache / installer / processed zip shell) to
+    _to-sort/Quarantine/<drive_rescue_folder>/, preserving its relative path under that folder.
+    Doug reviews and clears Quarantine himself. NEVER unlink() — this is the replacement for
+    'drop junk' anywhere this skill used to say discard/delete."""
+    src = Path(src)
+    if not src.exists():
+        print(f"  Q-MISS: {src.name}")
+        return
+    dst = QUARANTINE_ROOT / drive_rescue_folder / src.name
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if dst.exists():
+        dst = QUARANTINE_ROOT / drive_rescue_folder / f"{src.stem}_dup{os.urandom(2).hex()}{src.suffix}"
+    os.rename(src, dst)
+    print(f"  QUARANTINED: {src.name}{'  (' + reason + ')' if reason else ''}")
 
 def mv(src, dst):
     """Move src to dst. If dst exists and sizes match, stage src as a duplicate instead of overwriting."""
