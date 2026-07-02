@@ -270,6 +270,10 @@ SELECT target_name, status, last_check FROM qsys._healthchk_status WHERE target_
    - `check_url: http://service:port/health` (required for http/https/tcp)
    - `check_type: http` (or `https`, `tcp`, `ping`, `docker`)
    - `expected_status: 200`
+   - `alert_grace_hours: 12` (optional, added 2026-07-02) — for flaky-link devices:
+     a DOWN issue is only created after the target has been down continuously this
+     many hours (down-since = `qsys._healthchk_status.last_status_change`). Status
+     tracking still updates every run. Example: MagicMirror Pi on flaky WiFi.
 
 ### Check type specifics
 

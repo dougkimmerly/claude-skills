@@ -84,6 +84,14 @@ ORDER BY next_run;
 -- status: *ACTIVE, *HELD, *DISABLED
 ```
 
+**⚠️ `command` is the BARE program name** (e.g. `pg_amcheck`), never `run_program pg_amcheck`.
+With the prefix, the engine looks up a program literally named `run_program pg_amcheck`,
+fails instantly with "Program not found", and the Celery task still reports
+`succeeded ... 'success': False` — the job looks alive but never does anything.
+Found 2026-07-02: all 8 `HEALTH_*` jobs at BOTH sites were dead this way for weeks
+(it's why boat pg corruption went undetected). Audit:
+`SELECT name, command FROM qsys._jobscde WHERE command LIKE 'run_program %';`
+
 ### Frequency Types
 
 | Frequency | Meaning | Example |
