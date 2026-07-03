@@ -41,6 +41,12 @@ wrong often enough that deletion must never be the tool.**
 - **Every zip/archive gets opened and its contents inspected before any decision is made about it**
   — `unzip -l` at minimum, extract-and-look if the name doesn't make the contents obvious. A zip
   named after a generic download can hold anything; judge by content, never by filename alone.
+  **A `.zip` extension doesn't guarantee `unzip` will work** — old Mac archives are sometimes
+  StuffIt (`.sit`/`.sitx`) mislabeled with a `.zip` extension; `file <path>` reveals the true format
+  when `unzip -l` fails with "cannot find zipfile directory." For StuffIt specifically:
+  `brew install unar` (an actively-maintained, local, open-source tool — no need to upload a
+  business/personal file to some web converter), then `unar -o <destdir> <archive>`. Don't quarantine
+  an unopenable archive without at least trying `file` + the matching extraction tool first.
 
 ---
 
@@ -563,6 +569,16 @@ Call `write_dup_log()` at the very end of every script, before the summary print
 
 Done when: new files are in their homes, staging area is empty, reindexed, logged, skill updated.
 
+**For any reorg spanning more than one sitting** (multiple phases, thousands of files, or anything
+likely to outlast the current session): maintain a living status checklist —
+`reports/<project>/STATUS.md` — alongside the append-only `filing-log.csv`. The log answers "what
+happened and why"; the status file answers "what's left." One row per planned step, status
+done/in-progress/blocked/not-started, updated immediately after each step completes — not batched, not
+left to reconstruct from the chat transcript later. `_DriveRescue/RETRIEVAL-LOG.md` is the existing
+example of this pattern; use the same shape for any comparably-sized project. Doug's own words on why
+this matters: *"it could end up really messy if you don't."* A large reorg that only lives in
+conversation is one compaction or one session boundary away from losing track of itself.
+
 ---
 
 ## ⚠️ Broken-alias trap on SMB/NAS
@@ -606,6 +622,297 @@ Nothing is discarded on name or extension alone. A file that looks like junk can
 Anything novel or ambiguous: open it, check its neighbours, follow where it points. When still unsure: keep + flag for Doug.
 
 ---
+
+## ⚠️ Survey the destination before declaring "no home exists" (learned 2026-07-03)
+
+Mid-`_DriveRescue` drain, several real clusters were parked in `_to-sort` as "no established folder"
+when a full, mature home already existed on the NAS — `Home Files/Data/Documents/House Documents/`
+turned out to already have `Purchase/`, `Renovations/`, `Manuals/`, `Maintenance/`, `Control4/`
+(with `Projects/`, `Automations/`, `Announcements/`, `c4Music/`), `Tools/`, `Network/`, `CityToronto/`
+(`Hydro/`, `Utility/`, `Property Tax/`, `Occupancy/`), `Insurance/`, `Electrical/` — dozens of
+subfolders, hundreds of files, an entire mature structure that a shallow look at Home Files' top
+level (`Data/Documents/Personal`, `Sailing`, etc.) simply didn't surface. Same story for
+`Personal/Doug/Recipes` and `Personal/Maggie's Stuff/Recipes` (both already existed) and
+`Data/Documents/Paul and Sheryl/` (an entire folder for a specific family-friend relationship,
+already holding financial/contract history).
+
+**Before concluding "there's no fitting folder, park it in `_to-sort`"**: run a targeted `find`
+for the obvious keyword (the company name, "House", "Recipes", the person's name) against the
+whole share, not just the top-level tree you already know about. A `_to-sort` parking decision
+made without that search is provisional, not final — expect Doug to redirect a chunk of it once
+he looks, as happened here (Control4 automation docs, Hydro bills, sandblasting/porch illustration,
+a Paul-and-Sheryl bank doc, and Recipes all had existing homes filer hadn't found).
+
+### OCR/text-extraction failure ≠ unclassifiable — always visually inspect
+
+Several files landed in `_to-sort` purely because `pdftotext`/`strings` came back empty (an
+image-only scan) or unreadable (locale-coded Excel format strings with no visible cell text) —
+**not** because the content was actually ambiguous. Opening them with the `Read` tool (which
+renders PDF pages as images) resolved every one of them in seconds: a cached bank wire-transfer
+receipt ("OWT" = Outgoing Wire Transfer), a real prescription info sheet, and a `2015 en .xls` that
+turned out to be a nautical almanac (celestial navigation reference — Doug: "you should have seen
+this if you opened it"). **A failed text-extraction is a signal to look at the file, not a license
+to park it.** Reserve `_to-sort` for files you *did* look at and still can't place.
+
+### Redundant-with-live-Mac check for personal-app project bundles
+
+A GarageBand/Fritzing/similar project folder rescued from an old drive may already exist, further
+developed, on the Mac actually running the filing session — check `~/Music/GarageBand/` (or the
+equivalent) before treating it as ambiguous. Confirmed 2026-07-03: all 7 rescued `.band` projects
+matched by name to this Mac's live `~/Music/GarageBand/`, every one bigger there (the live `DSN.band`
+was 28MB vs. the rescued snapshot's 11MB) — the "ambiguous" rescued copies were simply older,
+already-superseded snapshots of files already home in their natural location. Quarantine (not
+delete) the redundant rescued copies once confirmed superseded.
+
+### Known non-DSN/XTL entities in Home Files (don't invent new Contract branches for these)
+
+- **Paul and Sheryl (the Shards)** — sold Doug/Maggie their boat (DSII), now close friends. Their
+  own company **Distant Shores Productions Inc.** and any of their financial/personal docs that
+  surface in a rescue go to the existing `Home Files/Data/Documents/Paul and Sheryl/` folder, not
+  a new Contract branch.
+- **KBLP** — a photography side-hobby of Doug's, never a real company. Client-prospect reference
+  material (e.g. brand/style research for a potential job) goes to `Home Files/Data/Documents/
+  Photography/`.
+- **Fritzing** (electronics prototyping hobby, Doug's) → `Personal/Doug/Electronics/`.
+- **Celestial navigation** (sight reduction tables, nautical almanacs, deviation cards) →
+  `Sailing/Celestial Navigation/`.
+
+## ⚠️ Never raw `mv` into a folder you haven't surveyed — even a "simple" reorg move (learned 2026-07-03)
+
+Mid-reorg, asked to fold one small folder into another (`Certifications/` → `Sailing/Certifications/`),
+this ran as a bare `mv "$SRC/"* "$DEST/"` with no check of what was already in `$DEST` first. It felt
+low-stakes — a tidy-up move, not a `_DriveRescue` drain — so the usual discipline got skipped. `Sailing/
+Certifications/` turned out to already exist with substantial content of its own, including files with
+the **exact same names** as what was being moved in. Plain `mv` overwrites silently on a name collision.
+One of the two collisions was a true duplicate (identical hash, nothing lost); the other **genuinely
+destroyed a different, older file** — recovered only because the Synology recycle bin happened to catch
+the SMB-level overwrite (`ssh <nas> && find "/volume1/<share>/#recycle" -iname '<name>'`), which is not
+guaranteed on every NAS/config.
+
+**The size of the move is not what determines whether the safety discipline applies.** Every move into
+an existing folder — one file or ten thousand — needs the destination surveyed first and the standard
+`mv()`/`dup_drop()` helpers (which check `dst.exists()` and stage collisions instead of clobbering them)
+used instead of a raw shell `mv`. "This is just a small reorg tidy-up" is exactly the moment this gets
+skipped, and exactly when a real, differently-named-but-collided file is most likely to be sitting
+unnoticed in the destination.
+
+## Two organizing axes: records vs. active working files (learned 2026-07-03)
+
+Not all content wants the same primary sort key. Conflating the two below was a real mistake this
+session — proposing to explode a CAD-file folder across the "true" destination domain of each model
+(a boat model into Sailing/, a business part into a DSN cross-share, a personal print into a hobby
+folder) felt principled but broke how the file actually gets used. Doug's correction: "if I'm working
+on 3d models I want them all available in one place, and when in there I have them sorted by where
+they are intended to go just for ease of finding."
+
+**Records / reference documents** — invoices, statements, contracts, manuals, IDs. You look these up
+*by subject* ("what's my car insurance policy"), never by which app or format produced them. These
+organize by life-domain/entity (Sailing/, House Documents/, Finance/) as the **primary** axis. This is
+most of what filer files.
+
+**Active creative/working project files** — CAD models, code projects, electronics prototypes, photo
+edits still in Lightroom. You work across many subjects in one sitting using the *same tool*, so these
+organize by **tool/activity type first** (`CAD & 3D Design/`, `Electronics/`), with the eventual subject
+as a **secondary, nested** hint folder inside that — `CAD & 3D Design/Sailing/`, `.../House/`,
+`.../KBL/`, `.../Hobby/` — not scattered to the top-level domain each item will eventually belong to.
+This is the same instinct already encoded elsewhere in this skill: photos go to `PhotoReorg/<source>/`
+preserving structure (not pre-sorted into subject albums — Lightroom does that after), music dumps into
+`_MusicToImport/` regardless of genre (beets sorts it after). CAD/maker files are the same pattern:
+one tool-type home, subject as a hint inside it, not the top-level split.
+
+**When a cross-domain "tool" folder turns up while filing** (a Sketchup/Fusion360/similar folder whose
+subfolders are named after boats, houses, businesses, hobbies rather than after CAD-internal
+categories): don't explode it out to those domains. Keep the tool-type folder as the top-level home,
+and use the existing subject-named subfolders as-is (or reorganize them into that hint structure) —
+the person doing CAD/electronics/photo work wants the whole set together when they're in that mode.
+**Within a tool-first folder, organize by tool first and domain second** (`Sketchup/`, `Fusion 360/`,
+`Models/` as the top split, each with domain subfolders inside) — not domain-first-with-tool-folded-in.
+Sorting "by tool then by project" is how the person actually works; sorting "by project then by tool"
+isn't, even though both look similar on paper.
+
+**A third axis: custodial — whose is it, not what it's about.** Personal archives that belong to someone
+*other* than the account owner (an IT-fix client's old profile, a sibling's family files, a deceased
+parent's estate) don't dissolve into the subject taxonomy at all, even when they contain financial docs,
+photos, and correspondence that would otherwise be split across Finance/Photos/etc. The unifying fact is
+who they belong to, not what type of document each one is. Keep each one as one intact folder (junk
+stripped, real content otherwise undisturbed) inside a single "these aren't mine" home — Doug's call
+this session: *"I don't want those files mixed into the rest of the structure."* Don't default to
+exploding every heterogeneous-looking folder by content type — check whether the real organizing
+question is "whose" before assuming it's "what."
+
+## Glanceability — how many folders belong at one level (learned 2026-07-03)
+
+How wide a folder level should get before it needs breaking up isn't a matter of taste — it's studied.
+Get the tradeoff wrong and you either force meaningless nesting or let levels sprawl past what a
+glance can take in.
+
+- **Miller (1956), "The Magical Number Seven, Plus or Minus Two"** — working memory holds ~7±2 discrete
+  chunks. This is the number everyone reaches for, but it describes *recalling* a sequence from memory,
+  not *scanning* a visible list — it's routinely over-applied to navigation/folder-count questions.
+- **Cowan (2001)** — a more rigorous revision: true working-memory capacity is closer to **4±1** without
+  a chunking strategy.
+- **Larson & Czerwinski (1998, Microsoft Research)** — the study that actually settles the depth-vs-breadth
+  question. The same content organized narrow-and-deep (fewer items per level, more levels) vs.
+  broad-and-shallow (more items per level, fewer levels) — broad-and-shallow was faster with fewer user
+  errors, even at 16–32 items on one level. **Going a level deeper costs more (disorientation,
+  backtracking) than a longer list costs to scan.**
+
+**The rule to apply when structuring or re-structuring any folder level:**
+1. Target *roughly* 5–9 items visible at a glance per level (Miller, tempered by Cowan) — a soft target,
+   not a hard cap.
+2. When a level exceeds that, prefer a **real, discriminating grouping** — one that tells you something
+   true about what's inside (`Finance/`, `Electronics/`) — over either (a) a non-discriminating wrapper
+   that doesn't actually distinguish its contents from anything else in the tree (a `Personal/` sitting
+   next to `Sailing/` and `House Documents/` inside a personal document store discriminates nothing —
+   everything in that tree is "personal"), or (b) letting the list grow unbounded with no structure at all.
+3. **Never add a nesting level just to hit the number.** Per Larson & Czerwinski, depth is the more
+   expensive mistake — a longer flat list beats a fake grouping invented just to shrink a list.
+4. This cuts both ways: dissolving a non-discriminating wrapper (see the `Personal/` case above) can
+   just as easily *overshoot* into a level with too many items to glance at. When that happens, look for
+   real subject-matter groupings among the promoted contents before accepting a 40+-item flat level —
+   don't stop at "no more meaningless wrappers" and declare victory without checking the resulting width.
+
+### The mirror question: how few files justify a folder at all
+
+Unlike the max-per-level side above, there's no equivalent named study for a minimum — this is a
+practitioner heuristic (Rosenfeld & Morville's IA literature calls over-categorizing a common design
+mistake, without attaching a number), not an experimental result. Don't cite it as more rigorous than
+it is. But the underlying principle is the same cost the max-side rule is built on, just mirrored:
+**every folder is a navigation cost — an extra click, an extra "is it in here?" — paid on every future
+lookup.** A folder only earns that cost once it removes more scanning pain than it adds. Fork off a
+subfolder for two or three files and you've paid the indirection cost without buying anything back.
+
+- **Rough threshold ~10+ similar files** before a grouping earns its own folder — already this skill's
+  working number (see "Recognize patterns" above: "3 insurance docs stay flat. 50 invoices get a folder").
+- **A single file never gets its own folder.** Park it at the nearest sensible parent level and flag it;
+  wait for more of its kind to accumulate (see "A file doesn't fit any existing folder" below).
+- **Cowan's ~4** (from the max-side research) doubles as a soft sanity floor here: if a person can hold
+  ~4 items in working memory without any chunking strategy, a group smaller than that doesn't need the
+  chunking a folder provides — the items can just be scanned directly in the parent list.
+- **A "hobby" that feels like it deserves its own top-level folder often doesn't, once verified.**
+  Diving and KBLP (photography) both looked substantial by file count, but the real content was thin —
+  a handful of dive logs buried under obsolete installer/driver junk, a small reference set — once opened.
+  Both folded into the owner's personal catch-all as a subfolder instead of standing alone. Check real
+  content before granting top-level status to something that only *feels* important.
+
+## "No personal data" is not the same question as "not needed" (learned 2026-07-03)
+
+A folder full of app settings, config JSON, an SDK guide, and opaque cache blobs was judged "confirmed
+junk" twice this session (once in an early survey, once re-verified at execution time) — both times on
+the same one-sided check: *is there unique personal data in here (designs, documents Doug created)?*
+No. Quarantined. Doug's correction: *"don't I need it to use JoinerCAD in Fusion 360?"* — followed
+by *"it must be there for a reason."*
+
+**Absence of personal data is not evidence of absence of function.** App settings, plugin
+configuration, and SDK files are exactly the kind of thing that has zero "content" value to a document
+audit while being completely load-bearing for a piece of software Doug actively uses. Before
+quarantining anything that looks like app-internal config (Settings/, SDK/, cache blobs, `.settings`/
+`.json` state files) — as opposed to installers or genuinely stale caches — ask **"does active software
+depend on this being here?"** as a separate question from "is there real data in here?" An unusual
+location (e.g., app config sitting on a NAS share instead of the OS's standard config directory) is a
+reason to ask, not a reason to conclude it's safe to move — some setups deliberately keep working data
+on a synced/shared location. When genuinely uncertain and the software might still be in active use:
+ask, or leave it in place — don't quarantine on a confidence level that only covers half the question.
+
+## Standard taxonomies are a sanity check, not an authority (learned 2026-07-03)
+
+Citing a recognized pattern ("household filing taxonomies keep Legal/Estate separate from Financial")
+is useful for catching a genuinely bad structure, but it isn't a trump card over the owner's own read of
+their actual content. Wills Power of Attorney *looked* like a textbook Legal/Estate category — until the
+real files showed the exact same POA/executor documents were also held by the investment manager for
+account-access compliance, and Ontario's own "Power of Attorney for Property" is specifically a
+financial instrument. Doug's instinct ("I feel wills and POA are a financial thing") was right, and the
+generic pattern was the thing that needed updating, not his read of it. **When a cited standard and the
+owner's own mental model disagree, go find concrete evidence (shared documents, legal definitions, actual
+usage) before defending the standard — don't treat "this is the normal pattern" as settling the question.**
+
+## A folder's name is not its contents (learned 2026-07-03)
+
+"Certifications" sounds like a generic catch-all for any kind of credential. Opened file-by-file, it was
+100% boating/marine content (operator licenses, Marine Advanced First Aid certs, Transport Canada Marine
+First Aid) — a Sailing subfolder that had picked up a generic label, not a genuinely mixed category. This
+is the same lesson as the cardinal box-relocation failure mode, but it cuts the other way: a folder can
+look *too generic to belong anywhere specific* by name, while its actual contents are entirely
+domain-specific. Don't let a bland name talk you out of checking whether everything inside actually
+belongs to one real destination already established elsewhere in the tree.
+
+## Re-survey a destination before merging into it — don't trust an early/shallow pass (learned 2026-07-03)
+
+A first-pass survey of DSII Documents (done by name/description only, early in a reorg) said "Boat
+Papers, PredictWind, Polars, Insurance, Marine Charts, Boat Repairs" — thin. Actually walking its real
+tree turned up ~40 subfolders, including a `DSII Drawings/` and an `IoT Boat Monitoring Project/` that
+*already existed* — and the content being merged in from elsewhere had near-identical, overlapping
+versions of both. Merging blind would have either duplicated content or silently overwritten it (see the
+Certifications recovery incident). **Before any merge-into-existing-folder move, re-verify the
+destination's actual current state if your knowledge of it predates the rest of the session's
+verification pass — a folder surveyed once at the start of a long reorg may be much richer than first
+recorded, especially if it turns out to be its own live, actively-used archive rather than a passive
+destination.**
+
+## A dedup catalog is only as fresh as the last reindex — verify the "canonical" match still exists (learned 2026-07-03)
+
+A scripted dedup pass (`name+size` lookup against `catalog.sqlite`, same pattern as `dup_drop()`) was run
+mid-reorg without reindexing first. Of 58 files it called "already covered elsewhere," 50 pointed to a
+`canonical_path` that no longer existed — because *this same session's own earlier reorg* had already
+renamed/moved that exact file (e.g. `Personal/Maggie's Stuff/...` no longer exists; it's `Docs Maggie/...`
+now). The catalog wasn't wrong when it was built — it was just built before the reorg that made its own
+paths stale. Nothing was lost (quarantine, not delete), but the *determination* was wrong for those 50: a
+file isn't "confirmed a duplicate" just because the catalog has a same-name/same-size row — that row's
+path has to actually resolve on disk **right now**, checked at the moment of the match, not trusted from
+whenever the catalog was last built. `find_canonical()` must call `os.path.exists()` on every candidate
+row before accepting it, especially deep into any project touching a share/subtree the reorg has already
+worked through — the more you've already reorganized, the *less* reliable the existing catalog gets for
+dedup in that same area, right up until the next reindex.
+
+## Recurring names across unrelated folders are consolidation signals (learned 2026-07-03)
+
+"Mill Road" turned up four separate times in this reorg, in folders that had no reason to reference each
+other: KDK's own estate folder, a Sketchup CAD-drawings folder, and twice more buried inside an old
+Google Drive export nested in an unrelated OldComp folder. Each occurrence in isolation looked like an
+unrelated one-off. Recognized together, they described one real thing (a condo bought and renovated for
+Doug's father) that belongs in one consolidated project folder, not scattered across four disconnected
+locations reflecting whatever tool or export happened to touch it. **When the same distinctive
+name/entity recurs across folders that shouldn't otherwise be related, treat it as a signal to
+consolidate — don't file each occurrence independently just because its immediate container looks
+unrelated to the others.**
+
+## Junk-determination and destination-filing are separate decisions — don't assume a folder needs both (learned 2026-07-03)
+
+The default heterogeneous-dump treatment is survey → judge junk vs. real → file by subject. But two
+distinct simplifications turned up this session for folders that looked like they needed the full
+pipeline: (1) the OldComp-* folders had *already* had their junk-vs-real question settled by a previous
+filing run — all that remained was distribution, not re-judgment; (2) Dale Perrin, Deb&Greg, and KDK
+turned out not to need subject-based filing at all — once junk was stripped, the right move was keeping
+each as one intact person-archive (see the custodial axis above), not exploding them into Finance/,
+Health/, etc. **Before defaulting to the full survey→judge→explode→file pipeline on a messy-looking
+source, check whether one or more of those steps has already been done, or isn't actually needed for
+this particular source — ask, rather than assume every old/messy folder needs the maximum-effort
+treatment.**
+
+## Confirm scope before executing on a broad approval word (learned 2026-07-03)
+
+Doug said "do it" about one specific decision (merging Certifications into Sailing) mid-way through a
+session that was explicitly still in "propose and discuss the structure" mode, not "execute" mode. It
+got read as blanket authorization to start moving files on the live NAS. It wasn't — and the live move
+that followed hit an unsurveyed destination and destroyed a file (recovered from the Synology recycle
+bin, but only by luck of the NAS having recycle-bin retention enabled). **A short approval word answers
+the specific thing just proposed — it doesn't expand a conversation's overall mode from "designing" to
+"executing" unless that shift is stated explicitly.** When in doubt about which is meant, ask, rather
+than inferring "do it" means "start moving things on disk."
+
+## Naming: echo the owner's own vernacular; use shared prefixes for alphabetical adjacency (learned 2026-07-03)
+
+Two small naming lessons, both about matching how the structure will actually be read and used rather
+than how it sounds most "correct" on paper:
+- **Match the owner's own naming register.** "Others' Documents" got replaced with "Other People's
+  Stuff" — echoing "Maggie's Stuff," a name the owner had already chosen for his own catch-all. A more
+  formal-sounding name (even a clearer one) can feel wrong next to the owner's existing vocabulary; when
+  renaming, check what register the *rest* of the tree already uses before proposing something new.
+- **A shared prefix is a legitimate design tool for forcing Finder's alphabetical sort to keep related
+  folders adjacent.** "Doug" and "Maggie's Stuff" were conceptually a pair but alphabetized far apart.
+  Renaming to "Docs Doug" / "Docs Maggie" cost nothing structurally and made them sit next to each other
+  in every default Finder view. When two folders are meant to be browsed as a pair, consider whether a
+  shared prefix — not just individually "good" names — gets them to actually behave like one.
 
 ## Special patterns
 
