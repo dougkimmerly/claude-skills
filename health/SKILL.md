@@ -52,7 +52,14 @@ When new scans are in `_ScanInbox/` (or to (re)index the tree). All tools in `~/
 5. **Reconcile + verify** → `python3 tools/sync-nas-paths.py` (stamp NAS locations after any move) then
    `python3 tools/audit-health.py` (verify naming date-first + folder matches classification, by hash).
 6. **Distill (QC)** — you are the quality check: the tenant is ~95% right (watch dates!). Read the richer new
-   docs and fold the precise clinical facts into the `_Records/*.md`.
+   docs and fold the precise clinical facts into the `_Records/*.md`. **Per-document accountability: every filed
+   doc's content must land in a `_Records` home OR be consciously judged no-clinical-content — nothing is "filed
+   and forgotten."** ⚠️ **Ledgers / multi-year summaries / payment histories / statements are HIGH-information
+   even though the tenant tags them `clinical_relevance: LOW` (they look like "receipts").** A dental payment
+   ledger = every visit + every treatment; a chiro statement = the whole visit cadence; an optometry invoice =
+   the refraction/contacts history. Distill these in FULL, don't skip them as low-value. Sanity check after a
+   drain: *is there a filed doc whose facts aren't yet reflected in any `_Records` file?* (esp. the care-stream
+   folders — Dental, Optometry, and the hearing/chiro receipts.)
 7. **Expenses (tax, 2026+)** — for any newly-filed **receipt / pharmacy / dental / optometry / procedure / device**
    doc dated in the **current or a future year**, read its patient-paid (unreimbursed, after-insurance) line items
    and append one row per line to `_Expenses/<year>-medical-expenses.csv` (schema in `_Expenses/README.md`;
@@ -76,8 +83,16 @@ tables — pivot yourself), "am I due for…"→`immunizations.md`. For free-tex
 imaging semantic search / `/ask`. Cite the source; if a value is `?` or files conflict, say so.
 
 ## Record something new (canonical home = the NAS `_Records`)
-New lab→append `labs.md`; vital/InBody→`measurements.md`; med change→`medications.md`; diagnosis→`conditions.md`
-(+`timeline.md`); procedure→`procedures.md`; vaccine→`immunizations.md`. Refresh the affected `history.md` section.
+Every fact has one home. New lab→append `labs.md`; vital/InBody→`measurements.md`; med change→`medications.md`;
+diagnosis→`conditions.md` (+`timeline.md`); surgery/scope/imaging test→`procedures.md`; vaccine→`immunizations.md`.
+**Recurring outpatient care streams each have their OWN stream record** (so they don't fall through the
+"it's just a receipt" crack): **dental work→`dental.md`; eye exams / glasses / contacts / eye drops→`eye-care.md`;
+hearing tests / aids / audiology→`hearing.md`; chiropractic / physio / massage / MSK→`chiropractic.md`.** Keep
+**diagnoses** in `conditions.md` and **surgeries** in `procedures.md` (canonical) — the stream record holds the
+**visit cadence + device / prescription / treatment history + provider + reason** and points to those for the
+clinical events. Refresh the affected `history.md` section. (`_Records` files: profile · allergies · conditions ·
+medications · labs · measurements · procedures · immunizations · **dental** · **eye-care** · **hearing** ·
+**chiropractic** · family-history · providers · timeline · history · intake.)
 
 ## Produce a one-page appointment prep sheet
 Draft `Person/_Records/assessments/<year>-summary.md`, copy `templates/health-summary.html`, fill it, mark
@@ -91,6 +106,12 @@ reading the PDF back. The 2026 sheets are worked examples.
 `Summaries & ID/`).
 
 ## Conventions
-Documents: **`YYYY-MM-DD <description>.pdf`** (date-first; person = the folder; undated IDs/credentials plain).
+Documents: **`YYYY-MM-DD <Provider> — <doc type> (<disambiguator, only if needed>).pdf`** — date-first (sorts by
+time; person = the folder); one canonical **provider** name (no doctor/city/branch); a short lowercase **doc type**
+(`bloodwork`, `dental visit`, `eye exam`, `Rx receipt`, `executive health exam`, `mammogram`, `hearing aids`…);
+**no dollar amounts / invoice #s / SNs** in the name (those live in the summary / _Records / expense CSV). Same-day
+docs disambiguate in the parens (`(report)` / `(assessment letter)` / `(invoice)`, `(left eye)`). Undated
+IDs/credentials get a plain name. Full grammar + provider/doc-type vocab in `CONVENTIONS.md`; the medical tenant
+emits this shape at triage (`lib/tenants/medical/prompt.js`) and `file-from-imaging.py` word-boundary-truncates it.
 Records: ISO dates; append to labs/measurements (never overwrite — trends need the series); cite a `source`;
 flag uncertainty `?`. Full grain in `~/Programming/health/CONVENTIONS.md`; decisions in its `docs/decisions/`.
