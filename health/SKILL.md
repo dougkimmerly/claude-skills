@@ -1,6 +1,6 @@
 ---
 name: health
-description: Track and answer questions about Doug's and Maggie's medical lives — meds, conditions, labs, vitals, procedures, immunizations, vaccinations, family history — produce doctor-ready outputs (full medical history, one-page appointment prep sheet), and ingest scanned documents through the imaging pipeline. Use for ANY "what meds am I on / when was my last colonoscopy / what's my BP trend / am I due for a shingles shot / log this lab / prep me for my physical / give the new GP my history / I've scanned new files / drain the scan inbox" task, and the medical-history intake. STRUCTURED DATA lives on the NAS at /Volumes/Home Files/Data/Documents/Personal/Health (per person, _Records/*.md); documents are filed there too AND indexed in the home imaging service (app=medical) for search/RAG + AI extraction. Code/tools = git repo ~/Programming/health. Most sensitive data we hold. Canonical home = home NAS + home imaging; the boat imaging service carries a replicated copy of app=medical via the site-parity imaging-documents Syncthing share (accepted by Doug 2026-07-03, fixer issue #774) — that replication is by design, not a leak.
+description: Track and answer questions about Doug's and Maggie's medical lives — meds, conditions, labs, vitals, procedures, immunizations, vaccinations, family history — produce doctor-ready outputs (full medical history, one-page appointment prep sheet), and ingest scanned documents through the imaging pipeline. Use for ANY "what meds am I on / when was my last colonoscopy / what's my BP trend / am I due for a shingles shot / log this lab / prep me for my physical / give the new GP my history / I've scanned new files / drain the scan inbox" task, and the medical-history intake. STRUCTURED DATA lives on the NAS at /Volumes/Home Files/Data/Documents/Health (per person, _Records/*.md); documents are filed there too AND indexed in the home imaging service (app=medical) for search/RAG + AI extraction. Code/tools = git repo ~/Programming/health. Most sensitive data we hold. Canonical home = home NAS + home imaging; the boat imaging service carries a replicated copy of app=medical via the site-parity imaging-documents Syncthing share (accepted by Doug 2026-07-03, fixer issue #774) — that replication is by design, not a leak.
 metadata:
   type: skill
 ---
@@ -12,7 +12,7 @@ home (records + filed documents); the **home imaging service** is a search/RAG/e
 documents (its own copy, rebuildable). They're linked by content hash + a stamped `nas_path`.
 
 ## Where everything is
-- **NAS (canonical)** — `/Volumes/Home Files/Data/Documents/Personal/Health/` (Synology "Blackhole55"). Per
+- **NAS (canonical)** — `/Volumes/Home Files/Data/Documents/Health/` (Synology "Blackhole55"). Per
   person `Doug/` & `Maggie/`:
   - **`_Records/*.md`** — structured data you maintain (profile, conditions, medications, allergies,
     immunizations, procedures, family-history, providers, measurements, labs, history, timeline, intake). **The
@@ -89,7 +89,7 @@ is written to `_Records` automatically.**
 
 ## Produce year-end medical-expense tax receipts (2026+)
 The store is the source of truth for the **CRA Medical Expense Tax Credit**. Line items accumulate in
-`Personal/Health/_Expenses/<year>-medical-expenses.csv` (pipeline step 7). At year-end (or on request):
+`Health/_Expenses/<year>-medical-expenses.csv` (pipeline step 7). At year-end (or on request):
 `python3 tools/med-expense-report.py <year> [--open]` → renders an itemized summary (totals by CRA category +
 by person + grand total, `⚠` on `maybe` lines, CRA 12-month-window/spouse-pooling/threshold reminders) to
 `Personal/Taxes/<year>/Medical/<year> Medical Expense Summary (Kimmerly).pdf` (+ `.md`). Only the **unreimbursed
