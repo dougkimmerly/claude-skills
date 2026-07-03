@@ -68,6 +68,25 @@ When new scans are in `_ScanInbox/` (or to (re)index the tree). All tools in `~/
 
 Run `sync-nas-paths.py` + `audit-health.py` after ANY manual move/rename to keep the two stores coherent.
 
+## Automated drain + on-demand QC (ADR 0004)
+Steps 1–5 now run **automatically**. The dk400 `HEALTH_DRAIN` job (every 3 h; `qsys._jobscde`, program
+`health_drain`) SSHes to docker-server and runs `tools/drain-inbox.sh`: if `_ScanInbox` has new PDFs it
+ingests → OCR → embeds → triages → files each into `Person/<Category>` with a canonical name → syncs → audits,
+then raises a **`health_qc_pending` fixer issue** listing what was filed. Empty inbox = silent no-op. **Nothing
+is written to `_Records` automatically.**
+- **Runs on docker-server** (the imaging container + the read-write NAS mount `/mnt/home-files-rw` live there;
+  `~/Programming/{health,filer}` are cloned there and kept current with `git pull`; the scripts honor
+  `HEALTH_ROOT`). First run clears an OCR backlog (~2 min/doc) and is slow; steady state is fast. `drain-inbox.sh`
+  bounds OCR/embed/triage with `timeout`, self-heals stale `_ScanInbox` tags, and flocks so runs don't overlap.
+- **Run it now:** `ssh 192.168.20.19 'docker exec dk400 celery -A dk400.robot.worker call
+  dk400.robot.tasks.run_program --args="[\"health_drain\"]"'` — or run `tools/drain-inbox.sh` directly on the
+  host. Change cadence via `qsys._jobscde` (see the `robot` skill).
+- **QC = steps 6–7, on-demand — this is how QC is done.** When a `health_qc_pending` fixer issue is open (or on
+  request), do the QC pass: read each newly-filed doc (the issue lists them — they're the recent files in each
+  `Person/<Category>`), fold its precise clinical facts into the owning `_Records/*.md` (**watch dates; distill
+  ledgers/statements in FULL**), append current-year receipts to `_Expenses`, then **resolve the fixer issue**.
+  The issue is the QC queue — nothing is filed-and-forgotten, and no medical-record write ever happens unattended.
+
 ## Produce year-end medical-expense tax receipts (2026+)
 The store is the source of truth for the **CRA Medical Expense Tax Credit**. Line items accumulate in
 `Personal/Health/_Expenses/<year>-medical-expenses.csv` (pipeline step 7). At year-end (or on request):
