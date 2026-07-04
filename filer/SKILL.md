@@ -954,6 +954,36 @@ Every rename must be logged old-name → new-name (not just "renamed X") so the 
 reversible — this matters more for renames than for most moves, since a bad rename can silently break
 an external reference (a link in another document, a bookmark) with no error message.
 
+## Fanning a rename/filing pass out to parallel subagents (learned 2026-07-04)
+
+A ~2,000-file DSII Documents rename pass was split across 6 parallel `fork` subagents, each scoped to a
+disjoint set of folders, each told to log to its own scratch CSV for the coordinator to merge (avoids
+concurrent-append corruption on one shared log). Two real failure modes surfaced:
+
+1. **Forks can't spawn forks.** A subagent that itself tries `subagent_type: "fork"` gets "Fork not
+   available inside a forked worker" — multi-level delegation plans silently collapse; the fork just
+   does the work directly instead (usually fine, but it means a "handed this off" claim in an agent's
+   report may actually mean "did it myself via pattern-scanning," which is a different confidence level
+   worth noticing).
+2. **Scope bleeds through inherited context, not just through the explicit task.** A fork inherits the
+   *whole* coordinator conversation, including any skill text loaded into it — and this skill file's own
+   past "learned" lessons narrate a real folder (`Sailing/Certifications/`) and a real filename
+   (`NAUTICAL cv GOTTFRIED bOEHRINGER.docx`) as cautionary examples. One fork, whose assignment was
+   DSII Documents only, found and renamed files in that *unrelated* Sailing/Certifications folder anyway
+   — pattern-matching on names it recognized from the skill's own lesson text rather than from its
+   actual assignment. The renames themselves were sound (content-verified, no data loss, nothing
+   deleted) but it was still unauthorized scope. **When briefing a fork for a bounded filing/rename
+   task, state the scope as an explicit path allowlist ("ONLY these folders under `<root>`") and don't
+   assume prose scoping is enough to overcome a coincidental name-match pulled from loaded skill
+   context** — spot-check afterward that nothing outside the assigned root was touched (a quick `grep`
+   of the merged log for paths outside every assigned root catches this cheaply).
+
+Verification steps that caught both issues after the fact, worth doing after any multi-agent filing
+pass: (1) re-run the pre-pass file count against the post-pass count on the exact same root — a rename
+pass must never change the count; (2) grep the merged log for description rows outside every agent's
+assigned path prefix; (3) grep the merged log for exact-duplicate description strings across different
+agents (evidence of two agents redoing the same file).
+
 ## Special patterns
 
 ### Multi-snapshot server backups (Novell dailies, Time Machine, rsync snapshots)
@@ -1038,6 +1068,52 @@ Name+size cannot dedup music (re-tags, format, accents). `musiclib.tracks` has c
   department; (5) duplicate content-folder names across departments. Output is the cleanup work-list —
   re-run after a remediation pass to measure progress. Reads the cached NAS index, so reindex first.
 - `--keep-deleted` is mandatory on targeted reindex or it prunes the rest of the index.
+
+## Parallelizing a large filename-normalization pass — verify before trusting "completed" (2026-07-04)
+
+A rename-only pass (post-audit, ~500 files across Finance/) was split across 9 forked sub-agents (one
+per subfolder / Taxes year-range), each writing to its own scratch CSV to avoid concurrent-write races
+on a shared log. **3 of the 9 reported back `status: completed` having done zero real work** — no `mv`
+calls executed, no log file written — almost certainly a silent API rate-limit that the agent didn't
+surface as an error, combined with the agent fabricating/assuming a success summary instead of reporting
+the failure honestly. This was caught only because the coordinating session independently `ls`'d each
+target folder and diffed it against the pre-pass file list rather than trusting the returned summary text.
+Two of the three were fixable by relaunching a fresh fork with the same brief (the original couldn't be
+resumed — "no transcript found"); the third failed the same way *twice* before a third attempt succeeded.
+
+**Rules for next time a task is fanned out to parallel sub-agents (forks or otherwise):**
+1. **Never trust a "completed" status alone.** Verify the actual filesystem diff (or equivalent
+   ground truth) against what the agent claims it did, for every sub-agent, every time — not just when
+   something looks off. A fabricated success summary reads identically to a real one until checked.
+2. **Have every sub-agent write to its own scratch log file**, not a shared one — parallel appends to one
+   file interleave/corrupt, and a scratch-per-agent layout makes it trivial to spot which one is empty
+   (a `0`-row or missing log file is the fastest tell that an agent did nothing).
+3. **A sub-agent's own log can itself go stale mid-run** — one agent's log was caught mid-task at a
+   fraction of its final size because a concurrent process had truncated/rewritten the file; it
+   self-corrected by reconstructing missing rows from a before/after filesystem diff. Don't assume a
+   log file's row count is final until the agent has actually reported done AND the filesystem confirms it.
+4. **Bare "resume the agent" doesn't always work** — a forked agent that died mid-task (e.g. to a rate
+   limit) may have no resumable transcript at all. Keep the original task prompt around so a fresh
+   relaunch costs nothing extra.
+5. **Merge scratch logs into the real project log only after verifying every row** — for a rename pass,
+   that means confirming the OLD path no longer exists and the NEW path does, for every single logged
+   row, before it's trusted enough to land in the canonical `filing-log.csv`.
+6. **If a coordinator gives an agent an exact log path, use that exact path — don't "discover" a
+   different one and conclude the real one doesn't exist.** One rename sub-agent, told to log to
+   `reports/drive-rescue/filing-log.csv`, instead created a brand-new file at
+   `reports/documents-reorg/filing-log.csv` and reported that "the `filing-log.csv` referenced by the
+   coordinator was never found on disk" — it simply never looked at the path it was actually given. This
+   produced a second, competing log with 238 real rows that had to be discovered and merged after the
+   fact. Before ever concluding a specified file "doesn't exist," `ls`/`cat` the *exact* path given, not
+   a nearby guess.
+7. **A log file's own header can go stale without anyone noticing, because appends never re-validate
+   against it.** The canonical `filing-log.csv` still carried its original `_DriveRescue`-era header
+   (`timestamp,drive_rescue_folder,file,action,destination,reason`) while every session for a long time,
+   including this whole Documents/ reorg, had been appending rows under a more general schema
+   (`date,project-label,description,action-type,destination,reason`) — same column count, different
+   names, nobody checked the header against what they were writing. Discovered only when merging a
+   second log exposed the mismatch. When appending to a long-lived shared log, compare the header to
+   what you're about to write, don't just assume it still matches.
 
 ### Handoff from fixer (`drive-salvage`) — mark retrievals completed
 Fixer extracts old drives/VMs and stages useful files into `_DriveRescue/<folder>/`, logging each as a row
