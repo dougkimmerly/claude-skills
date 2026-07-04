@@ -914,6 +914,46 @@ than how it sounds most "correct" on paper:
   in every default Finder view. When two folders are meant to be browsed as a pair, consider whether a
   shared prefix — not just individually "good" names — gets them to actually behave like one.
 
+## File-level naming convention for personal documents (2026-07-04)
+
+Once a document is correctly *placed*, a separate pass can normalize its *filename* so a flat listing of
+the folder is self-describing without opening anything. This applies to Doug's own personal documents
+(Finance, Docs Doug/Maggie, Cars, Sailing, House Documents, Paul and Sheryl, DSII Documents, System &
+Tools, Vacations, and the document-like parts of CAD & 3D Design/Electronics). It does **not** apply to:
+- **Health/** — owned by a separate `health` git repo with its own pinned convention
+  (`YYYY-MM-DD <Provider> — <doc type>.pdf`, see `~/Programming/health/CONVENTIONS.md`). Leave Health
+  filenames to that repo's own session; hand off findings via `HANDOFF.md` rather than renaming directly.
+- **Other People's Stuff/** — custodial content belonging to other people. Doug doesn't own the naming
+  call on someone else's documents; leave as-is.
+- **Machine-generated/technical filenames that carry real meaning to the tool that reads them** — chart
+  cell IDs (`5161.BSB`), CAD internal object names, code/sketch filenames, config files named by
+  device ID. Renaming these for human readability would break the tool that consumes them. Leave alone.
+
+The convention for everything else:
+
+1. **Descriptive, not generic.** Replace `Document.pdf`, `Summary.pdf`, `untitled008.pdf`,
+   `pension.pdf` with a name that says what the content actually is, specific enough to distinguish it
+   from siblings in the same folder.
+2. **Date-first when the document is inherently date-anchored** (statements, filings, dated
+   correspondence, invoices, event records): `YYYY-MM-DD <description>.ext`, falling back to `YYYY-MM`
+   or `YYYY` when that's the real precision of the source. Don't invent a date the document doesn't
+   support — omit it rather than guess.
+3. **No raw scanner/camera filenames** (`Epson_10092024115742.pdf`, `CCF_002813.pdf`, `IMG_1234.jpg`) —
+   replace with a content description (+ date, if legible from the scan itself or reliable metadata).
+4. **No provenance tokens once reconciled** — `(from Docs Maggie Desktop)`, `(OldComp-Old-HD variant)`,
+   `(from 219-maggie rescue)` etc. did their job during the reorg; once a file has settled into its final
+   home and any duplicate has been resolved, the token is dead weight. Strip it.
+5. **Fix mechanical defects**: trailing spaces, double periods, typos, inconsistent
+   `tax`/`Tax`/`TAX` capitalization — normalize to match the sibling files already in that folder.
+6. **Disambiguators are parenthetical and descriptive**, not `(1)`/`(2)` — say *what's different*
+   (`(2020 revision)`, `(signed copy)`, `(Prius policy)`), not just that a collision happened.
+7. **When renaming would require judgment about content you're not confident on, don't guess** — leave
+   the filename as-is and note it for a human pass, same discipline as placement decisions.
+
+Every rename must be logged old-name → new-name (not just "renamed X") so the action is auditable and
+reversible — this matters more for renames than for most moves, since a bad rename can silently break
+an external reference (a link in another document, a bookmark) with no error message.
+
 ## Special patterns
 
 ### Multi-snapshot server backups (Novell dailies, Time Machine, rsync snapshots)
