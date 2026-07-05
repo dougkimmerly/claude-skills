@@ -98,7 +98,7 @@ imaging-service/
 │   ├── thumbnails.js      # Sharp: 200x200 thumb + 800x800 preview (WebP)
 │   ├── webdav.js          # WebDAV router for Genius Scan+ auto-sync
 │   ├── xmp.js             # ExifTool: embed metadata into JPEG/PNG/PDF files
-│   ├── ocr.js             # Text extraction: pdftotext first, Tesseract OCR fallback
+│   ├── ocr.js             # Text extraction: pdftotext→Tesseract; OSD orientation auto-correct + ingest-time upright normalization (qpdf) + per-page quality signal (docs/OCR-ROBUSTNESS.md); extractPdfPages for splitting
 │   ├── embeddings.js      # Text chunking + Ollama nomic-embed-text (768-dim vectors)
 │   ├── mailer.js          # Gmail email via nodemailer + App Password (GMAIL_USER/GMAIL_APP_PASSWORD)
 │   ├── triage.js          # v1 single-shot classifier (legacy; only behind GET /triage/modules)
@@ -113,7 +113,9 @@ imaging-service/
 │   │   ├── maintenance/   # jobs, job_parts, equipment
 │   │   ├── manuals/       # equipment registry + RAG manual_summary
 │   │   ├── ports/         # port_visits (Ports & Immigration)
-│   │   └── receipts/      # tank_log fills + generic receipts (subtype dispatch)
+│   │   ├── receipts/      # tank_log fills + generic receipts (subtype dispatch)
+│   │   ├── reference/     # port guides, entities, vessel documents
+│   │   └── medical/       # home-only health docs; person+subtype filing, split_plan bundle-splitting (ADR 0014)
 │   ├── rag.js             # RAG engine: retrieval + Claude answer generation
 │   ├── classify.js        # Post-OCR content-based doc_type + caption classification
 │   └── equipment-resolver.js  # Maps natural language → specific boat equipment
@@ -129,6 +131,9 @@ imaging-service/
 │   ├── import-manuals.js         # Import manuals from DSII Manuals collection
 │   ├── ocr-manuals.js            # Batch OCR (--dry-run, --limit, --id, --reprocess)
 │   ├── embed-manuals.js          # Batch embed (--dry-run, --limit, --id, --rechunk)
+│   ├── reocr-fix.js              # Repair rotated/garbled OCR: OSD-detect → normalize upright → re-OCR + re-embed (--dry-run default/--apply, --app, --id)
+│   ├── split-fix.js              # Backfill: split mixed bundles into child docs (ADR 0014) via re-triage (--dry-run/--apply, --app, --id)
+│   ├── doc.js                    # Maintenance CLI: info/text/reocr <id> (avoids docker exec node -e escaping)
 │   └── smoke-test.sh             # Integration tests (REST + WebDAV + scan sessions)
 ├── compose.yaml
 ├── Dockerfile

@@ -42,6 +42,23 @@ ssh $SYN "$D exec sonarr curl -s -o /dev/null -w '%{http_code}\n' --max-time 10 
 ssh $SYN "$D ps --format '{{.Names}}: {{.Status}}' | grep -iE 'gluetun|sonarr|radarr|lidarr|prowlarr|bazarr|sab|kometa'"
 ```
 
+## Indexers (Prowlarr)
+Indexers live in Prowlarr (`:9696`, key in its `data/config.xml`) and auto-sync to Sonarr/Radarr —
+never add an indexer in the arrs directly. **Diagnostic (learned 2026-07-05): an indexer outage
+masquerades as VPN trouble.** NZBgeek went down (502s on nzb-fetch, then empty search results) and
+it looked exactly like a Cloudflare-blocked VPN exit; a pointless rotation later, `curl` from the
+house (no VPN) proved the indexer itself was returning `total="0"`. **Always test the indexer's API
+direct-from-house before rotating the VPN.** NZBFinder was added that night as the second indexer
+precisely because a single indexer is a single point of failure. Also: **Sonarr's min-size quality
+gate (14 MB/min) rejects legitimate vintage SD releases** (~180 MB 25-min 1960s episodes) — they
+show as "rejected"; force-grab via `POST /api/v3/release {guid, indexerId}` after deleting the old
+file, or the release never imports.
+
+**DrunkenSlug registration watch:** the dk400 `DSLUG_WATCH` job (every 6h, program
+`drunkenslug_watch` in dk400-homelab) polls r/usenet feeds; a registration-window announcement
+raises fixer issue `registration_open`/`drunkenslug` (error → one Telegram per window). After
+registering, add the API key to Prowlarr and RESOLVE the issue (next window auto-reopens it).
+
 ## VPN rotation (gluetun `.env`)
 The `.env` (provider/country/WireGuard key) is **managed by the dk400 `vpn_rotation` program** — real rotation, retry-until-healthy, auto-blacklist of dead combos, keep-alive revert, daily + heal-on-unhealthy. **Do not hand-edit `.env` and `restart`** — that's the broken pattern it replaced. See fixer **ADR 0015**. State in `qsys._vpnstate` / `qsys._vpnblacklist`. Manual rotate / heal:
 ```bash
