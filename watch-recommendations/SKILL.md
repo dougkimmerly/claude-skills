@@ -192,6 +192,9 @@ gotchas.
 - **"Is it on Plex?" is computed from our own `plex_library`** (kept current by watch_sync), not Overseerr's `mediaInfo` (which is often empty here).
 - **Overseerr runs on the Synology** (`192.168.20.16:5055`), co-located with the Arr stack (Radarr `:7878` / Sonarr `:8989`); the **API key alone authorizes** search/request — no Plex session cookie needed. ⚠️ **There is a STRAY EMPTY Overseerr on docker-server** (`localhost:5055`, no Radarr/Sonarr connected, different key) — do NOT use it. The watch-rater backend's `OVERSEERR_URL` (compose default) + `OVERSEERR_API_KEY` (SOPS) must both point at the Synology one. **Fixed 2026-06-08:** they were on `localhost:5055`/a stale key, so every app request 403'd into the empty instance and never reached the Arr stack. Symptom = "requests aren't getting through"; check `docker exec watch-rater env | grep OVERSEERR` first.
 
+
+- **Honest ETA (2026-07-05):** `/api/sync-progress` snapshots the queue level (`watchlist.sync_progress_snapshots`, ≤1/10min, server interval + opportunistic) and derives the 24h NET drain → `queue_now`/`net_24h`/`eta_hours`/`keeping_pace`. The tab says **"holding steady — keeping pace with new content"** when inflow≈outflow (e.g. a quality-upgrade wave) instead of a frozen "done in 5h". Trend fields are null for the first ~6h of snapshot history (naive fallback ETA is labeled "if nothing new lands"). Verify-sweep priority: fresh never-attempted rows beat re-queued backlog rows — a re-queued backlog (e.g. the 252 foreign-audio re-checks) waits out an upgrade wave by design; jump the line via the Subs-tab fix button.
+
 ## Watchlist Database
 
 **Connection:**

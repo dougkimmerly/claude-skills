@@ -563,11 +563,15 @@ Call `write_dup_log()` at the very end of every script, before the summary print
 3. **Dedup** — run the ladder; split into redundant vs genuinely-new.
 4. **Propose** — group genuinely-new into clusters, each with proposed home + reasoning. Present for approval. Ask on entity assignment and anything the structure doesn't cover.
 5. **Execute approved** — same-volume = instant rename; **cross-share = copy+delete** (crosses Syncthing boundaries). **Never overwrite.** Use the standard helpers above.
-6. **Reindex** — `python3 auditor.py index-nas --root '<path>' --keep-deleted` on touched homes.
-7. **Log** — every move/skip/discard to `reports/<label>/filing-log.csv`.
-8. **Capture** — any new rule or sub-structure goes into this skill.
+6. **Prune empty directories** left behind by every move (`find <touched-root> -depth -type d -exec rmdir {} \;` — safe, only removes dirs that are actually empty). **Do this every time, not just at the end** — a folder tree with zero files in it still *looks* like unprocessed content to the next person (or the next you) who runs `ls`/`find` on the staging area. An empty shell and "nothing left to do" must look the same on disk, or the staging area misrepresents its own state.
+7. **Reindex** — `python3 auditor.py index-nas --root '<path>' --keep-deleted` on touched homes.
+8. **Log** — every move/skip/discard to `reports/<label>/filing-log.csv`.
+9. **Capture** — any new rule or sub-structure goes into this skill.
 
-Done when: new files are in their homes, staging area is empty, reindexed, logged, skill updated.
+Done when: new files are in their homes, staging area is **actually empty (no files AND no empty
+directory shells)**, reindexed, logged, skill updated. Before reporting a staging area "resolved,"
+run `find <root> -type f | wc -l` **and** `find <root> -mindepth 1 | wc -l` — if the second number is
+non-zero while the first is zero, there are unpruned empty shells; prune them before calling it done.
 
 **For any reorg spanning more than one sitting** (multiple phases, thousands of files, or anything
 likely to outlast the current session): maintain a living status checklist —
@@ -611,7 +615,12 @@ client**. Symptom: the mount(s) stop responding mid-run, the worker hangs, the j
      SMB reads/copies. Sustained saturation is what wedges it.
   3. **For very large jobs (100k+ files), run NAS-side** — SSH to the Synology and operate on the local
      `/volume1/...` paths instead of the Mac's SMB mount. Eliminates the wedge entirely and is far faster.
-     (Deferred for the DSN job since it was already 90% done; the right default for the next big one.)
+     **For reindexing this is now built in: `index-nas --nas-side`** (implemented 2026-07-05) — walks on
+     the Synology over ssh and streams results back at ~8,000 files/s vs ~70/s over SMB (full 2.8M-file
+     reindex: ~6 minutes instead of ~11 hours). Make it the default for any full reindex. Notes:
+     `/volume1/<share>` maps 1:1 to `/Volumes/<share>`; the NAS-local view exposes `@eaDir`/`#snapshot`
+     dirs SMB hides (auto-skipped via `NAS_LOCAL_SKIP`); paths are NFC-normalized on ingest. DSM's own
+     SynoFinder index is NOT usable for this — no supported bulk export; a local walk is the answer.
 
 ---
 
@@ -1047,6 +1056,19 @@ Treat it as a **SOURCE, not a destination:**
 ### QuickBooks — two `.QBW` for the same company
 Pick the **larger** one as live (more recent data); smaller → `Accounting/Backups/`.
 
+### Google Drive link stubs (`.gdoc`/`.gsheet`/`.gslides`) — park, don't file
+These are ~200-byte JSON pointers to cloud documents, no local content. Filing them by subject is
+meaningless — the content lives in Google's cloud until the planned Google Drive importer fetches it.
+Park them in **`_to-sort/_GoogleDrive-stubs/<source>/`** (paths preserved) and record any
+already-made routing decisions in that folder's `README.md` so the importer inherits them instead of
+re-asking. Established 2026-07-05 during the OldComp drain (32 kimmerlyblacksmith.com-domain stubs).
+
+### `_to-sort/_needs-doug/<source>/` — the end-of-drain remainder convention
+When draining a tree, files that survive content inspection but still can't be placed go to
+`_to-sort/_needs-doug/<source-tree>/` (not left scattered in the source tree) so the drain can
+finish and the ambiguous tail is one small folder Doug reviews in a sitting. Reserve it for files
+you DID open and still can't place — same discipline as the general `_to-sort` rule.
+
 ### `_DelSyncFiles/` — treat as a source, not a junk bin
 May contain unique files. Compare each against the live canonical location by filename. Absent from live → file normally. Present in live → drop the `_DelSyncFiles/` copy.
 
@@ -1059,7 +1081,9 @@ Launch ad-hoc beets containers with an explicit `--name` (e.g. `--name beets-imp
 - **In a QB source root** = the 0-byte original is a dead print run, the ` 2` is the only good copy → strip suffix on move, drop the 0-byte
 
 ### Tooling (drive-auditor)
-- `python3 auditor.py index-nas --all-shares --keep-deleted` — index all 3 shares. **Must span all 3** or DSN/XTL content looks missing.
+- `python3 auditor.py index-nas --all-shares --nas-side` — index all 3 shares **on the Synology over ssh**
+  (~6 min for the full NAS; always prefer this to the SMB walk). **Must span all 3 shares** or DSN/XTL
+  content looks missing. Add `--keep-deleted` on any targeted (single-root) run.
 - `python3 auditor.py audit` — placement + duplicate checks.
 - `python3 auditor.py intent-audit [--share /Volumes/DSN]` — **the intent enforcer.** Turns the
   cardinal-failure-mode rules above into machine checks. Flags, per share: (1) folders whose name
