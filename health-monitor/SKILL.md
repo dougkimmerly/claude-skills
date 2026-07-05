@@ -297,9 +297,21 @@ SELECT target_name, status, last_check FROM qsys._healthchk_status WHERE target_
 For VMs representing Docker containers:
 1. Set `check_type: docker`
 2. Set `container_name: actual-container-name` (if different from VM name)
-3. Assign VM to correct cluster (Synology, DK/400, NetBox, etc.)
+3. Assign VM to correct cluster (Synology, DK/400, NetBox, docker-containers, etc.)
 
 The cluster determines which host to SSH to for docker inspect.
+
+**Two silent-invisibility traps (burned us 2026-07-04 — 14 new VMs checked by nothing):**
+- The cluster MUST be in `CLUSTER_TO_DOCKER_HOST` in `shared/health_check.py`, or every
+  docker-check VM in it is skipped at debug level. General .19 containers → cluster 10
+  `docker-containers`.
+- The cluster MUST have a site: NetBox 4 clusters use scope, and `PATCH {"site": N}`
+  returns 200 while doing NOTHING — send `{"scope_type": "dcim.site", "scope_id": N}`,
+  verify `virtualization_cluster._site_id` is set. NULL `_site_id` + NULL vm.site_id =
+  the VM fails the site filter and is never fetched as a target.
+
+Diagnostic: new VM not appearing in `qsys._healthchk_status` after 2+ minutes → check
+those two before anything else.
 
 ### Change check frequency
 Update in database (schedules now in `_jobscde`, not schedules.py):
