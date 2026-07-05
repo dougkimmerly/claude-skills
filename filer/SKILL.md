@@ -1052,6 +1052,7 @@ May contain unique files. Compare each against the live canonical location by fi
 
 ### Music — beets is the dedup engine
 Name+size cannot dedup music (re-tags, format, accents). `musiclib.tracks` has clean artist/title/album/duration + MusicBrainz IDs. Match by **normalized artist + title + duration(±2s)**; route uncertain tail through beets import.
+Launch ad-hoc beets containers with an explicit `--name` (e.g. `--name beets-import`) — fixer's discovery flags every random-named container as unknown (fixer #790).
 
 ### `" 2.pdf"` suffix files — two opposite meanings
 - **In a destination folder** = QB printed the same doc twice → hash-verify identical, drop
