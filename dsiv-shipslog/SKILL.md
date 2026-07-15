@@ -11,8 +11,12 @@ description: Reach and deploy to the DSIV ship's-log Mac (Sheryl's M2 aboard Dis
 ssh sherylshard@shipslog.local        # Doug's Mac's key is already authorized
 ```
 
-- If `shipslog.local` doesn't resolve, the M2 may have hopped WiFi (gotcha 4 in
-  the repo CLAUDE.md) or mDNS is mid-heal. Find it by probing the LAN:
+- If `shipslog.local` doesn't resolve, FIRST check which WiFi YOUR device is on
+  (`ipconfig getsummary en0 | grep SSID`) — a client on the wrong network was
+  the whole story on Jul 15 2026 (laptop on a 10.10.10.x net, boat WiFi is
+  elsewhere; mDNS doesn't cross networks). Only then suspect the M2: it may
+  have hopped WiFi (gotcha 4 in the repo CLAUDE.md) or mDNS is mid-heal.
+  Find it by probing the LAN:
   `arp -a`, then `curl http://<ip>:3200/health` → `{"ok":true,...}` is the app.
   Check `/tmp/shipslog-mdns.log` on the M2 — it records every IP re-advertisement,
   so it tells you when and where the Mac hopped.
@@ -40,8 +44,10 @@ On the M2, docker/colima/lima live in `/usr/local/bin` (the offline install
 bundle put them there), NOT `/opt/homebrew/bin` — an SSH shell's default PATH
 has neither (verified Jul 14 2026).
 
-```bash
-```
+**Never invoke `python3` in an ssh command to the M2** — no Xcode CLT yet, so
+it pops an install dialog on the boat Mac's SCREEN (repo gotcha 12; done by
+reflex Jul 15 2026 — someone aboard had to tap Cancel). Parse JSON on your own
+Mac or with node.
 
 **Never drop these excludes:**
 - `deploy/dsiv-signalk/` — the LIVE SignalK home (bind-mounted into the
