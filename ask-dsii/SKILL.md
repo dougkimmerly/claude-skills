@@ -150,3 +150,4 @@ When the cross-tenant routing pattern actually lands (system prompt? per-questio
 - `tailscale` — when reaching imaging from off-LAN introduces auth issues
 - `claude-api` — Anthropic SDK / tool-description tuning patterns
 - `cruising-system` (project-scoped, in cruising-app) — table-level reference for `ask_log` and the rest of the cruising schema
+- `dsiv-shipslog` — the OTHER boat (Distant Shores IV) has its own hand-built Ask (`/ask`, `routes/ask.js`) with the same `ask_log` thumbs-up/down tuning loop plus offline quick answers; it is NOT this codebase (deliberate fork) — see the `dsiv-ask-the-log` memory. Don't cross-port; the tuning *pattern* is shared, the code is not.

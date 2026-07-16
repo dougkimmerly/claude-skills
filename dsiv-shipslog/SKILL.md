@@ -32,7 +32,7 @@ cd ~/Programming/dsiv-shipslog   # commit first; deploy the committed tree
 rsync -az --delete \
   --exclude '.DS_Store' --exclude 'deploy/dsiv-signalk/' --exclude 'plugin/node_modules/' \
   --exclude 'shipslog-data-*.tgz' --exclude '.sim-state.json' \
-  --exclude 'Start Ships Log.command' --exclude '.claude/' \
+  --exclude 'Start Ships Log.command' --exclude '.claude/' --exclude '.env' \
   ./ sherylshard@shipslog.local:dsiv-shipslog/
 ssh sherylshard@shipslog.local 'export PATH="/usr/local/bin:$PATH"; cd ~/dsiv-shipslog \
   && docker compose build shipslog && docker compose up -d \
@@ -54,6 +54,11 @@ Mac or with node.
   container: settings, plugin config, kip sqlite). `--delete` here destroys the
   boat's instrument config.
 - `Start Ships Log.command` — M2-local launcher, not in git.
+- `.env` — M2-local secrets (`ANTHROPIC_API_KEY` for `/ask`). Docker Compose reads
+  it for `${VAR}` interpolation. Gitignored in the repo; without this exclude a
+  `--delete` rsync wipes the key on the boat. (Post-Horta, once the M2 is a SOPS
+  host, this moves to `sops exec-env` and the `.env` goes away — see the `secrets`
+  skill's host-provision + service-migration flow.)
 - Include `.git/` (default) so the M2's repo lands on the deployed commit —
   makes the Horta git/remote setup trivial.
 
@@ -73,6 +78,12 @@ manual edits deploy by rsync alone, no rebuild.
 - Verify: `/health`, `/api/voyages/active` (voyage resumed), `/api/settings`,
   `curl -L /log` (`-L`! the shortcut is a 302 — a bare curl greps empty), and
   `docker logs shipslog | tail`.
+- **Right after a restart, `/api/voyages/active` transiently returns
+  `{"active":false,"state":"unknown"}` for ~1-2 s** while the app re-resumes the
+  voyage from the DB asynchronously (`/health` answers before the resume lands).
+  Wait for `docker logs shipslog | grep "Resumed active voyage"`, or just
+  re-hit the endpoint, before reporting voyage state — don't call a live passage
+  dead off a query fired during the startup window (did exactly that Jul 16 2026).
 - If timestamps or the data meter look wrong, compare `date -u` (host) with
   `colima ssh -- date -u` AND an external truth (GPS `navigation/datetime`
   time-of-day, or `curl -sI https://google.com | grep -i date`). If the HOST
