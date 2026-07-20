@@ -45,6 +45,10 @@ wrkjobq                     # 5250 green screen (F6=NEXT, F10=ad-hoc, 5=log,
 ## Rules of the machine
 
 - **One job running Mac-wide** (`engine/global.lock`) — queues wait their turn.
+  Both locks are dirs whose mtime is a **heartbeat** (worker touches its queue
+  lock every 15 s while a job runs or waits its turn — added 2026-07-20 after a
+  healthy 3-hour drain read as a "stale lock" and a live job got falsely held
+  as stranded); stale-break only fires when the mtime is genuinely old.
 - **MSGW holds are per-queue**: a job that exits non-zero OR leaves the repo
   dirty moves to `held/`, the `MSGW` marker freezes that queue only. Read the
   marker + `done/<job>.log`, fix or decide, then `sbmjob -release` (resubmit
