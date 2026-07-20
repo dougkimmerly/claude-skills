@@ -76,6 +76,13 @@ wrkjobq                     # 5250 green screen (F6=NEXT, F10=ad-hoc, 5=log,
   Pre-2026-07-20 logs are plain text; the renderer passes them through.
   Worker log: `<queue>/worker.log`.
 
+## Needing the tree while the queue is ACTIVE (housekeeping etc.)
+
+Don't race the worker — pause it deliberately: write a note into
+`<queue>/MSGW` saying it's a deliberate pause (the running job finishes and
+commits normally; the worker stops before taking the next). Wait for
+`running/` to empty, do the interactive work, COMMIT, then `sbmjob -release`.
+
 ## Submitting from a session
 
 When Doug decides something and says "queue it": write the decision INTO the
