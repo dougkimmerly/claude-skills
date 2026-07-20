@@ -34,6 +34,8 @@ Registered queues: `shard` (physically `~/.shard-batch`, symlinked — legacy).
 ```
 sbmjob NEXT                 # queue "top unblocked backlog item" — cwd-resolved
 sbmjob "free text job"      # ad-hoc job; the text becomes the session prompt
+sbmjob -pty 1 "..."         # JOBPTY: expedite — runs BEFORE every normal job
+                            #   (1 = most urgent; 1-9 all beat plain FIFO)
 sbmjob -q <name> ...        # target a queue from anywhere
 sbmjob -wrk                 # WRKJOBQ text view, all queues
 sbmjob -whichq              # which queue does cwd resolve to?
@@ -80,19 +82,39 @@ wrkjobq                     # 5250 green screen (F6=NEXT, F10=ad-hoc, 5=log,
   Pre-2026-07-20 logs are plain text; the renderer passes them through.
   Worker log: `<queue>/worker.log`.
 
-## Needing the tree while the queue is ACTIVE (housekeeping etc.)
+## Changing the queue's world while it runs — expedite, don't pause
 
-Don't race the worker — pause it deliberately: write a note into
-`<queue>/MSGW` saying it's a deliberate pause (the running job finishes and
-commits normally; the worker stops before taking the next). Wait for
-`running/` to empty, do the interactive work, COMMIT, then `sbmjob -release`.
+The reviewer session constantly makes decisions the queue must see (ROADMAP
+edits, captured calls, reprioritized work) while a job holds the tree. The
+default answer is a **priority job**, not a pause: write the full change into
+a `sbmjob -pty 1 "..."` job — exact files, exact edits/decisions, commit
+message — and move on. It jumps the FIFO (filename prefix `0N-` sorts before
+any timestamp; the worker's plain `sort` does the rest), so the change lands
+in its own fresh session before the next queued job runs — reorderings take
+effect before the next NEXT fires. Priorities 1-9 all beat normal jobs and
+rank among themselves. Reordering/cancelling **queued** jobs needs no job at
+all: rename/delete files in `<queue>/queue/` directly — they're execution
+tokens, not repo files (safe while a job runs; only don't race an idle
+worker's pick).
+
+## Needing the tree YOURSELF while the queue is ACTIVE (rare)
+
+Only when the work is genuinely interactive — Doug iterating live, a server
+restart to eyeball, anything a headless session can't do — pause deliberately:
+write a note into `<queue>/MSGW` saying it's a deliberate pause (the running
+job finishes and commits normally; the worker stops before taking the next).
+Wait for `running/` to empty, do the interactive work, COMMIT, then
+`sbmjob -release`. If a fire-and-forget `-pty 1` job could do it, use that
+instead — pausing costs the whole wait; expediting costs nothing.
 
 ## Submitting from a session
 
 When Doug decides something and says "queue it": write the decision INTO the
 job text — context, the chosen option, acceptance criteria — so the fresh
 session needs nothing else. `sbmjob -q <queue> "..."` or drop a file in
-`<queue>/queue/` named `YYYYmmdd-HHMMSS-<slug>.job`.
+`<queue>/queue/` named `YYYYmmdd-HHMMSS-<slug>.job` (`0N-` prefix = JOBPTY N,
+runs before all unprefixed jobs). Decisions that must land before the next
+queued job runs → `-pty 1`.
 
 ## Registering a new repo
 
