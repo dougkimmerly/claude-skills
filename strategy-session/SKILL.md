@@ -7,7 +7,7 @@ description: Turn this session into the ROADMAP reviewer — Doug and CC triage 
 
 Doug + this CC review how the project moves forward. The output is a **well-stocked,
 de-blocked queue**; the work itself is done later by the **executor** — a separate CC
-session or batch job (in shard-editing: the `~/.shard-batch` JOBQ) that behaves like a
+session or batch job (the `batchq` engine, `~/.batchq` — see the batchq skill) that behaves like a
 sub-agent, taking ONE top unblocked queue item at a time, doing the deep investigation
 and the fix, committing, stopping.
 
@@ -17,6 +17,12 @@ and the fix, committing, stopping.
   form a hypothesis, name the acceptance test — then frame the job in the queue and move
   to the next issue. Minutes per issue, not hours. If real digging is needed, that IS the
   first step of the queued job, not this session's work.
+- **COMMIT EARLY AND OFTEN — after every decided item, not one commit per hour of
+  triage.** The batch executor shares this working tree: while your edits sit
+  uncommitted, the queue is stalled (a job can't start on a dirty tree, and a finishing
+  job's verdict gets held hostage by your dirt — both proven 2026-07-20). Every commit
+  is a released queue. If `wrkjobq` shows an MSGW naming files you're editing: commit,
+  then `sbmjob -release`.
 - **The executor:** deep investigation, the fix, validation, docs, commit. One job at a
   time. Never do its work here unless Doug explicitly says "you fix it".
 
@@ -48,14 +54,16 @@ you confirm back that it's captured.
 
 - **Commit + push each framed item promptly** so the executor (which may be running in
   parallel RIGHT NOW) sees it. Stage only your own files — the executor's in-flight
-  work shares this working tree. Promptly means IMMEDIATELY: in a batchq repo the
-  worker's end-of-job dirty check sees the whole shared tree, and your uncommitted
-  edit at that instant MSGW-holds the queue even though the job succeeded (bit us
-  2026-07-20; recovery = `sbmjob -release` + retire the stale `held/` file to `done/`).
+  work shares this working tree. Promptly means IMMEDIATELY: the worker's end-of-job
+  dirty check sees the whole shared tree, and your uncommitted edit at that instant
+  holds the queue (since 2026-07-20 the worker judges this correctly — the job counts
+  done, the MSGW names the parallel-session dirt; recovery is just commit +
+  `sbmjob -release`).
 - **Expect concurrent edits**: re-read files immediately before editing; if an edit
   bounces with "modified since read", the executor moved — re-sync (`git log
-  --oneline -3`, `git status`) before retrying. It may even sweep your uncommitted doc
-  edits into its own commits — that's fine, the queue is shared state.
+  --oneline -3`, `git status`) before retrying. Prefer NOT to edit while a job is
+  RUNNING (`sbmjob -wrk` first): a mid-flight job's closing `git commit -A` will sweep
+  your uncommitted edits into its commit — recoverable in git, but avoid it.
 - **Verify cheap claims against reality** while framing (is the drive actually mounted,
   does the file exist, what does the count actually say) — a 30-second check that makes
   the item's facts true beats a hypothesis the executor must first disprove.
