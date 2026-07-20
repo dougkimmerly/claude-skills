@@ -48,7 +48,10 @@ you confirm back that it's captured.
 
 - **Commit + push each framed item promptly** so the executor (which may be running in
   parallel RIGHT NOW) sees it. Stage only your own files — the executor's in-flight
-  work shares this working tree.
+  work shares this working tree. Promptly means IMMEDIATELY: in a batchq repo the
+  worker's end-of-job dirty check sees the whole shared tree, and your uncommitted
+  edit at that instant MSGW-holds the queue even though the job succeeded (bit us
+  2026-07-20; recovery = `sbmjob -release` + retire the stale `held/` file to `done/`).
 - **Expect concurrent edits**: re-read files immediately before editing; if an edit
   bounces with "modified since read", the executor moved — re-sync (`git log
   --oneline -3`, `git status`) before retrying. It may even sweep your uncommitted doc
