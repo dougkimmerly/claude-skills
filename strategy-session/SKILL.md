@@ -59,17 +59,31 @@ you confirm back that it's captured.
   holds the queue (since 2026-07-20 the worker judges this correctly — the job counts
   done, the MSGW names the parallel-session dirt; recovery is just commit +
   `sbmjob -release`).
+- **Expedite, don't pause (the default since 2026-07-20)**: check `sbmjob -wrk` before
+  editing — if a job is RUNNING, do NOT edit the tree interactively (its closing
+  `git commit -A` sweeps the whole tree). Instead capture the queue/roadmap change as
+  an **expedited job**: `sbmjob -pty 1 "full self-contained change — exact files, exact
+  edits, decisions, commit"` jumps the FIFO and runs before the next normal job.
+  Deliberate-pause is ONLY for genuinely interactive work (see the batchq skill's
+  "expedite, don't pause" section). When the queue is idle, edit directly.
 - **Expect concurrent edits**: re-read files immediately before editing; if an edit
   bounces with "modified since read", the executor moved — re-sync (`git log
-  --oneline -3`, `git status`) before retrying. Prefer NOT to edit while a job is
-  RUNNING (`sbmjob -wrk` first): a mid-flight job's closing `git commit -A` will sweep
-  your uncommitted edits into its commit — recoverable in git, but avoid it.
+  --oneline -3`, `git status`) before retrying.
 - **Verify cheap claims against reality** while framing (is the drive actually mounted,
   does the file exist, what does the count actually say) — a 30-second check that makes
   the item's facts true beats a hypothesis the executor must first disprove.
 - **End-of-session blocker sweep**: walk the open queue top to bottom — no item left
-  needing a decision, missing an input, or ambiguous about its gate. Then normal
-  housekeeping if Doug asks (compass/status doc rewrite, commit, push).
+  needing a decision, missing an input, or ambiguous about its gate.
+- **Pre-clear ritual (the session's last act, before Doug /clears):**
+  1. **Flush the context** — everything Doug voiced this sitting is captured in the
+     queue or a doc, nothing lives only in the conversation; confirm each capture back.
+  2. **Queue housekeeping as an expedited job** — `sbmjob -pty 1` with the project's
+     housekeeping definition spelled out in full (in shard-editing: compass rewrite,
+     feature-log currency, manual + PDF regeneration, migration-plan currency, commit
+     + push). The job must be self-contained — it runs after this session's context
+     is gone.
+  3. **Tell Doug it's queued** — he can /clear immediately; the job carries the rest.
+     Never make him hold the session open waiting for housekeeping to run.
 
 ## Tone
 
