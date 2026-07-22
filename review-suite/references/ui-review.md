@@ -9,6 +9,19 @@ same job," "the empty state is confusing," or "the buttons are misaligned" in so
 actual UI, drive it through its states, screenshot each, and have a **vision-capable reviewer**
 observe it against the catalog below.
 
+## ⚠ DON'T LET THE UI LENS DEGRADE TO CODE-ONLY (escaped 2026-07-22)
+
+In a **whole-repo or L3/L4 multi-agent audit**, the "UI" area silently becomes *just another
+code-reading reviewer* unless you explicitly wire in a rendered pass — and then it misses exactly
+the defects only rendering shows. This escaped a live L4 audit: a code-only "web-ui" reviewer
+passed a manual page that renders **edge-to-edge with no margins** and a top nav that **overflows so
+the Control gear falls off-screen on a phone** — both instantly obvious in a 390px screenshot,
+invisible in the source (the CSS was print-styled `body{margin:0}`; the nav was a flex row with too
+many items). **Rule:** if ANY audit area touches user-facing surfaces, that area's method MUST
+include a rendered pass — headless-screenshot each key page at **mobile (~390px, and check 375px)
+AND desktop**, vision-review the images, THEN code-verify. A UI area whose agent only read code has
+NOT reviewed the UI. Cheap even without Playwright: `"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --screenshot=out.png --window-size=390,844 --virtual-time-budget=8000 URL`, then read the PNG.
+
 ## ⚠ PIXELS PROPOSE, CODE DISPOSES — the load-bearing discipline
 
 **A screenshot tells you WHAT it looks like; only the code tells you WHY, and whether it's
