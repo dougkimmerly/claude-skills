@@ -38,6 +38,12 @@ assumes and feeds.
 - **The test for a test:** would it FAIL if the behavior broke? If not, delete or fix it.
 - Don't mock the unit under test. Shape fixtures like real data. Test the **error path**, not just
   the happy path.
+- **Mutation testing — the gold standard for "are my tests actually real?"** It deliberately injects
+  small bugs (*mutants*: flip `>` to `>=`, delete a line, negate a condition) and checks whether your
+  suite **catches** them. A **surviving mutant** is a test gap coverage % can't see. Run it
+  periodically on critical modules — **Stryker** (JS/TS), **PIT** (Java), **mutmut** / **cosmic-ray**
+  (Python). (2025 research even drives mutant-killing with fuzzers to surface real faults.) This is
+  how you audit the *tests themselves*, not just the code.
 
 ## The runnable gate (make it one command)
 - **One command runs the whole suite.** That command is your **L0 gate** and your **ship gate**.

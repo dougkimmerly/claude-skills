@@ -25,7 +25,12 @@ the review→verify→synthesize shape.
   its offline-first contract) + where the **real data** lives, and tell them to **verify against it**,
   read-only. A finding checked against reality beats a hypothesis.
 - **Adversarial verify is non-optional.** It's what removes plausible-but-wrong findings. Prompt the
-  skeptic to REFUTE, not to confirm.
+  skeptic to REFUTE, not to confirm — a **separate** agent, never the finder self-checking.
+- **Debias the prompts (research-backed).** Tell every reviewer + verifier to judge the code **on its
+  own merits** — ignore reassuring comments, the PR/commit description, and benign-looking names;
+  verify what the code *does*, and treat a "this is safe / can't happen" comment as a place to look
+  harder. Framing defeats autonomous LLM reviewers up to **88%** of the time; explicit debiasing
+  restores detection to **~94%**. Put this line in `CTX`.
 - **Verify in a pipeline**, not after a barrier — each area's findings verify as soon as that area
   finishes, so fast areas don't wait on the slowest.
 - **Severity comes from the verifier**, not the finder (finders over-rate).

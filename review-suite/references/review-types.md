@@ -14,6 +14,11 @@ For each: **what it catches**, **red flags to grep/look for**, **how to run it**
   rounding, `==` on floats, missing `else`, TODO/FIXME, "can't happen" comments.
 - **How:** read the logic against concrete inputs (empty, one, many, malformed, boundary). Reproduce
   the failure with a real input before reporting.
+- **Cross-file / "seam" bugs (deep + whole-repo reviews):** a change can be locally correct but break
+  a **caller**, a shared **contract/schema**, or an assumption **elsewhere in the codebase** — the
+  highest-value bugs hide in the seams between files/services, invisible to a diff-only view (this is
+  the measured edge of whole-codebase-indexing reviewers over diff-only ones). Trace each change to
+  its callers and the contracts it must uphold; don't judge a diff in isolation.
 
 ## 2. Data-safety / destructive-op / migration  *(scrutinize hardest — irreversible)*
 - **Catches:** deletes/moves/renames that can't be undone, non-atomic writes to canonical files
