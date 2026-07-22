@@ -138,20 +138,34 @@ harder to break over time.
 
 ## Model & reasoning effort
 
-A review is the **highest-stakes reasoning task** in the workflow — a missed data-safety bug ships.
-Don't leave model/effort to session inheritance:
+A review is the **highest-stakes reasoning task** in the workflow — a missed data-safety bug ships —
+so choose model + effort **deliberately per stage**; don't leave them to session inheritance, and
+don't spray your best/scarcest model across the whole fan-out.
 
-- **L3 / L4 reviewers and verifiers:** run on the **strongest reasoning model available** (Opus
-  tier) at **high — or `max` ("ultrathink") for security- and data-safety-critical areas** —
-  reasoning effort. In a multi-agent workflow, set `effort: 'high'` (or `'max'`) on the review +
-  verify `agent()` calls, and **start the run from a session on the strong model** (agents inherit
-  the orchestrator's model unless overridden).
-- **L1 / L2:** the session's default model + effort is fine; bump effort for anything touching
-  destructive flows or security.
-- **Implementing mechanical fixes** (the remediation step for fix-now findings): a lighter/faster
-  model is fine — the hard reasoning was the *finding*, not the one-line guard.
-- Ultrathink is **not automatic** — you opt in per the above. Spend the tokens on review + verify;
-  economize on mechanical fixes.
+**Model tiers (strongest → cheapest) and where each fits:**
+- **Fable — top reasoning tier, but SCARCE (exhaustible weekly bucket).** Treat it as a limited
+  resource (batch work is deliberately kept *off* it to preserve the bucket). Aim it where a wrong
+  call is most costly and hardest to make: the **adversarial VERIFY stage** and the
+  **highest-stakes areas** (data-safety, security, irreversible flows). **Do not run a whole
+  30+-agent fan-out on Fable — that burns the weekly bucket** (an L4 audit is ~33 agents / 2M+ tokens).
+- **Opus — strong and plentiful.** The default for L3/L4 **area reviewers**: strong enough to surface
+  the candidate findings across the whole codebase without draining the Fable bucket.
+- **Sonnet.** Fine for L1/L2 passes and for **implementing mechanical fixes** (the hard reasoning was
+  the *finding*, not the one-line guard).
+- **Haiku.** Trivial/mechanical only.
+
+**Recommended allocation for an important (L4) review — bucket-aware:**
+- Area **reviewers** → **Opus**, `effort: 'high'`.
+- Adversarial **verifiers** + the **data-safety / security / irreversible** areas → **Fable**,
+  `effort: 'high'` (or `'max'`/ultrathink) — highest leverage, lower volume.
+- *Or the cheapest way to use your best model well:* run everything on Opus, then **escalate only the
+  confirmed high/blocker findings to a short Fable second-opinion pass.**
+- Implementing **fix-now** findings → **Sonnet**.
+
+Set per-agent `model` + `effort` in the workflow (agents inherit the orchestrator's model unless
+overridden). **Top-tier/ultrathink is opt-in per stage, not automatic.** The principle: spend the
+scarce model on VERIFY and the irreversible areas; economize on the broad first pass and mechanical
+fixes.
 
 ## Pairing with a rigorous testing pattern
 
