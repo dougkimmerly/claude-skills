@@ -24,6 +24,10 @@ the review→verify→synthesize shape.
 - **Give every reviewer the shared rules** of the codebase (its invariants, its data-safety rules,
   its offline-first contract) + where the **real data** lives, and tell them to **verify against it**,
   read-only. A finding checked against reality beats a hypothesis.
+- **Prime with tooling before the fan-out.** Run **SAST (Semgrep) + dep-audit** as L0 and pass their
+  findings in as candidates; build the **repo map / semantic index** and hand it to each area agent so
+  they trace changes to callers/contracts and catch **seam bugs**. See
+  `references/automated-analysis.md`.
 - **Adversarial verify is non-optional.** It's what removes plausible-but-wrong findings. Prompt the
   skeptic to REFUTE, not to confirm — a **separate** agent, never the finder self-checking.
 - **Debias the prompts (research-backed).** Tell every reviewer + verifier to judge the code **on its

@@ -55,7 +55,7 @@ Then **state the plan back** before running, e.g.:
 
 | Level | Trigger | What it runs | Method | Cost |
 |---|---|---|---|---|
-| **L0 — Automated gates** | ALWAYS, first | format · lint · type-check · build · existing tests | tooling, no agent | seconds |
+| **L0 — Automated gates** | ALWAYS, first | format · lint · type-check · build · existing tests · **SAST (Semgrep)** · **dep-audit** | tooling, no agent (`references/automated-analysis.md`) | seconds |
 | **L1 — Quick** | small / low-risk diff | `/code-review` single pass + run tests | one pass | minutes |
 | **L2 — Standard** | a normal feature / PR | `/code-review` + `/verify` the flow + a security glance + test-coverage check | pass + real-path verify | ~10–20 min |
 | **L3 — Deep** | risky / destructive / security-sensitive / core-path change | multi-dimension (correctness + data-safety + `/security-review` + design/ADR conformance + performance) with **adversarial verification**, against **real data** | multi-agent workflow (`references/multi-agent-workflow.md`) | ~20–40 min |
@@ -99,11 +99,15 @@ Correctness is always on. Add the rest by what the change touches. Full catalog 
 
 ## Methods (how the review is actually run)
 
-- **Automated static analysis FIRST (shift-left).** Linters, type-checkers, formatters, SAST. The
-  cheapest defects — never spend an agent on what a tool catches.
+- **Automated static analysis FIRST (shift-left).** Linters, type-checkers, formatters, **SAST**
+  (Semgrep), and **dependency audit** — the cheapest defects, deterministic, zero LLM tokens. Never
+  spend an agent on what a tool catches; feed the tool's findings in as pre-surfaced candidates. Full
+  toolchain + how to add repo-specific rules → **`references/automated-analysis.md`**.
 - **Diff single-pass** — `/code-review`, `/security-review` on the working change.
 - **Whole-codebase multi-agent audit** — one reviewer per area, adversarially verified, synthesized
-  into a ranked punch list. Recipe/template: **`references/multi-agent-workflow.md`**.
+  into a ranked punch list. **Build the repo map / semantic index first** so reviewers see beyond the
+  diff and catch **seam bugs** (`references/automated-analysis.md` §B). Recipe/template:
+  **`references/multi-agent-workflow.md`**.
 - **Real-path verify** — `/verify` drives the real flow.
 - **Triage the output** — rank blocker→low; each finding carries **file:line + concrete failure
   scenario + fix direction**. Then split: **fix-now** (mechanical, safe, testable) vs **hold**

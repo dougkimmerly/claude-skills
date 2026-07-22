@@ -36,8 +36,10 @@ For each: **what it catches**, **red flags to grep/look for**, **how to run it**
   deserialization, SSRF, missing input validation at boundaries, supply-chain risk.
 - **Red flags:** string-built SQL/shell, user input in file paths, secrets in code/logs/bundles,
   `eval`/`pickle`/`subprocess(shell=True)`, permissive CORS, auth checks client-side only.
-- **How:** run `/security-review`; threat-model with STRIDE (Spoofing, Tampering, Repudiation, Info
-  disclosure, DoS, Elevation). Validate only at system boundaries; trust internal calls.
+- **How:** run **`semgrep --config p/security-audit --config p/secrets --config p/owasp-top-ten`**
+  (SAST) as the automated first pass, then `/security-review`; threat-model with STRIDE (Spoofing,
+  Tampering, Repudiation, Info disclosure, DoS, Elevation). Validate only at system boundaries; trust
+  internal calls. Full toolchain → `references/automated-analysis.md`.
 
 ## 4. Design & architecture conformance  *(code vs intent)*
 - **Catches:** drift from accepted decisions (ADRs), violated invariants, an abstraction bypassed,

@@ -11,6 +11,7 @@ Run this at **L4**. Anything unchecked is a **no-go** or an explicitly-accepted,
 - [ ] Type-check / compile clean.
 - [ ] Full test suite passes (not just the touched files).
 - [ ] Build/package succeeds.
+- [ ] **SAST (Semgrep) + dependency audit** clean, or findings triaged (`references/automated-analysis.md`).
 - *(No CI? Run these by hand and record it. CI just automates this list on every push — "shift-left".)*
 
 ## 2. Review complete
