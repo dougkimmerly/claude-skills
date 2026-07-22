@@ -1,6 +1,6 @@
 ---
 name: review-suite
-description: Tiered, multi-dimension code review, remediation, and ship-readiness auditing. Use when the user wants a code review, a quality/security/data-safety/design audit, a "is this ready to ship / release / hand off" check, to harden code before a release or migration, to FIX the findings, or to log an escaped/production bug for corrective action. On invoke it ESTABLISHES the review — scope (diff / subsystem / whole repo), level (L1 quick → L4 full ship audit), lenses (review types), and outcome mode (review-only vs review→fix) — runs it, adversarially verifies findings, produces a ranked punch list, and can continue into remediation (fix safe findings with a regression test + real-path verify each, hold the judgment calls). Includes an escaped-bug feedback loop and pairs with a rigorous testing pattern. Composes the built-in /code-review, /security-review, /verify plus a multi-agent adversarial workflow. Keywords: code review, audit, review level, fix, remediate, regression test, escaped bug, post-mortem, ship prep, release readiness, go/no-go, bulletproof, harden, pre-release, quality gate, definition of done, testing.
+description: Tiered, multi-dimension code review, remediation, and ship-readiness auditing. Use when the user wants a code review, a quality/security/data-safety/design audit, a "is this ready to ship / release / hand off" check, to harden code before a release or migration, to FIX the findings, or to log an escaped/production bug for corrective action. On invoke it ESTABLISHES the review — scope (diff / subsystem / whole repo), level (L1 quick → L4 full ship audit), lenses (review types), and outcome mode (review-only vs review→fix) — runs it, adversarially verifies findings, produces a ranked punch list, and can continue into remediation (fix safe findings with a regression test + real-path verify each, hold the judgment calls). Includes an escaped-bug feedback loop and pairs with a rigorous testing pattern. Composes the built-in /code-review, /security-review, /verify plus a multi-agent adversarial workflow. Keywords: code review, audit, review level, fix, remediate, regression test, escaped bug, post-mortem, ship prep, release readiness, go/no-go, bulletproof, harden, pre-release, quality gate, definition of done, testing, UI review, UX review, visual review, accessibility, design review, review this screen/page/UI.
 ---
 
 # Review Suite — tiered, multi-dimension review & ship-readiness
@@ -93,9 +93,10 @@ Correctness is always on. Add the rest by what the change touches. Full catalog 
   (→ `/security-review`) · **design & ADR/architecture conformance** · **performance & efficiency**
   · **resilience / failure-modes / offline degradation** · **test coverage & quality** ·
   **API / contract / backward-compat** · **readability / maintainability** · **docs & comments
-  accuracy** · **dependencies / supply-chain (CVEs, licenses)** · **accessibility / UX** ·
+  accuracy** · **dependencies / supply-chain (CVEs, licenses)** ·
   **redundancy / duplication / dead-legacy** (two surfaces doing one job; a legacy control left in
-  after its replacement shipped)
+  after its replacement shipped) · **UI / UX visual review** (render + observe, not read code — the
+  full dimension incl. accessibility: `references/ui-review.md`)
 
 ## Methods (how the review is actually run)
 
@@ -108,6 +109,10 @@ Correctness is always on. Add the rest by what the change touches. Full catalog 
   into a ranked punch list. **Build the repo map / semantic index first** so reviewers see beyond the
   diff and catch **seam bugs** (`references/automated-analysis.md` §B). Recipe/template:
   **`references/multi-agent-workflow.md`**.
+- **UI review — render + drive + observe (not read code)** — for user-facing changes: drive the app
+  (Playwright), screenshot every state (empty / loading / error / responsive), and **vision-review**
+  the screenshots against the UI catalog; a11y (axe/Lighthouse) + visual-regression as the automated
+  first pass. Full dimension → **`references/ui-review.md`**.
 - **Real-path verify** — `/verify` drives the real flow.
 - **Triage the output** — rank blocker→low; each finding carries **file:line + concrete failure
   scenario + fix direction**. Then split: **fix-now** (mechanical, safe, testable) vs **hold**
