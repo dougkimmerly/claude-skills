@@ -109,10 +109,12 @@ Correctness is always on. Add the rest by what the change touches. Full catalog 
   into a ranked punch list. **Build the repo map / semantic index first** so reviewers see beyond the
   diff and catch **seam bugs** (`references/automated-analysis.md` §B). Recipe/template:
   **`references/multi-agent-workflow.md`**.
-- **UI review — render + drive + observe (not read code)** — for user-facing changes: drive the app
-  (Playwright), screenshot every state (empty / loading / error / responsive), and **vision-review**
-  the screenshots against the UI catalog; a11y (axe/Lighthouse) + visual-regression as the automated
-  first pass. Full dimension → **`references/ui-review.md`**.
+- **UI review — render + observe, THEN code-verify** — for user-facing changes: drive the app
+  (Playwright), screenshot every state (empty / loading / error / responsive), **vision-review** the
+  screenshots against the UI catalog, then **cross-reference each finding against the code that
+  renders it** (a static shot can't see intentional-disabled states, by-design emphasis, or
+  `confirm()` dialogs — pixels-only review is mostly false positives). a11y (axe/Lighthouse) +
+  visual-regression as the automated first pass. Full dimension → **`references/ui-review.md`**.
 - **Real-path verify** — `/verify` drives the real flow.
 - **Triage the output** — rank blocker→low; each finding carries **file:line + concrete failure
   scenario + fix direction**. Then split: **fix-now** (mechanical, safe, testable) vs **hold**

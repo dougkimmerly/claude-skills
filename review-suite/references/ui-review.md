@@ -4,11 +4,40 @@ A first-class **dimension of review-suite, not a separate skill** — it shares 
 (levels, adversarial verify, remediation, feedback loop, ship-readiness). What differs is the
 **method**, the **check catalog**, and the **tooling**.
 
-**The defining difference: UI defects are found by LOOKING, not by reading code.** You cannot see
-"these two cards do the same job," "the empty state is confusing," "the buttons are misaligned," or
-"the contrast fails" in source. So UI review's **real-path verification IS the primary method**:
-render the actual UI, drive it through its states, screenshot each, and have a **vision-capable
-reviewer** observe it against the catalog below.
+**The defining difference: UI defects are found by LOOKING** — you cannot see "these two cards do the
+same job," "the empty state is confusing," or "the buttons are misaligned" in source. So render the
+actual UI, drive it through its states, screenshot each, and have a **vision-capable reviewer**
+observe it against the catalog below.
+
+## ⚠ PIXELS PROPOSE, CODE DISPOSES — the load-bearing discipline
+
+**A screenshot tells you WHAT it looks like; only the code tells you WHY, and whether it's
+intentional.** A pixels-ONLY review is mostly false positives — this was learned the hard way: a
+vision pass flagged a greyed button as an "inconsistency" when the code showed it's `disabled`
+because there's nothing to review; a gold button as "off-system" when it's a deliberate `brass`
+emphasis class; and "permanent delete has no confirmation" when the code has a `confirm()` dialog a
+static image can't show. **~5 of 6 findings evaporated on reading the code.**
+
+So, non-negotiable: **every visual finding MUST be cross-referenced against the code that renders it
+(and the interaction behavior) before it counts.** The vision pass *proposes*; the code + interaction
+check *disposes*. This IS the adversarial-verify step for UI — do not skip it (running the review
+inline without it is what produced the false positives).
+
+### What a static screenshot CANNOT see — verify these in code or by DRIVING the app
+- **Intentional disabled / empty states** — a greyed control may be `disabled` on purpose (nothing to
+  act on). Check the code before calling it an inconsistency.
+- **Emphasis by design** — a differently-coloured button may be a deliberate `brass`/hero/primary
+  class, not a system crack. Check the class.
+- **Hidden-when-N/A** — a "missing" element may be intentionally not rendered for this state.
+- **`confirm()` / dialogs / toasts** — destructive-action confirmations and feedback don't appear in a
+  static frame. Never claim "no confirmation" from a screenshot — read the handler or drive the click.
+- **Hover / focus / active / loading / error / transition states** — invisible in a static shot;
+  drive them (Playwright) or read the code.
+- **JS-enabling / conditional rendering** — what's disabled/blank now may enable when data arrives.
+
+**Rule:** if a finding depends on *behavior or intent* (disabled, confirmed, emphasized, conditional),
+it is UNRELIABLE from a screenshot alone — confirm in code or by driving before reporting. Report only
+what survives both the eye and the code.
 
 ## Method — render, drive, observe
 1. **Drive the real app** in a headless browser (Playwright/Puppeteer): navigate each page/flow.
@@ -16,8 +45,10 @@ reviewer** observe it against the catalog below.
    populated · long-content/overflow · plus key **responsive breakpoints** (mobile/tablet/desktop).
 3. **A vision-capable agent reviews the screenshots** against the catalog; each finding cites the
    component/template that renders it (file:line) + the screenshot as evidence.
-4. **Adversarially verify** like any finding (really wrong, or intended?). Real-path is automatic
-   here — you're already looking at the true render.
+4. **Cross-reference EACH finding against the code that renders it** (and drive the interaction where
+   the claim is behavioral) — is it a real defect or an intentional state / by-design emphasis /
+   a dialog the screenshot can't show? Only findings that survive both the eye AND the code are
+   reported. This is mandatory, not optional (see "Pixels propose, code disposes" above).
 
 ## Automated first pass — the UI equivalent of SAST (run at L0)
 - **axe-core** / **pa11y** — accessibility violations (contrast, labels, roles, landmarks). Cheap, deterministic.
