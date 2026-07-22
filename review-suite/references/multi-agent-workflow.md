@@ -31,6 +31,12 @@ the review→verify→synthesize shape.
 - **Severity comes from the verifier**, not the finder (finders over-rate).
 - **Scale to the ask**: a few areas + single-vote verify for "any bugs?"; all areas + 3-vote
   adversarial + synthesis for "audit this before we ship."
+- **Model & reasoning (don't leave to inheritance).** A review is the highest-stakes reasoning task
+  — run reviewers + verifiers on the **strongest reasoning model** (Opus tier) at **`effort: 'high'`
+  (or `'max'`/"ultrathink" for security- and data-safety-critical areas)**. Agents inherit the
+  orchestrator's model unless overridden, so **start the run from a session on the strong model**.
+  Economize elsewhere: *implementing* a mechanical fix can use a lighter model — the hard reasoning
+  was the finding, not the one-line guard.
 
 ## Skeleton (adapt AREAS + paths)
 

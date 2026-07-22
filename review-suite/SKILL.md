@@ -1,6 +1,6 @@
 ---
 name: review-suite
-description: Tiered, multi-dimension code review and ship-readiness auditing. Use when the user wants a code review, a quality/security/data-safety/design audit, a "is this ready to ship / release / hand off" check, or to harden code before a release or migration. On invoke it ESTABLISHES the review — scope (diff / subsystem / whole repo), level (L1 quick → L4 full ship audit), and which review types (lenses) to run — then runs them, adversarially verifies findings, and produces a ranked punch list. Composes the built-in /code-review, /security-review, /verify plus a multi-agent adversarial workflow. Keywords: code review, audit, review level, ship prep, release readiness, go/no-go, bulletproof, harden, pre-release, quality gate, definition of done.
+description: Tiered, multi-dimension code review, remediation, and ship-readiness auditing. Use when the user wants a code review, a quality/security/data-safety/design audit, a "is this ready to ship / release / hand off" check, to harden code before a release or migration, to FIX the findings, or to log an escaped/production bug for corrective action. On invoke it ESTABLISHES the review — scope (diff / subsystem / whole repo), level (L1 quick → L4 full ship audit), lenses (review types), and outcome mode (review-only vs review→fix) — runs it, adversarially verifies findings, produces a ranked punch list, and can continue into remediation (fix safe findings with a regression test + real-path verify each, hold the judgment calls). Includes an escaped-bug feedback loop and pairs with a rigorous testing pattern. Composes the built-in /code-review, /security-review, /verify plus a multi-agent adversarial workflow. Keywords: code review, audit, review level, fix, remediate, regression test, escaped bug, post-mortem, ship prep, release readiness, go/no-go, bulletproof, harden, pre-release, quality gate, definition of done, testing.
 ---
 
 # Review Suite — tiered, multi-dimension review & ship-readiness
@@ -24,6 +24,9 @@ risk, then confirm with the user in one line before running:
    | Whole codebase | pre-release / handoff / periodic deep audit |
 2. **LEVEL** — how much rigor (the ladder below). Default from scope + risk; the user can dial up/down.
 3. **TYPES** — which lenses (correctness is always in; add others by risk — see `references/review-types.md`).
+4. **OUTCOME mode** — **review-only** (produce the verified punch list; the human fixes) or
+   **review → fix** (continue into remediation: auto-fix the safe findings, hold the judgment calls).
+   See "Outcome & modes" below.
 
 Then **state the plan back** before running, e.g.:
 > "L3 deep review of the *filing* subsystem — lenses: correctness + data-safety + design/ADR
@@ -62,7 +65,9 @@ Correctness is always on. Add the rest by what the change touches. Full catalog 
   (→ `/security-review`) · **design & ADR/architecture conformance** · **performance & efficiency**
   · **resilience / failure-modes / offline degradation** · **test coverage & quality** ·
   **API / contract / backward-compat** · **readability / maintainability** · **docs & comments
-  accuracy** · **dependencies / supply-chain (CVEs, licenses)** · **accessibility / UX**
+  accuracy** · **dependencies / supply-chain (CVEs, licenses)** · **accessibility / UX** ·
+  **redundancy / duplication / dead-legacy** (two surfaces doing one job; a legacy control left in
+  after its replacement shipped)
 
 ## Methods (how the review is actually run)
 
@@ -77,13 +82,84 @@ Correctness is always on. Add the rest by what the change touches. Full catalog 
   (judgment / design / irreversible-flow) for the user. Never auto-"fix" a destructive-flow change
   on a guess.
 
-## Output & follow-through
+## Outcome & modes
 
-- A **ranked, verified punch list**, blocker / data-safety first, most-severe first.
-- Each finding **classified** fix-now vs hold, with a one-line fix direction.
-- If the project has a tracker (ROADMAP / issues / TODO), **write the findings there** as items so
-  none are lost; if it doesn't, propose one.
-- **Re-verify every fix on the real path** before calling it done.
+The outcome is **never just a raw list**. Two modes, chosen at Step 0:
+
+- **Review-only** — the deliverable is a **ranked, adversarially-verified, triaged** punch list:
+  each finding is blocker→low, classified **fix-now vs hold**, carries a **file:line + failure
+  scenario + fix direction**, and is **written into the project tracker** (ROADMAP / issues) so none
+  are lost. The human does the fixing.
+- **Review → fix** — the skill **continues into remediation** (below). The outcome is a *resolved
+  state*: safe findings fixed + tested + verified, judgment calls held for the human.
+
+## Remediation — continuing to the fix (the "review → fix" mode)
+
+Triage every finding, then act:
+
+1. **Classify:**
+   - **fix-now** — mechanical, unambiguous, safe, testable (add a guard, atomic-write swap,
+     off-by-one, a clear algorithm fix). Makes things *safer*, not riskier.
+   - **hold** — needs a judgment/design call, or touches an **irreversible flow**
+     (delete/migrate/sync) beyond a trivially-safe change. Surface with a recommendation; **never
+     gamble on a destructive path unattended.**
+2. **Fix each fix-now finding as its own unit:** make the change → **add/extend a regression test
+   that FAILS before and PASSES after** → **verify on the real path** (drive the actual flow) →
+   **commit** (one finding per commit, blocker / data-safety first).
+3. **Re-verify:** L0 gates + the touched tests + the real flow. A fix isn't done until proven on
+   reality (sandbox-green ≠ done).
+4. **Track the holds** in the tracker with the fix direction, for a human decision.
+
+This is exactly the loop that took the #49 audit to "9 fixed + 6 held." Run it autonomously (fix the
+safe ones while the user's away) or stop at the list — the user picks at Step 0. Built-in
+`/code-review --fix` and `/simplify` are the lightweight single-pass version (good for L1/L2); use
+the full loop above for L3/L4.
+
+## Feedback loop — when a bug escapes into the field
+
+No review catches everything; the discipline is to **learn from every escape** so the same *class*
+never ships twice. When a bug is found *after* shipping (a user report, a production incident), run
+this intake — a **blameless post-mortem + corrective action** (invoke the skill with "log an escaped
+bug"):
+
+1. **Reproduce** it; write a **regression test that FAILS** on current code. This captures the bug
+   permanently — it can never silently return.
+2. **Fix** it → the test passes. Commit fix + test together.
+3. **Root-cause the miss — which review LENS should have caught it?**
+   - Lens exists but didn't fire → **strengthen it** (add the red flag / a real-data check) in
+     `references/review-types.md`.
+   - **No lens** covers this failure class → **add a new lens**.
+   - A ship-gate gap → add a checklist item to `references/ship-readiness.md`.
+4. **Commit the skill change** (`cd ~/.claude/skills && git add … && commit && push`).
+
+Two durable memories come out of every escape: the **regression test** (memory for the *code*) and
+the **new/strengthened lens** (memory for the *reviewer*). This ratchet is why mature codebases get
+harder to break over time.
+
+## Model & reasoning effort
+
+A review is the **highest-stakes reasoning task** in the workflow — a missed data-safety bug ships.
+Don't leave model/effort to session inheritance:
+
+- **L3 / L4 reviewers and verifiers:** run on the **strongest reasoning model available** (Opus
+  tier) at **high — or `max` ("ultrathink") for security- and data-safety-critical areas** —
+  reasoning effort. In a multi-agent workflow, set `effort: 'high'` (or `'max'`) on the review +
+  verify `agent()` calls, and **start the run from a session on the strong model** (agents inherit
+  the orchestrator's model unless overridden).
+- **L1 / L2:** the session's default model + effort is fine; bump effort for anything touching
+  destructive flows or security.
+- **Implementing mechanical fixes** (the remediation step for fix-now findings): a lighter/faster
+  model is fine — the hard reasoning was the *finding*, not the one-line guard.
+- Ultrathink is **not automatic** — you opt in per the above. Spend the tokens on review + verify;
+  economize on mechanical fixes.
+
+## Pairing with a rigorous testing pattern
+
+Review and testing are **complementary layers, not substitutes**: review is judgment + discovery
+(finds *new/unknown* defects); tests are the **durable, automated proof** that *known* behavior
+stays correct. The rule that binds them: **every review finding and every escaped bug ends its life
+as a test.** The full pattern — the testing pyramid, regression-first, real-path acceptance, the
+runnable gate, and how it interlocks with this skill → **`references/testing-pattern.md`**.
 
 ## Ship-readiness (L4) — the go/no-go
 

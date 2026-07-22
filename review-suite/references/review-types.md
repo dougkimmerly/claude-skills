@@ -96,6 +96,26 @@ For each: **what it catches**, **red flags to grep/look for**, **how to run it**
 - **Catches:** keyboard traps, missing labels/alt text, contrast, dead-ends, confusing error copy.
 - **How:** drive the UI; check against WCAG basics; read every error message as a new user.
 
+## 13. Redundancy / duplication / dead-legacy  *(pairs with #4 design & #9 readability)*
+- **Catches:** the **same function exposed twice** (two UI cards / buttons / pages / endpoints doing
+  one job), a **legacy implementation left in place after its replacement shipped**, copy-pasted
+  logic that has since drifted, duplicate routes/config, two sources of truth for one fact. This is
+  the "we built the new one but never removed the old one" class — it accumulates silently and
+  confuses users.
+- **Example (real):** a ship's-log `/control` page showing **both** a new "Watch plan" card (W6) and
+  the **old legacy "Watch rotation" card** — two controls for the same job; the legacy one should
+  have been retired (or the two merged) when the new one landed.
+- **Red flags:** two components with overlapping labels/purpose; a `vN` / `W6` / "new" feature sitting
+  beside its predecessor; `_legacy` / `_old` / `_v1` names still wired into routes or nav; two
+  endpoints returning the same data; the same render/logic block in ≥2 files; a feature flag
+  permanently on with the old branch still present; a nav with two entries that land on the same task.
+- **How:** for each **user-facing surface and each capability**, ask "does anything else already do
+  this?" — map capability → implementation(s); where two serve one function, the superseded one
+  should be **removed or merged** (this is "one home per knowledge" applied to code/UI). When a new
+  version lands, **grep for the old one** (its name, route, component) and confirm it was retired.
+  For logic, grep for duplicated blocks that should be one shared function. Flag each as
+  **merge / remove-legacy / dedupe**, and name which of the two is the keeper.
+
 ---
 
 ## Extending this catalog
