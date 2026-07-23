@@ -18,7 +18,7 @@ Mac (2026-07-20 canary test).** This queue is the replacement.
 
 ```
 ~/.batchq/
-  engine/            worker.sh · sbmjob · wrkjobq.py · register.sh · defaults/
+  engine/            worker.sh · sbmjob · wrkjobq.py · register.sh · watch.sh · defaults/
   <queue>/           queue/ running/ done/ held/ config tail.md next.md MSGW?
 ```
 
@@ -39,6 +39,9 @@ sbmjob -pty 1 "..."         # JOBPTY: expedite — runs BEFORE every normal job
 sbmjob -q <name> ...        # target a queue from anywhere
 sbmjob -wrk                 # WRKJOBQ text view, all queues
 sbmjob -whichq              # which queue does cwd resolve to?
+sbmjob -watch [hb_s]        # reviewer wake-on-event: block until this queue needs
+                            #   attention (MSGW/held/drained/heartbeat), then exit.
+                            #   Run from a session with run_in_background.
 sbmjob -release             # clear MSGW hold + restart that queue's worker
 wrkjobq                     # 5250 green screen (F6=NEXT, F10=ad-hoc, 5=log,
                             #   4=cancel queued, F12=release); --once = snapshot
@@ -116,6 +119,41 @@ session needs nothing else. `sbmjob -q <queue> "..."` or drop a file in
 runs before all unprefixed jobs). Decisions that must land before the next
 queued job runs → `-pty 1`.
 
+## Watching a queue as reviewer (wake-on-event)
+
+A reviewer/strategy session is interactive — it only wakes on a user message or when a
+task it launched exits; it can't poll on its own (in-session cron is dead here). So after
+you queue jobs, hand the watching to the queue's own hold signal: launch the **watcher**
+in the background and let it wake you.
+
+```
+sbmjob -watch &        # from the session with run_in_background — cwd-resolved queue
+# or: sbmjob -q <name> -watch 1800   ·   ~/.batchq/engine/watch.sh <queue> <heartbeat_s>
+```
+
+It is READ-ONLY (safe while jobs edit the tree) and BLOCKS until the queue needs you,
+then exits — which wakes the session. Wake conditions:
+
+- **MSGW** — a job errored / left the tree dirty and froze the queue. Read
+  `held/<job>.log`, then fix + `sbmjob -release`, or escalate a genuine decision to Doug.
+- **a job in `held/`** — same.
+- **DRAINED** — every queued job finished. Review the commits (`git log`); if a big
+  multi-step item stranded a later one, top up a `sbmjob NEXT`.
+- **heartbeat** (default 30 min / 1800 s) — a liveness ping so a silently-dead watcher
+  can't hide a stuck queue; just relaunch it.
+
+**On every wake, act, then RELAUNCH the watcher** (one launch = one wake). It only detects
+and wakes — clearing a hold is a judgment call, never automated.
+
+**Limit + the cross-session escalation:** the watcher can only wake a session that is still
+alive; it can't resurrect a closed one. A held queue is safe meanwhile — it just waits. For
+notification with NO session alive (e.g. overnight), add a launchd `WatchPaths` agent on
+`<queue>/held/` + the `MSGW` marker that fires a macOS notification / phone push (the same
+mechanism the worker itself uses); build it per-need and scope it to NOTIFY only, never
+auto-release. Optional refinement: a `tail.md` line telling a job that hits an ambiguous
+requirement to write the QUESTION into a reviewer inbox (HANDOFF-style) before holding, so
+you wake to the decision itself, not just a failure log.
+
 ## Registering a new repo
 
 ```
@@ -130,7 +168,8 @@ gui/$UID/com.batchq.<name>`, delete the plist + queue dir.
 
 1. **Strategy session** (interactive): triage, decide, frame work into the
    repo's ROADMAP/backlog — the thinking-between-jobs layer.
-2. `sbmjob NEXT` × N — spend the backlog.
+2. `sbmjob NEXT` × N — spend the backlog, then `sbmjob -watch &` so the queue
+   wakes you on trouble/drain (see "Watching a queue" above).
 3. The queue executes: fresh small sessions (survives slow Starlink),
    housekeeping welded on, MSGW on trouble.
 4. Review: `wrkjobq`, `git log`, the repo's own docs — decisions the jobs

@@ -66,6 +66,13 @@ you confirm back that it's captured.
   edits, decisions, commit"` jumps the FIFO and runs before the next normal job.
   Deliberate-pause is ONLY for genuinely interactive work (see the batchq skill's
   "expedite, don't pause" section). When the queue is idle, edit directly.
+- **After queuing jobs, launch the watcher so the queue can't stall silently.**
+  `sbmjob -watch &` (run_in_background) blocks until this queue needs you — an MSGW
+  hold, a job in `held/`, or the queue draining — then exits and wakes this session, so
+  you catch a stuck job or a needed decision without babysitting. Act on the wake, then
+  relaunch it (one launch = one wake). See the batchq skill's "Watching a queue" section;
+  it can only wake a LIVE session — overnight/no-session notification needs the launchd
+  escalation documented there.
 - **Expect concurrent edits**: re-read files immediately before editing; if an edit
   bounces with "modified since read", the executor moved — re-sync (`git log
   --oneline -3`, `git status`) before retrying.
