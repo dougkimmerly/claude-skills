@@ -163,7 +163,12 @@ worker's pick).
 
 When Doug decides something and says "queue it": write the decision INTO the
 job text — context, the chosen option, acceptance criteria, "update the
-ROADMAP/ADR yourself" — so the fresh session needs nothing else. This
+ROADMAP/ADR yourself" — so the fresh session needs nothing else. **Acceptance
+criteria = ENUMERATED behavioral cases** — the submitting session fixes the
+test contract before any code exists; the executor's tail.md forbids editing
+existing tests to pass and requires the full suite green (see engine
+`defaults/tail.md`, inherited by new queues; the strategy-session skill
+carries the framing side). This
 **named self-contained job is the default unit** (the retro's strongest
 pattern: MON4, ETA-5c, VOY-START all one-shotted). `sbmjob -q <queue> "..."`
 or drop a file in `<queue>/queue/` named `YYYYmmdd-HHMMSS-<slug>.job`
