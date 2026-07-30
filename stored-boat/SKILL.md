@@ -58,14 +58,12 @@ Data goal: keep normal monthly usage under the **50 GB/month** Starlink budget.
 2. Account → Resume service
 3. Full speed restored in minutes; service picks up from beginning of new billing cycle
 
-**Starlink power control via Telegram (when cell WAN is too slow for web UI):**
-- `/starlink on` → SK PUT `electrical.commands.switch.sensesp-starlinkInverter = "on"` → relay 1 energizes → Starlink powers on
-- `/starlink off` → de-energizes relay → Starlink off
-- Works at any bandwidth (Telegram works at 1 kbps; Starlink web UI needs ~1+ Mbps)
-- Relay wired NC→NO departure-day: default stored state = Starlink OFF (relay de-energized)
-- See item #32 in stored-boat-plan.md
+**Starlink power control (POLARITY CORRECTED 2026-07-30 — relay 1 is NC, never rewired):**
+- Relay 1 is wired **normally closed** across Starlink power: **de-energized relay = Starlink ON** (verified live 2026-07-30). Energizing the relay CUTS Starlink.
+- So a power-cycle = energize relay briefly, then de-energize. "Off by default when relay unpowered" is FALSE — the pre-departure NC→NO rewire was cancelled/never done (plan HW-1/#32).
+- The `/starlink on|off` Telegram command was never built (no Telegram listener exists — plan #32/#43); control today = reboot2 relay via powernet page or `PUT /api/reboot2/starlinkInverter/state`.
 
-**Peplink outbound policy — WAN-aware routing (item #34, not yet configured):**
+**Peplink outbound policy — WAN-aware routing (item #34, DONE 2026-05-23 per plan):**
 Both WANs stay powered on. Peplink routes per-connection; no relay toggling for daily management.
 
 | Rule | Source | Destination | Algorithm | WAN order |
