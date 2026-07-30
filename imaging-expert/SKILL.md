@@ -74,6 +74,12 @@ SHA-256 prefix prevents collisions. Human-readable name keeps files browsable wi
 
 On upload, SHA-256 of file content is checked against `imaging.documents.content_hash`. Duplicates return the existing row instead of storing again.
 
+⚠️ `content_hash` = hash of the **pre-XMP upload bytes only**. The stored file is then mutated by XMP embedding
+(and re-mutated on every metadata PATCH), so hashing the stored file or a `GET /documents/:id/file` download will
+NOT reproduce `content_hash`. Dedup against a re-upload of the same original still works; external tools matching
+files back to docs must fall back to `tags`/doc-id when the hash misses (imaging-born files — e.g. split
+children — never match).
+
 ## Tech Stack
 
 | Layer | Technology |

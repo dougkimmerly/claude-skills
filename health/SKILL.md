@@ -30,13 +30,17 @@ documents (its own copy, rebuildable). They're linked by content hash + a stampe
   `/Volumes/XTL/`. Their *medical content* is still extracted by the tenant (mixed-batch) and searchable.
 
 ## ⚠️ Confidentiality
-Most sensitive data we hold. **Home-only:** the `medical` app is deliberately NOT in any imaging sync peer
-list, so it never replicates to the boat. Records + documents live on the NAS + the home imaging node — not on
-GitHub. Cloud Claude IS used for triage/classification of medical docs (Doug approved this); OCR (Tesseract) +
-embeddings (Ollama) are local. Don't put medical data in git.
+Most sensitive data we hold. Canonical home = home NAS + home imaging; the boat imaging node carries a
+replicated copy of `app=medical` via the site-parity imaging-documents Syncthing share (accepted by Doug
+2026-07-03, fixer #774 — by design, not a leak). Records + documents are never on GitHub. Cloud Claude IS used
+for triage/classification of medical docs (Doug approved this); OCR (Tesseract) + embeddings (Ollama) are
+local. Don't put medical data in git.
 
 ## The scan → records pipeline (the main workflow)
 When new scans are in `_ScanInbox/` (or to (re)index the tree). All tools in `~/Programming/health/tools/`:
+**PDFs only** — the drain ignores `.doc`/`.xls`/etc. Convert first (`soffice --headless --convert-to pdf`,
+LibreOffice on the Mac), give the PDF a person-hinted name, drop it back in the inbox, delete the original
+after it files.
 1. **Upload** → `ingest-medical.sh <dir>` — POSTs PDFs to imaging as `app=medical`; derives person + subtype
    from the NAS folder (auto-detect for `_ScanInbox`). Idempotent (dedup by content hash).
 2. **OCR + embed** (on the imaging container, local):
@@ -49,8 +53,16 @@ When new scans are in `_ScanInbox/` (or to (re)index the tree). All tools in `~/
 4. **File** → `python3 tools/file-from-imaging.py` — moves `_ScanInbox` docs into `Person/<category>/<caption>.pdf`
    using the classification, stamps `nas_path` back onto imaging. Leaves tax/business-homed docs in place;
    holds `Both`/`Other`-person docs for you to place.
+   ⚠️ **Split children are NOT auto-filed.** When the tenant splits a bundle scan (ADR 0014), the children are
+   imaging-born (no `source_folder` tag), so this engine skips them. For each non-duplicate child: download via
+   `GET /documents/:id/file` into `Person/<Category>/<canonical name>.pdf`, then step 5 stamps it (path
+   fallback). Children that duplicate already-filed docs: DELETE from imaging (the parent bundle keeps the full
+   scan). The held parent stays imaging-only; clear its `source_folder` tag and remove the inbox source.
 5. **Reconcile + verify** → `python3 tools/sync-nas-paths.py` (stamp NAS locations after any move) then
    `python3 tools/audit-health.py` (verify naming date-first + folder matches classification, by hash).
+   Matching is hash-first with `nas_path` fallback (since 2026-07-30): imaging mutates stored PDFs (XMP
+   re-embed on upload + every tag PATCH), so imaging-born files (split children) and rotated scans never
+   hash-match — only a stamped `nas_path` links them.
 6. **Distill (QC)** — you are the quality check: the tenant is ~95% right (watch dates!). Read the richer new
    docs and fold the precise clinical facts into the `_Records/*.md`. **Per-document accountability: every filed
    doc's content must land in a `_Records` home OR be consciously judged no-clinical-content — nothing is "filed
@@ -80,7 +92,9 @@ is written to `_Records` automatically.**
   bounds OCR/embed/triage with `timeout`, self-heals stale `_ScanInbox` tags, and flocks so runs don't overlap.
 - **Run it now:** `ssh 192.168.20.19 'docker exec dk400 celery -A dk400.robot.worker call
   dk400.robot.tasks.run_program --args="[\"health_drain\"]"'` — or run `tools/drain-inbox.sh` directly on the
-  host. Change cadence via `qsys._jobscde` (see the `robot` skill).
+  host. Change cadence via `qsys._jobscde` (see the `robot` skill). ⚠️ A direct `drain-inbox.sh` run does NOT
+  raise the `health_qc_pending` fixer issue (that's `health_drain`'s job) — queue the QC follow-up yourself
+  (fixer issue or `HANDOFF.md`) or steps 6–7 get lost.
 - **QC = steps 6–7, on-demand — this is how QC is done.** When a `health_qc_pending` fixer issue is open (or on
   request), do the QC pass: read each newly-filed doc (the issue lists them — they're the recent files in each
   `Person/<Category>`), fold its precise clinical facts into the owning `_Records/*.md` (**watch dates; distill
