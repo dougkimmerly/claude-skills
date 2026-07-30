@@ -80,9 +80,18 @@ consider the work done, walk this checklist:
    other isn't — decide which is canonical (almost always the manual) and make the other
    a pointer.
 
-Do all seven before you call a feature "shipped with its docs." None of them are
+8. **Wire in-app context help, if this repo has it.** Some apps expose a "hover a
+   thing, press F2 (or click its ⓘ), get the manual section for exactly that" overlay,
+   keyed off a `data-help` attribute naming this manual's own `<h2>` anchor id (see the
+   repo's context-help conventions in the per-repo config below, if any). A panel,
+   section, or button new enough to earn a manual mention is new enough to carry that
+   attribute — add it in the same pass as the manual edit, not a follow-up pass. Skip
+   this item entirely for repos with no such wiring.
+
+Do all eight before you call a feature "shipped with its docs." None of them are
 optional busywork — skipping #3 or #6 breaks in-app help and RAG retrieval invisibly,
-not loudly, so nobody notices until a much later review turns it up.
+skipping #8 (where it applies) leaves a dead help key on the new surface, and none of
+it is loud — nobody notices until a much later review turns it up.
 
 ---
 
@@ -199,6 +208,10 @@ caller can find. At minimum it names:
 - **Repo-specific gotchas** — anything like the pane-key trap above, but concretely
   named for that repo's actual routing code (a specific function/file), plus any other
   drift traps that repo has already hit once.
+- **Context-help wiring, if the app has any** — the attribute/convention that ties a
+  UI element to a manual anchor (e.g. a `data-help="anchor-id"` pattern) and the
+  regression check that proves every seeded one still resolves. Absent entirely in
+  most repos — only name this if UPDATE mode #8 actually applies here.
 
 Read the calling repo's config before starting either mode — file paths, build commands,
 and routing gotchas below are illustrative of the *kind* of thing to expect, not literal
