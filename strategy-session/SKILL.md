@@ -35,6 +35,13 @@ Multi-paragraph narration of future work is the smell; a submitted job is the cu
   queued job. In-session **fan-out research subagents** (parallel Agent calls) are
   the exception that stays here: cheap, fast, and they made the ETA redesign better —
   use them to sharpen a spec before it becomes a job.
+- **ALL spawned work runs Sonnet** (Doug 2026-07-30): every research/fan-out Agent
+  call passes `model: "sonnet"`, and batch jobs default to sonnet in the engine.
+  The reviewer session's stronger model does the REASONING — decompose the task,
+  pre-make the decisions, write the spec so completely that Sonnet executes it
+  cold. If a spawned task keeps failing on reasoning depth, the fix is a sharper
+  spec (or doing that piece in-session), not a bigger model. Per-job escalation
+  exists (`~/.batchq/<queue>/model` file) but is the rare exception, removed after.
 - **The executor:** deep investigation, the fix, validation, docs, commit — one write
   job at a time, each in its own git worktree (v2); the worker merges + pushes.
   Never do its work here unless Doug explicitly says "you fix it".

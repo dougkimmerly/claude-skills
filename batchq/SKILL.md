@@ -104,6 +104,13 @@ protocol — same terminal.css, 3270 font vendored — and auto-refreshes every
 
 ## Rules of the machine
 
+- **Jobs run SONNET by default** (Doug 2026-07-30; engine commit that day). The
+  worker resolves `--model` per call: `<queue>/model` file > `engine/model` file >
+  `sonnet`. Jobs silently inherited the interactive default (fable) before —
+  a 12-job day on the premium tier. The submitting session's stronger model does
+  the reasoning IN THE SPEC; jobs execute cold on sonnet. Escalate a single job by
+  writing the model name to `~/.batchq/<queue>/model` before submit and deleting
+  it after — rare exception, never the norm.
 - **Write jobs: one per queue, `MAX_CONCURRENT` Mac-wide** (global slots —
   different queues may overlap). RO jobs ride outside the slots, `RO_MAX` per
   queue. Lock-dir mtimes are heartbeats; stale-break only on genuinely old.
@@ -136,6 +143,15 @@ normally. Two residual rules:
    needed". Nothing is lost — commit/stash yours, merge the branch, release.
 2. **Sequential jobs build on each other**, so a held merge holds the queue —
    don't leave a manual-merge MSGW sitting.
+3. **Shared hot-spot files need an edit convention** (learned 2026-07-27,
+   shard: two manual merges in one day). When jobs and the interactive
+   session both edit one file's SAME region — e.g. a ROADMAP where new
+   entries are inserted at the top while each finishing job stamps "done" on
+   its topmost-entry heading — adjacent-line edits conflict every time. Fix
+   in the queue's `tail.md`: jobs must never edit the region where the
+   session inserts (e.g. mark done by APPENDING a status line at the END of
+   their entry, never editing its heading). Distant edits auto-merge; the
+   dance disappears.
 
 `-pty 1` expedites remain the tool for REORDERING the queue's world (a
 decision the next job must see), not for tree safety. Cancel/reorder queued
