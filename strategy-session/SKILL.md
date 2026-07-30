@@ -35,6 +35,12 @@ Multi-paragraph narration of future work is the smell; a submitted job is the cu
   queued job. In-session **fan-out research subagents** (parallel Agent calls) are
   the exception that stays here: cheap, fast, and they made the ETA redesign better —
   use them to sharpen a spec before it becomes a job.
+- **Route by output type** (Doug 2026-07-30, confirmed twice): work that WRITES
+  code/commits → the jobq (isolated worktree, worker merges). Research/read-only
+  work feeding the live conversation → PARALLEL IN-SESSION Agent calls (sonnet) —
+  do NOT queue it as RO batch jobs, which serialize it away from the conversation.
+  RO batch jobs only for probes that should run unattended (scheduled, or no
+  session alive to receive results).
 - **ALL spawned work runs Sonnet** (Doug 2026-07-30): every research/fan-out Agent
   call passes `model: "sonnet"`, and batch jobs default to sonnet in the engine.
   The reviewer session's stronger model does the REASONING — decompose the task,
