@@ -63,7 +63,12 @@ already executor-ready (spec + decisions + acceptance). A well-framed job contai
 4. **Decisions pre-made** — surface any call only Doug can make and GET IT MADE now;
    an item that stalls the executor on a decision is a framing failure.
 5. **Acceptance** — what proves it done (`tests/*-sim.js` here; `accept_*.py` in
-   shard).
+   shard). ENUMERATE the behavioral cases in the job text ("hot 2h → one alert;
+   flapping → resets") — the reviewer fixing the contract before any code exists
+   is the load-bearing half of test-first; the executor implements test + code
+   against it in one job and may add cases, never skip listed ones. For genuinely
+   risky seams, follow the landed job with an RO adversarial-review job: "can you
+   construct an input that passes these tests but violates the spec?"
 6. **Housekeeping orders** — "update the ROADMAP + manual + ADR yourself".
 
 **The queue is Doug's ONLY list.** Anything he voices — a want, a bug, an idea, even
