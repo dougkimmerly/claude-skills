@@ -13,14 +13,18 @@ description: Stored-boat mode for Distant Shores II — the vessel-mode flag (cr
 
 ---
 
-## Stored-mode WAN topology
+## Stored-mode WAN topology (UPDATED 2026-07-30 — Doug's decision)
 
-During storage, Starlink Maritime service is **paused** (not cancelled). Cell is primary.
+**Starlink runs FULL TIME and is primary.** It was pay-reactivated 2026-06-10 (the
+planned standby pause lasted 4 days) and never re-paused; planner regime `always_on`.
+Cell is **backup only, lower priority** — its USSD budget polling has been dead since
+2026-06-11 and was unreliable even when working; repair is a backup-quality goal.
+Data goal: keep normal monthly usage under the **50 GB/month** Starlink budget.
 
 | WAN | Device | Status |
 |-----|--------|--------|
-| Masthead LTE (HD1 Dome) | MAX HD1 Dome via SIM Injector | **Primary** — TelCell SIM, APN `internet.telcell.am`, Band 8 locked |
-| Starlink Maritime | starlinkInverter relay | Service paused; relay 1 rewired NC→NO departure-day (OFF by default) |
+| Starlink Maritime | starlinkInverter relay | **Primary, always on.** Relay 1 is wired **NC — the NC→NO rewire was NEVER done** (confirmed live 2026-07-30: relay de-energized while Starlink powered). De-energized relay = Starlink ON. |
+| Masthead LTE (HD1 Dome) | MAX HD1 Dome via SIM Injector | Backup — TelCell SIM, APN `internet.telcell.am`, Band 8 locked; budget numbers frozen since Jun 11 |
 | Glow / Fleet One | Redport → FleetOne | Last resort, ~150 kbps satellite |
 
 **TelCell config (Sint Maarten, IMSI 362510100240143):**
