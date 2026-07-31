@@ -51,8 +51,11 @@ Multi-paragraph narration of future work is the smell; a submitted job is the cu
 - **The executor:** deep investigation, the fix, validation, docs, commit — one write
   job at a time, each in its own git worktree (v2); the worker merges + pushes.
   Never do its work here unless Doug explicitly says "you fix it".
-- **Deploys stay with Doug** (gated), always — the executor never deploys, and this
-  session deploys only on Doug's in-context go.
+- **Deploys stay with Doug** (gated), always — the executor never deploys UNLESS the job text
+  carries Doug's explicit in-context authorization for that specific deploy. When Doug says
+  "queue the deploy", that means SUBMIT A JOB carrying the authorization + exact machine state —
+  it does NOT mean this session starts running deploy commands inline (corrected by Doug
+  2026-07-31 after the reviewer session started executing a deploy he asked to have queued).
 
 ## Framing: self-contained jobs are the unit (ROADMAP-first is the exception)
 
