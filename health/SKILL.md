@@ -19,7 +19,8 @@ documents (its own copy, rebuildable). They're linked by content hash + a stampe
     source of truth for "what's true now."**
   - Document categories (identical for both): `Exec Exams · Lab Results · Imaging & Tests · Surgeries &
     Procedures · Prescriptions · Vaccinations (+ Vaccine passes) · Optometry · Dental · Reports & Letters ·
-    Receipts · Summaries & ID`.
+    Receipts · Summaries & ID · Fitness`. Fitness = workout programs, stretching/TRX routines, trainer
+    screening forms (triage as subtype `reference`/`fitness`; `audit-health.py` accepts them there).
   - `_ScanInbox/` (Health root) — new scans land here (Brother MFC-L3780CDW scans straight to it, or via
     Image Capture). `_Reference/` = generic guides.
 - **Imaging service (home node)** — `http://192.168.20.19:3100/api/v1`, app **`medical`**, tenant defined in
