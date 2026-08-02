@@ -40,7 +40,10 @@ Multi-paragraph narration of future work is the smell; a submitted job is the cu
   work feeding the live conversation → PARALLEL IN-SESSION Agent calls (sonnet) —
   do NOT queue it as RO batch jobs, which serialize it away from the conversation.
   RO batch jobs only for probes that should run unattended (scheduled, or no
-  session alive to receive results).
+  session alive to receive results). **The tell (Doug 2026-08-02, after two violations in one
+  sitting): if you are typing `sbmjob -ro` while Doug is actively in the conversation, STOP —
+  that research feeds THIS conversation; spawn a parallel sonnet Agent instead. The -ro lane
+  is for results nobody is waiting on.**
 - **ALL spawned work runs Sonnet** (Doug 2026-07-30): every research/fan-out Agent
   call passes `model: "sonnet"`, and batch jobs default to sonnet in the engine.
   The reviewer session's stronger model does the REASONING — decompose the task,
