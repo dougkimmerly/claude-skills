@@ -59,6 +59,14 @@ Multi-paragraph narration of future work is the smell; a submitted job is the cu
   "queue the deploy", that means SUBMIT A JOB carrying the authorization + exact machine state —
   it does NOT mean this session starts running deploy commands inline (corrected by Doug
   2026-07-31 after the reviewer session started executing a deploy he asked to have queued).
+  EXCEPTION (2026-08-02): when the batch executor physically **can't reach the deploy target**
+  — the batchq sandbox is walled off from the prod NAS (`192.168.20.16`) and dk400, so a
+  deploy job just fails its first ssh — a job can't do it at all. In that case, once Doug
+  **explicitly says "run the deploy" in-context**, the reviewer session runs it inline,
+  step-by-step with each step's output surfaced (git pull → build BOTH images → `./deploy.sh`
+  → migrations as the dk400 owner via the `dk400-postgres` container → prod verify). That is
+  authorized and correct; the anti-pattern the 07-31 rule bans is running inline a deploy Doug
+  asked to *queue*, not one he directly told you to run when queuing is impossible.
 
 ## Framing: self-contained jobs are the unit (ROADMAP-first is the exception)
 

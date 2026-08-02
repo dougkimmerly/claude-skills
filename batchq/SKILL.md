@@ -174,6 +174,16 @@ pattern: MON4, ETA-5c, VOY-START all one-shotted). `sbmjob -q <queue> "..."`
 or drop a file in `<queue>/queue/` named `YYYYmmdd-HHMMSS-<slug>.job`
 (`0N-` prefix = JOBPTY N; `.ro.job` = read-only).
 
+**Gotcha — never pass a rich job spec as an inline `sbmjob "..."` arg.** Job
+text almost always contains backticks (`` `file.js` ``) and parentheses
+(`foo(bar)`), which zsh/bash evaluate as command substitution / hit parse
+errors *before* `sbmjob` sees them (seen repeatedly, 2026-08-02). Write the
+spec to a file with the Write tool, then submit with
+`~/.batchq/engine/sbmjob "$(cat /tmp/thejob)"` — command-substitution output is
+used literally and is NOT re-scanned for backticks. (Or write the `.job` file
+straight into `<queue>/queue/`.) Editing a parked/queued `.job` file in place is
+also safe — they're plain text, not running.
+
 ## Watching a queue as reviewer (wake-on-event)
 
 After queuing, hand the watching to the queue: `sbmjob -watch &` (from the
