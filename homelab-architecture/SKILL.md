@@ -74,7 +74,7 @@ When a question concerns a specific subsystem, load the topical skill rather tha
 | Boat LAN device DHCP table, SignalK, Victron, Maretron | `homelab-boat-network` | |
 | TP-Link router (192.168.20.1) | `homelab-houserouter` | |
 | DNS / NPM proxy at home | `homelab-proxy-dns` | |
-| Control4 home automation | `homelab-c4` | |
+| Control4 home automation | `c4` | |
 | dk400 scheduler (Robot, Celery, programs/) | `homelab-dk400` AND `robot` | dk400 universal skill complements |
 | NetBox source-of-truth queries | `netbox` | universal |
 | Postgres logical replication setup/troubleshooting | `postgres-replication` | universal |

@@ -52,7 +52,7 @@ A universal skill reaches `~/.claude/skills/` in one of two physical forms. Choo
 
 The exposed name = the symlink's directory name. (Skills with no `name:` frontmatter are named after their directory; an explicit `name:` must match it.)
 
-- Skills from the **multi-skill `homelab` repo** get a **`homelab-` prefix** (`homelab-centralsk`, `homelab-dk400`, `homelab-c4`, `homelab-rogers-gateway`, …) — their bare names (`centralsk`, `dk400`, `c4`, `synology`) are generic and would collide.
+- Skills from the **multi-skill `homelab` repo** get a **`homelab-` prefix** (`homelab-centralsk`, `homelab-dk400`, `c4`, `homelab-rogers-gateway`, …) — their bare names (`centralsk`, `dk400`, `c4`, `synology`) are generic and would collide.
 - Single-skill repos and already-distinct names need **no prefix** (`hardware-roadmap`, `voice-assistant`, `central-signalk`).
 - Real-file universals keep their own distinct name (`tailscale`, `netbox`, `secrets`).
 
