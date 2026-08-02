@@ -189,7 +189,8 @@ Clearing a hold is a judgment call, never automated.
 ```
 ~/.batchq/engine/register.sh <name> </path/to/repo>
 ```
-Then EDIT `~/.batchq/<name>/tail.md` (the repo's own hard guardrails) and
+Queue names max 10 chars (`*JOBQ` limit; register.sh rejects longer, monitors
+truncate display to 10). Then EDIT `~/.batchq/<name>/tail.md` (the repo's own hard guardrails) and
 `next.md` (point at the repo's real backlog doc). Unregister: `launchctl
 bootout gui/$UID/com.batchq.<name>`, delete the plist + queue dir.
 
