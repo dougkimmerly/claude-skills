@@ -1,6 +1,6 @@
 ---
 name: batchq
-description: Doug's AS/400-style batch job queue for unattended Claude work (~/.batchq — one JOBQ per repo, launchd-fired worker, worktree-per-job, MSGW holds). Use when Doug says "queue that", "sbmjob", "add it to the jobq", "run it overnight/as a batch job", "check the queue", "what did the batch jobs do", or "set up a jobq for this repo". Jobs run in isolated git worktrees — interactive edits no longer race them.
+description: Doug's AS/400-style batch job queue for unattended Claude work (~/.batchq — one JOBQ per repo, launchd-fired worker, worktree-per-job, MSGW holds). Use when Doug says "queue that", "sbmjob", "add it to the jobq", "run it overnight/as a batch job", "check the queue", "what did the batch jobs do", or "set up a jobq for this repo". ALSO use when you touched/found something in ANOTHER repo's domain — cross-domain requests are delivered as verify-first jobs to the owning repo's queue (see "Cross-domain requests"; fixer ADR 0048), not HANDOFF.md entries. Jobs run in isolated git worktrees — interactive edits no longer race them.
 ---
 
 # batchq — the batch job queue
@@ -183,6 +183,40 @@ spec to a file with the Write tool, then submit with
 used literally and is NOT re-scanned for backticks. (Or write the `.job` file
 straight into `<queue>/queue/`.) Editing a parked/queued `.job` file in place is
 also safe — they're plain text, not running.
+
+## Cross-domain requests (verify-first — ADR 0048 in fixer)
+
+When any session touches, fixes, or discovers something in **another repo's
+domain**, the delivery is a job on the OWNING repo's queue, not a HANDOFF.md
+entry (HANDOFF.md survives only for repos with no registered queue — `ls
+~/.batchq/` to check). The job runs inside the owning repo, so its own
+CLAUDE.md/skills/memory make the judgment call the sender can't. Every such
+spec begins with this preamble, verbatim:
+
+```
+CROSS-DOMAIN REQUEST from <sender CC> — VERIFY FIRST.
+Before executing, check this against your domain's context (CLAUDE.md, skills,
+memory, current state). Three outcomes:
+1. Makes sense → execute it (or your domain's better variant; note the deviation).
+2. Wrong or unnecessary here → no-op; record why in your job output.
+3. Needs Doug (destructive / attended-only / policy) → do NOT execute; file a
+   fixer issue with your recommendation, park attended work in your deferred
+   register, and end the job clean.
+
+What happened: <finding, in this domain's terms>
+What we ask: <the concrete follow-up>
+Refs: fixer issue #N, commits, log paths
+```
+
+- **FYI-only findings are still jobs**: "What we ask: verify whether this
+  changes your docs/skills/memory; update if so, otherwise no-op."
+- **Escalation (outcome 3) is a fixer issue, never an MSGW hold** — MSGW is
+  for broken jobs and blocks the queue; issues reach Doug via `/issue-review`
+  (severity=info, send_notification=false — the ADR 0047 producer discipline).
+  Attended boat work also goes in `fixer/docs/runbooks/stored-boat-plan.md`.
+- Submit per the inline-arg gotcha above: Write the spec to a file, then
+  `~/.batchq/engine/sbmjob -q <owning-queue> "$(cat /tmp/spec)"`. No parallel
+  HANDOFF entry — one fact, one home; JOBLOG.md is the record.
 
 ## Watching a queue as reviewer (wake-on-event)
 
