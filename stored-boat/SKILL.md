@@ -100,7 +100,7 @@ Both WANs stay powered on. Peplink routes per-connection; no relay toggling for 
 | Component | Status | Host | Notes |
 |---|---|---|---|
 | stored-boat-heartbeat.py | **Live** | N2KPower (192.168.22.14) | storedBoat 2.0 PNP daemon. Normal mode: watchdog + stored-state polling every 5 min. Phase 2 mode: SoC-scaled duty-cycle (7d/3d/24h/6h/2h). Supersedes centralsk-watchdog.py. Fixed 2026-05-24: SK JWT auth, COMMS_URL → Tailscale IP. |
-| centralsk-watchdog.py | **Retired** | N2KPower | Disabled 2026-05-23. Service stopped + disabled. |
+| centralsk-watchdog.py | **Retired** | N2KPower | Disabled 2026-05-23 — but found ENABLED + running again 2026-05-30→2026-08-04 (unknown re-enable during recovery work); it would have fought Phase 2 by re-powering centralsk during intentional shutdowns. Disabled again 2026-08-04. Lesson: after retiring a daemon, VERIFY it stayed down (`systemctl is-enabled`) — don't trust the recorded disable. |
 | signalk-ble-watchdog.timer | **Live** | centralsk (systemd) | Fires every 10 min. If ≥3 of 5 BLE battery IDs missing from SK AND PowerNet Pi reachable → `systemctl restart signalk`. Auto-recovers from power-glitch boot-race. Script: `/opt/signalk/watchdog/ble-reconnect.sh`. Logs: `journalctl -t ble-watchdog`. |
 | storedBoat v1 | Disabled | centralsk | `enabled:false` in plugin-config-data since 2026-03-17. Never wired to real circuits. |
 | Vessel mode flag | **Live** | cruising-app (port 3200) | sb-p1-22 RESOLVED. `cruising.vessel_config` (mode/occupancy/nav_state_override). Chips in every header. `/boat-status/` management page. |
