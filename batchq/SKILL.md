@@ -124,6 +124,13 @@ protocol — same terminal.css, 3270 font vendored — and auto-refreshes every
 - **Merge conflict = job done, queue held**: the work is safe on its `job/*`
   branch; the MSGW gives the exact manual-merge commands. The queue holds
   because later jobs may build on that work. Merge, push, release.
+- **A "DONE but UNMERGED / needs manual merge" line in JOBLOG is NOT proof of a
+  live hold** — the worktree job writes that line *before* it exits, and the
+  worker merges *after*, so the line goes stale the instant the merge lands
+  (seen 2026-08-04: read a stale line as a hold and spawned a needless recovery
+  job). The authoritative "still needs hands" signals are the queue's `held/`
+  dir and an actual `MSGW` — check those, or `git log main | grep "Merge branch"`
+  for the branch name, BEFORE treating any JOBLOG disposition as unfinished.
 - Job logs: `done/<job>.log` — stream-json, filling LIVE. Render with
   `wrkjobq` option 5 or `tail -f … | python3 ~/.batchq/engine/render_stream.py`.
   Quick review path: `done/<job>.summary.md` and `JOBLOG.md` — read those
@@ -183,6 +190,17 @@ spec to a file with the Write tool, then submit with
 used literally and is NOT re-scanned for backticks. (Or write the `.job` file
 straight into `<queue>/queue/`.) Editing a parked/queued `.job` file in place is
 also safe — they're plain text, not running.
+
+**Gotcha — when submission ORDER matters, pause 1s between submits.** The FIFO
+drain orders by the `.job` filename's `<stamp>` (`YYYYMMDD-HHMMSS-slug`), which is
+second-granular. Fire several `sbmjob`s in the same shell burst and they collide on
+one timestamp → the worker picks among them in filesystem order, NOT submit order
+(observed 2026-08-04: four c4-mcp jobs shared `122948`; the dependent job ran before
+its prerequisite). When a later job depends on an earlier one landing first, `sleep 1`
+between the submits so the stamps differ and FIFO holds. (Belt-and-suspenders even
+so: write dependent jobs to be order-robust — "if the prereq isn't in your base yet,
+build it yourself" — since same-queue jobs serialize with a merge between and a
+truly independent stamp still can't guarantee which worker cycle grabs which.)
 
 ## Cross-domain requests (verify-first — ADR 0048 in fixer)
 
