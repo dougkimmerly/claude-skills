@@ -1,18 +1,38 @@
 ---
 name: batchq
-description: Doug's AS/400-style batch job queue for unattended Claude work (~/.batchq — one JOBQ per repo, launchd-fired worker, worktree-per-job, MSGW holds). Use when Doug says "queue that", "sbmjob", "add it to the jobq", "run it overnight/as a batch job", "check the queue", "what did the batch jobs do", or "set up a jobq for this repo". ALSO use when you touched/found something in ANOTHER repo's domain — cross-domain requests are delivered as verify-first jobs to the owning repo's queue (see "Cross-domain requests"; fixer ADR 0048), not HANDOFF.md entries. Jobs run in isolated git worktrees — interactive edits no longer race them.
+description: Doug's AS/400-style batch job queue for unattended Claude work (~/.batchq — one JOBQ per repo, homecore-hosted worker (systemd; the Mac's sbmjob forwards to it), worktree-per-job, MSGW holds). Use when Doug says "queue that", "sbmjob", "add it to the jobq", "run it overnight/as a batch job", "check the queue", "what did the batch jobs do", or "set up a jobq for this repo". ALSO use when you touched/found something in ANOTHER repo's domain — cross-domain requests are delivered as verify-first jobs to the owning repo's queue (see "Cross-domain requests"; fixer ADR 0048), not HANDOFF.md entries. Jobs run in isolated git worktrees — interactive edits no longer race them.
 ---
 
 # batchq — the batch job queue
 
-One engine, one JOBQ per repo. Jobs are files; the OS (launchd `WatchPaths`)
-fires the worker the moment one lands; the worker drains FIFO, running each job
-as a **fresh headless `claude -p` session in its own git worktree** with the
-queue's housekeeping tail welded on. The WORKER merges each job's branch into
-main and pushes — jobs never push. No timers, no session needs to stay open.
-Doug explicitly authorized `--dangerously-skip-permissions` for these jobs
-(2026-07-20). Engine history + design rationale: `~/.batchq/engine/` is a git
-repo — see its `DECISIONS.md` (v2 worktree rework, 2026-07-24).
+One engine, one JOBQ per repo. Jobs are files; the OS's file-watcher (systemd
+`.path` on homecore) fires the worker the moment one lands; the worker drains
+FIFO, running each job as a **fresh headless `claude -p` session in its own git
+worktree** with the queue's housekeeping tail welded on. The WORKER merges each
+job's branch into main and pushes — jobs never push. No timers, no session needs
+to stay open. Doug explicitly authorized `--dangerously-skip-permissions` for
+these jobs (2026-07-20). Engine history + design rationale: `~/.batchq/engine/`
+is a git repo (`github.com/dougkimmerly/batchq`) — see its `DECISIONS.md` (v2
+worktree rework, 2026-07-24) and `PARKING_LOT.md`.
+
+## Where it runs (homecore, since 2026-08-05 — fixer ADR 0049)
+
+The worker, all queue state (`~/.batchq/<queue>/`), the engine, and the dashboard
+run on **homecore** (192.168.20.19), fired by **systemd `--user`** units
+(`batchq@<queue>.path` → `batchq@<queue>.service`) — not launchd. Repos are
+dedicated clones under `~/batchq-repos/` on homecore (NOT `/var/syncthing`; git
+remotes are the only sync bus). Staying current is **event-driven, not a poll**:
+the worker `fetch`+`ff-only`s each clone to origin **before every job** (jobs run
+on current code, incl. interactive Mac pushes) and integrate-then-retries the
+**push** after (a Mac push mid-job never strands work); between jobs a clone may
+sit behind origin harmlessly. You still drive everything from the Mac exactly
+as before: `~/.local/bin/sbmjob` is now a thin **forwarder** that SSHes to
+homecore, so `sbmjob …` / `sbmjob -wrk` behave identically. The heavy Claude API
+traffic leaves homecore's pipe, so submitting from anywhere (incl. away over
+Tailscale) is a small SSH round-trip. Rollback: the Mac's launchd plists are
+unloaded but retained. Deviations & gotchas (inotify limits, XDG-over-SSH,
+10-char queue names): `~/.batchq/engine/PARKING_LOT.md` +
+`fixer/docs/runbooks/batchq-homecore-migration.md`.
 
 **Never use in-session CronCreate for autonomy — proven to never fire on this
 Mac (2026-07-20 canary test).** This queue is the replacement.
@@ -91,16 +111,18 @@ wrkjobq                          # curses 5250 in the terminal (ssh fallback)
 wrkjobq --once                   # one text snapshot to stdout
 ```
 
-**THE monitor is the web 5250 at http://localhost:8250/** (launchd KeepAlive
-`com.batchq.wrkjobqweb`; reinstall with `wrkjobq --web --install`, run ad-hoc
-with `wrkjobq --web [--port N] [--open]`). It speaks dk400's own screen
+**THE monitor is the web 5250 at http://192.168.20.19:8250/** (systemd
+`batchq-web.service` on homecore, bound `0.0.0.0` via `BATCHQ_WEB_HOST`; also on
+the Command Centre dashboard as the `batchq` tile). It speaks dk400's own screen
 protocol — same terminal.css, 3270 font vendored — and auto-refreshes every
 3 s without clobbering half-typed options. Screens: **WRKJOBQ** (queues:
 5=Work with jobs, 6=Release, 8=JOBLOG) → **WRKJOBS** (jobs: 4=End queued,
 5=Display log — LIVE follow while running, 8=Summary, 9=Resubmit) →
 **SBMJOB** prompt on F10 (queue/pty/read-only/text). The `===>` line takes
 `SBMJOB [-Q q] [-PTY n] [-RO] text`, `NEXT [q]`, `REL [q]`. Server binds
-127.0.0.1 only; source `engine/wrkjobq_web.py` + `engine/web/`.
+`0.0.0.0` on homecore (`BATCHQ_WEB_HOST`; default localhost — an unauthenticated
+control surface, LAN-exposed, see engine `PARKING_LOT.md`); source
+`engine/wrkjobq_web.py` + `engine/web/`.
 
 ## Rules of the machine
 
@@ -111,8 +133,8 @@ protocol — same terminal.css, 3270 font vendored — and auto-refreshes every
   the reasoning IN THE SPEC; jobs execute cold on sonnet. Escalate a single job by
   writing the model name to `~/.batchq/<queue>/model` before submit and deleting
   it after — rare exception, never the norm.
-- **Write jobs: one per queue, `MAX_CONCURRENT` Mac-wide** (global slots —
-  different queues may overlap). RO jobs ride outside the slots, `RO_MAX` per
+- **Write jobs: one per queue, `MAX_CONCURRENT` homecore-wide** (global slots,
+  currently **6** — different queues may overlap). RO jobs ride outside the slots, `RO_MAX` per
   queue. Lock-dir mtimes are heartbeats; stale-break only on genuinely old.
 - **A job must leave its WORKTREE clean and commit its work** — an uncommitted
   worktree or non-zero exit moves the job to `held/` + freezes the queue
@@ -186,10 +208,14 @@ text almost always contains backticks (`` `file.js` ``) and parentheses
 (`foo(bar)`), which zsh/bash evaluate as command substitution / hit parse
 errors *before* `sbmjob` sees them (seen repeatedly, 2026-08-02). Write the
 spec to a file with the Write tool, then submit with
-`~/.batchq/engine/sbmjob "$(cat /tmp/thejob)"` — command-substitution output is
-used literally and is NOT re-scanned for backticks. (Or write the `.job` file
-straight into `<queue>/queue/`.) Editing a parked/queued `.job` file in place is
-also safe — they're plain text, not running.
+`sbmjob "$(cat /tmp/thejob)"` — command-substitution output is
+used literally and is NOT re-scanned for backticks. **Use the forwarder `sbmjob`
+(PATH → `~/.local/bin/sbmjob`), NOT `~/.batchq/engine/sbmjob` and NOT a direct
+file-drop into `<queue>/queue/` — post-homecore-migration those write to the
+Mac's DEAD local queue and the job never runs** (seen 2026-08-05: a cross-domain
+job stranded on the Mac's `~/.batchq/homelab/queue/`). Only drop a `.job` file
+directly when you're on homecore itself. Editing a parked/queued `.job` file in
+place (on the host that owns the queue) is safe — they're plain text, not running.
 
 **Gotcha — when submission ORDER matters, pause 1s between submits.** The FIFO
 drain orders by the `.job` filename's `<stamp>` (`YYYYMMDD-HHMMSS-slug`), which is
@@ -232,9 +258,15 @@ Refs: fixer issue #N, commits, log paths
   for broken jobs and blocks the queue; issues reach Doug via `/issue-review`
   (severity=info, send_notification=false — the ADR 0047 producer discipline).
   Attended boat work also goes in `fixer/docs/runbooks/stored-boat-plan.md`.
+- **Jobs can't verify LAN endpoints** — the `tail.md` guardrail is localhost +
+  Anthropic API only, so a job asked to confirm something on the LAN (a service
+  on homecore, NetBox, another host) will correctly DECLINE rather than reach it.
+  Put the verification *result* in the spec, or do the LAN check from an
+  interactive/LAN session (cost two needless command-ce jobs, 2026-08-05).
 - Submit per the inline-arg gotcha above: Write the spec to a file, then
-  `~/.batchq/engine/sbmjob -q <owning-queue> "$(cat /tmp/spec)"`. No parallel
-  HANDOFF entry — one fact, one home; JOBLOG.md is the record.
+  `sbmjob -q <owning-queue> "$(cat /tmp/spec)"` (the forwarder, NOT
+  `~/.batchq/engine/sbmjob` — that strands the job on the Mac's dead local
+  queue). No parallel HANDOFF entry — one fact, one home; JOBLOG.md is the record.
 
 ## Watching a queue as reviewer (wake-on-event)
 
@@ -249,12 +281,16 @@ Clearing a hold is a judgment call, never automated.
 ## Registering a new repo
 
 ```
-~/.batchq/engine/register.sh <name> </path/to/repo>
+# on homecore: clone the repo under ~/batchq-repos/ first, then
+~/.batchq/engine/register.sh <name> </home/doug/batchq-repos/<repo>>
 ```
-Queue names max 10 chars (`*JOBQ` limit; register.sh rejects longer, monitors
-truncate display to 10). Then EDIT `~/.batchq/<name>/tail.md` (the repo's own hard guardrails) and
-`next.md` (point at the repo's real backlog doc). Unregister: `launchctl
-bootout gui/$UID/com.batchq.<name>`, delete the plist + queue dir.
+register.sh is OS-guarded: on homecore it links + `systemctl --user enable --now
+batchq@<name>.path`. Queue names max 10 chars (`*JOBQ` limit; register.sh's
+`set -eu` rejects longer — the grandfathered over-length queues `music-library`
+/`voice-announce` were enabled directly with `systemctl --user enable --now`).
+Then EDIT `~/.batchq/<name>/tail.md` (the repo's own hard guardrails) and
+`next.md` (point at the repo's real backlog doc). Unregister on homecore:
+`systemctl --user disable --now batchq@<name>.path`, delete the queue dir.
 
 ## The working loop (how this is meant to be used)
 
