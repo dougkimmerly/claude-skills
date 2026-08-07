@@ -203,6 +203,21 @@ pattern: MON4, ETA-5c, VOY-START all one-shotted). `sbmjob -q <queue> "..."`
 or drop a file in `<queue>/queue/` named `YYYYmmdd-HHMMSS-<slug>.job`
 (`0N-` prefix = JOBPTY N; `.ro.job` = read-only).
 
+**Every job spec MUST carry the foreground-verification clause** (2026-08-07,
+after TWO jobs died the same way in one day): batch executors receive NO
+background-task notifications, so an executor that launches Playwright/builds
+with run_in_background and then "waits for the notification" idles until the
+worker kills it — with whatever it hadn't committed lost. Include in every
+write-job spec: "NEVER background any command (no run_in_background, no
+trailing &) — run tests/builds as plain foreground commands and wait for the
+exit code; dev servers: start, bounded port-poll (max ~60s), foreground tests,
+kill by exact PID. COMMIT FEATURE CODE FIRST, before docs/full-suite runs, so
+partial progress survives." A soft "run verification synchronously" note is
+NOT enough — the second death happened with that note present; use the hard
+phrasing. (Durable fix — a standing rule in the engine's `defaults/tail.md` —
+was requested from the engine queue the same day; keep this clause until the
+engine confirms it.)
+
 **Gotcha — never pass a rich job spec as an inline `sbmjob "..."` arg.** Job
 text almost always contains backticks (`` `file.js` ``) and parentheses
 (`foo(bar)`), which zsh/bash evaluate as command substitution / hit parse
