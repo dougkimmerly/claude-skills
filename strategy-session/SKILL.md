@@ -43,7 +43,13 @@ Multi-paragraph narration of future work is the smell; a submitted job is the cu
   session alive to receive results). **The tell (Doug 2026-08-02, after two violations in one
   sitting): if you are typing `sbmjob -ro` while Doug is actively in the conversation, STOP —
   that research feeds THIS conversation; spawn a parallel sonnet Agent instead. The -ro lane
-  is for results nobody is waiting on.**
+  is for results nobody is waiting on.** **Restated harder (Doug 2026-08-07, third
+  correction): while a session is live, read-only work runs as parallel agents UNDER THE
+  SESSION — only WRITE jobs go to the jobq, full stop. "It's future-phase groundwork /
+  nobody's waiting on it yet" is NOT an exemption: if a live session is the one queuing it,
+  the session is the receiver — run it in-session and let Doug react to the findings while
+  strategy mode is still open. The -ro lane exists solely for runs with no session alive
+  (scheduled sweeps, overnight probes).**
 - **ALL spawned work runs Sonnet** (Doug 2026-07-30): every research/fan-out Agent
   call passes `model: "sonnet"`, and batch jobs default to sonnet in the engine.
   The reviewer session's stronger model does the REASONING — decompose the task,
