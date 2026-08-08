@@ -130,6 +130,10 @@ Found 2026-07-02: all 8 `HEALTH_*` jobs at BOTH sites were dead this way for wee
 4. Commit and push code changes, restart dk400
 5. Schedule takes effect within 60 seconds
 
+**⚠️ Shared programs deploy in TWO commits (bit us on ADR 0054, 2026-08-08):** if the program lives in the `shared/` directory, that's the **dk400-programs repo as a git submodule**. Pushing dk400-programs does NOT deploy it — you must also bump the submodule pointer in dk400-homelab (`git -C shared fetch && git -C shared checkout <sha> && git add shared && git commit && git push`), then on the server `git pull --ff-only && git submodule update --init shared && ./deploy.sh`. Verify the pairing landed: `docker exec dk400 grep <new_symbol> /app/programs/<file>.py`. Skipping the bump ships callers whose callees don't exist in the image.
+
+**⚠️ Untracked program files on the server are a time bomb:** `docker build` copies the whole working dir, so an untracked `programs/*.py` runs fine — until a fresh clone silently loses it and every `_jobscde` job that names it breaks (found 2026-08-08: `viarail_probe.py`, 4 ACTIVE jobs). During any deploy, `git status --short` on the server; commit strays.
+
 ### Modify a schedule
 
 ```sql
@@ -290,6 +294,10 @@ ssh doug@192.168.20.19 "docker restart dk400"
 **Cause:** DatabaseScheduler refreshes every 60 seconds
 
 **Fix:** Wait up to 60 seconds, or restart dk400 for immediate effect
+
+### 3b. "Job X not in registry, skipping" right after a restart
+
+A single `dk400.web.job_scheduler` WARNING within ~2 minutes of container start is a benign startup race — the web scheduler sees `_jobscde` before the program registry finishes loading. The Celery beat dispatch is unaffected; the job runs normally at its next scheduled time (verified 2026-08-08: one warning at start, BOAT_SYNC ran on schedule 20 min later). Only investigate if the warning REPEATS across scheduled runs — that means the program genuinely isn't registered (check `programs/__init__.py`).
 ```bash
 ssh doug@192.168.20.19 "docker restart dk400"
 ```
