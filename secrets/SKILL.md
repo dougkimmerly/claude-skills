@@ -30,13 +30,14 @@ sops exec-env secrets/home/<file>.sops.yaml -- <cmd>  # run cmd with the secrets
 **Add / edit a secret:**
 ```bash
 export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"   # REQUIRED in scripts — see Diagnostics
-# macOS gotcha (bit us 2026-08-08): without that env var, sops on the Mac looks in
-# "~/Library/Application Support/sops/age/keys.txt" (XDG default on darwin), NOT
-# ~/.config — interactive `sops <file>` fails with "no master key was able to
-# decrypt". Fixed permanently on the M1 Pro with a symlink:
-#   mkdir -p "$HOME/Library/Application Support/sops/age" \
-#     && ln -sf ~/.config/sops/age/keys.txt "$HOME/Library/Application Support/sops/age/keys.txt"
-# New Macs need the same symlink (or always set SOPS_AGE_KEY_FILE).
+# macOS gotcha (bit us 2026-08-08): without that env var, sops on the Mac does
+# NOT look in ~/.config/sops/age/keys.txt (darwin default is "~/Library/
+# Application Support/sops/age/keys.txt", and resolution varies by sops build) —
+# interactive `sops <file>` fails with "no master key was able to decrypt".
+# PERMANENT FIX (done on the M1 Pro 2026-08-08): export the env var in ~/.zshrc:
+#   export SOPS_AGE_KEY_FILE="$HOME/.config/sops/age/keys.txt"
+# (A symlink into "Application Support" also exists there as belt-and-braces,
+# but the export is the reliable fix across sops versions.) New Macs: add both.
 sops secrets/home/<file>.sops.yaml                    # opens $EDITOR on decrypted content; re-encrypts on save
 sops set secrets/home/<file>.sops.yaml '["KEY"]' '"value"'   # scripted, no editor
 ```
