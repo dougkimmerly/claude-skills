@@ -54,6 +54,14 @@ docs/research/
    quota** — require each verifier to state and rate the strongest refutation, and
    spot-audit verdicts with a second hostile verifier. Expect a nonzero kill rate;
    0-of-N-refuted means your skeptic bar was too low, not that everything was right.
+   Data point (dk-w5 plan review, 2026-08-09): require-and-rate-the-refutation alone
+   produced 3-of-24 WEAKENED but still 0 REFUTED — it moves verifiers off pure
+   recalibration but doesn't produce kills when finders cite verified local text
+   (source-grounded findings genuinely die less than web-sourced ones). Partial
+   mitigation that worked: the orchestrator independently reads the core sources and
+   pre-registers its own findings before seeing panel output, giving an external
+   check on at least the top of the ranking. The second-hostile-verifier spot-audit
+   remains untried; do it next run before concluding the bar is fine.
 6. **METHOD-NOTES.md at close.** The orchestrator writes the candid retrospective —
    scale numbers, what worked, what fought, what to change — before the session ends.
    That knowledge exists nowhere else and is the input to improving this skill.
@@ -88,9 +96,13 @@ corpora always rot (the wiki's own declared-metadata-rot lesson applies to itsel
   pass: new/updated entity page, touched concept pages, lint over the touched set,
   log.md entry.
 - **Periodic refresh** (~quarterly for fast-moving fields): sweep for new entrants AND
-  re-verify the **load-bearing pages** — those cited by decisions/ADRs, flagged in
-  frontmatter. A refresh that finds a decision-relevant delta files a finding; findings
-  can supersede decisions.
+  re-verify the **load-bearing pages** — those cited by decisions/ADRs, flagged
+  `load_bearing: true` in frontmatter (apply the flag at citation time; remove only
+  when no decision cites the page). A refresh that finds a decision-relevant delta
+  files a finding; findings can supersede decisions. The reference instance records
+  this whole commitment as w5 ADR 0014 (its SCHEMA.md Conventions define the flag);
+  a wiki that misses its refresh cadence is presumed decaying, like any unverified
+  registry.
 - **Scope test on every ingest:** does this bear on a decision the wiki serves? A
   research wiki is not a news scrapbook.
 - Known-weak page classes to re-check first on refresh: empty-failure-cupboard pages

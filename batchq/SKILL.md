@@ -319,6 +319,13 @@ Then EDIT `~/.batchq/<name>/tail.md` (the repo's own hard guardrails) and
 `next.md` (point at the repo's real backlog doc). Unregister on homecore:
 `systemctl --user disable --now batchq@<name>.path`, delete the queue dir.
 
+## Multi-job overnight builds → the `build-loop` skill
+
+For a MILESTONE of coding (many dependent jobs verified against ADRs/specs,
+unattended, with reviewer jobs + bounded hold recovery + self-chaining plans),
+don't hand-roll it on raw sbmjob — use the **`build-loop`** universal skill
+(piloted on dk-w5, 2026-08-09). This skill remains the chassis underneath.
+
 ## The working loop (how this is meant to be used)
 
 1. **Strategy session** (interactive): triage, decide, frame — see the
