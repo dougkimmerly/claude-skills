@@ -153,6 +153,18 @@ control surface, LAN-exposed, see engine `PARKING_LOT.md`); source
   job). The authoritative "still needs hands" signals are the queue's `held/`
   dir and an actual `MSGW` — check those, or `git log main | grep "Merge branch"`
   for the branch name, BEFORE treating any JOBLOG disposition as unfinished.
+- **Machine-readable completion signal (bit us 2026-08-08):** the `.log` fills
+  LIVE while the job runs — a consumer that tests `done/<job>.log` existence
+  declares completion ~16s after submission (this broke the Telegram
+  dispatcher's first live run). The authoritative signals are the **`.job`
+  file itself appearing in `done/`** (worker moves it at completion) and
+  `done/<job>.summary.md` (written at completion; also the job's final result
+  JSON line carries `total_cost_usd` + `usage` — parsed daily by fixer's
+  CLSPEND spend tracker, ADR 0059).
+- **Jobs can arrive via Telegram** (fixer ADR 0058): any text Doug sends the
+  bot becomes a verify-first job on the fixer queue; the dispatcher relays
+  the job's summary back to his phone. Producer convention: begin the job
+  summary with `**Answer for Doug:**` — that block is what gets sent.
 - Job logs: `done/<job>.log` — stream-json, filling LIVE. Render with
   `wrkjobq` option 5 or `tail -f … | python3 ~/.batchq/engine/render_stream.py`.
   Quick review path: `done/<job>.summary.md` and `JOBLOG.md` — read those
