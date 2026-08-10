@@ -58,6 +58,11 @@ hold-recovery prompt), `docs/plan-review.md` (plan-review method),
   ntfy). One action per invocation, max 3/night (`recover.count`, reset by
   fire.sh), never touches engine/guardrails/other queues, logs to `recovery.log`.
 - **FIFO stamps are second-granular** — sleep 1 between paired submits.
+- **CLOSE is a max-stamp held job** (`99999999-…` filename dropped straight into
+  the queue dir): fix pairs' real date stamps always sort ahead, so CLOSE cannot
+  gate early and auto-releases when the queue is otherwise empty. Keep an in-spec
+  ordering guard (requeue-self if queue non-empty) as the race backstop. (Pilot
+  lesson: a normally-stamped CLOSE gated while 4 fix rounds were still queued.)
 - **Foreground-verification clause in every spec**, verbatim (batchq standing rule).
 
 ## Morning protocol
