@@ -29,8 +29,14 @@ hold-recovery prompt), `docs/plan-review.md` (plan-review method),
    the tests itself, and closes its own fix loop (writes fix pairs into the queue
    dir; cap 2 rounds, then HANDOFF + drain continues — fix-forward).
 5. **CLOSE job** gates the milestone (all verdicts approved + forcing tests green
-   + scoreboard reconciled) → report + retro → chains the NEXT milestone's
-   planning job AND its adversarial plan-review job, then stops.
+   + scoreboard reconciled). **Gate-and-remediate:** on INCOMPLETE with a
+   mechanically actionable blocker (a job that exited without its contracted
+   artifact → resubmit its spec with the hardened foreground warning; a diagnosed
+   defect CLOSE can spec with concrete AC → author the scoped fix pair), CLOSE
+   submits the jobs itself and re-drops its own max-stamp hold — budget max 3
+   gate passes (`gate.count`, reset by fire.sh); anything it can't spec, or at
+   cap → honest report + HANDOFF + stop. On COMPLETE → report + retro → chains
+   the NEXT milestone's planning job AND its adversarial plan-review job, stops.
 6. **Morning merge session** (interactive): human + strong model merge plan +
    review, decompose, fire the next milestone. One human session per milestone.
 
