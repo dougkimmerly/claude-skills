@@ -70,6 +70,11 @@ hold-recovery prompt), `docs/plan-review.md` (plan-review method),
   ordering guard (requeue-self if queue non-empty) as the race backstop. (Pilot
   lesson: a normally-stamped CLOSE gated while 4 fix rounds were still queued.)
 - **Foreground-verification clause in every spec**, verbatim (batchq standing rule).
+- **An LDA relay file** (`docs/LDA.md`, AS/400 Local Data Area pattern): JOBLOG is
+  the record, not a channel — every job reads the tiny capped LDA first and may
+  append <=3 terse trap/tip lines for successors; CLOSE prunes it at the gate.
+  (Pilot lesson: a builder logged a trap "for the next job" that the next job,
+  correctly minding its read-set, never saw.)
 
 ## Morning protocol
 
