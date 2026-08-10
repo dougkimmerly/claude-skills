@@ -338,3 +338,20 @@ don't hand-roll it on raw sbmjob — use the **`build-loop`** universal skill
 4. Engine changes: edit in `~/.batchq/engine`, run `tests/run-tests.sh`
    (scratch repo + fake claudes, no network), commit there. Never edit
    `worker.sh` in place while a drain is running — write aside and `mv`.
+
+## Recovering a queue after a host crash / hard shed (learned 2026-08-10)
+
+A killed worker (host wedge, `pkill claude`, reboot) leaves two messes the
+watcher won't self-heal:
+1. **A stale job stuck in `running/`** with a half-built worktree. Reset it:
+   remove the worktree + branch, `mv running/<job> queue/<job>`, `rm -rf work/<job>`.
+   FIFO stamps restore correct order automatically (a build's stamp < its review's).
+2. **`systemctl --user start batchq@<q>.path` does NOT pick up pre-existing queue
+   files** — inotify fires on new events only, and files that predate the watcher
+   start are invisible. Re-trigger by touching the top job:
+   `cd queue; F=$(ls|sort|head -1); mv "$F" "../$F.t" && mv "../$F.t" "$F"`.
+   New jobs (fix pairs, next batch) trigger normally once the watcher is live.
+
+Also: after a memory-pressure or PCIe-storm wedge, verify it was actually the
+batch system before blaming `MAX_CONCURRENT` — the 2026-08-10 wedge was a faulty
+Thunderbolt controller (fixer #1237), batch exonerated, cap restored to 6.
