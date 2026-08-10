@@ -87,6 +87,20 @@ docs/research/
    review — cost ~15M subagent tokens / 214 agents / ~3h20m. Scale lenses and review
    depth to the ask; a landscape-only run without review is roughly half.
 
+## Ingest-spec traps (paid for 2026-08-10, Cole Medin rounds 1–2)
+
+- **Test the operator's ACTUAL hypothesis, not a proxy the convenient sources can
+  answer.** "Has a logistics background" (bios can falsify) is not "has logistics
+  exposure, e.g. consulting" (only content analysis can test — engagements never
+  appear in bios). A falsified proxy recorded as a falsified hypothesis actively
+  misleads later refreshes.
+- **Operator testimony is admissible evidence when labeled and attributed.** Don't
+  discard the observation that motivated the ingest.
+- **"Written sources primary" systematically skips video-first creators' core
+  corpus.** If the subject's main medium is video, budget for transcripts/
+  descriptions/companion repos of the RELEVANT series — don't let source
+  convenience redefine scope.
+
 ## Living-wiki maintenance (after the founding run)
 
 A research wiki is a permanent design input, not a review artifact — but unmaintained
