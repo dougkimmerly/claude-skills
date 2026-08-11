@@ -102,6 +102,13 @@ Per-JOB budget (≤2 remediations/job, then escalate), not a global nightly cap.
 needed. Set `StartLimitIntervalSec=0` on the recovery `.service` (its own lock +
 per-job budget guard runaway); reset-failed it if it ever trips.
 
+**Make remediation VISIBLE** (2026-08-11): the error-handler runs as a systemd
+process against a HELD job, so it's NOT in the monitor's running/ list — a hold under
+active auto-repair looks identical to a wedged one. Have the recovery wrapper write a
+live status into the MSGW (`AUTO-REMEDIATION ACTIVE — Xs elapsed, started HH:MM`,
+heartbeat every ~15s) so the operator sees it working and for how long. Self-healing
+must be legible, or the operator falls back to blind trust — the opposite of the goal.
+
 **Nudge-loop** (`nudge-loop.sh`): a background poke that re-triggers the queue when
 the worker idles with jobs waiting — the inotify `.path` unit does NOT pick up
 pre-existing files after a restart, which silently stalls a resumed drain.
