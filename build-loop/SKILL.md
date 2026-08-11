@@ -96,6 +96,21 @@ one-trick preserver (`jobs-staged/hold-recovery-prompt.md` is the reference):
   **The only path to a human.**
 Per-JOB budget (≤2 remediations/job, then escalate), not a global nightly cap.
 
+**The error-handler is NOT yet safe for unattended heavy drains (WEDGE 2026-08-11).**
+The self-healing loop caused a MULTI-HOUR CPU/memory wedge on a shared host: a
+persistent hold (a fix job that kept failing) made the error-handler re-fire
+repeatedly, each invocation launching a full conformance suite (docker stacks), and
+the stacks piled up until memory exhausted → swap thrash → box unreachable, needing a
+physical power-cycle. The debounce added mid-crisis was insufficient. BEFORE re-arming
+the error-handler for unattended runs, it needs: (a) a HARD per-job remediation cap
+that actually stops re-invocation (a real cooldown/lock, not just a counter), (b) it
+must NEVER stack conformance runs (check no other remediation/suite is already
+running), and (c) a global concurrency ceiling on remediation+build docker stacks.
+Until hardened, finish heavy milestones SEMI-ATTENDED: error-handler OFF, low
+MAX_CONCURRENT (2), nudge-loop ON (safe — it only re-triggers the queue), operator
+watching for holds. The nudge-loop and the estate build/review jobs were never the
+problem; the error-handler's re-fire-under-persistent-hold was.
+
 **The error-handler needs its own error handling.** It died mid-K8 on systemd
 `start-limit-hit` — a persistent hold kept the `held/` dir non-empty, re-firing the
 `.path` unit faster than the rate limit allowed, killing the watchdog exactly when
