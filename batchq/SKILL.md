@@ -355,3 +355,12 @@ watcher won't self-heal:
 Also: after a memory-pressure or PCIe-storm wedge, verify it was actually the
 batch system before blaming `MAX_CONCURRENT` — the 2026-08-10 wedge was a faulty
 Thunderbolt controller (fixer #1237), batch exonerated, cap restored to 6.
+
+- **After a host-wide shed, re-enable EVERY watcher, not just the ones you're
+  working on** (2026-08-11): a crash-recovery that does `systemctl --user stop
+  batchq@*.path` must pair with re-enabling ALL of them on return — otherwise the
+  queues you weren't focused on sit dark with jobs stranded (5 estate queues sat
+  silent for hours after the 2026-08-10 wedge). Verify:
+  `for u in $(systemctl --user list-unit-files 'batchq@*.path' -o json 2>/dev/null); do systemctl --user is-active "$u"; done`
+  — any inactive one with a non-empty queue/ is stranded. Nudge each (inotify won't
+  fire on pre-existing files).
