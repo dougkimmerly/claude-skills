@@ -57,12 +57,54 @@ hold-recovery prompt), `docs/plan-review.md` (plan-review method),
   images from an interactive session and add a SCOPED tail.md exception
   (spec-pinned pulls/installs only). Decouple real secrets from the overnight path
   (throwaway env proves every clause; real deploy is a morning step).
-- **Bounded hold recovery** (Doug-authorized override of "never automate hold
-  clearing", per-queue): systemd path unit on held/+MSGW fires a headless sonnet
-  agent with a narrow prompt (release transients; preserve-then-release worktrees;
-  trivial merges only; resubmit-once with failure addendum; doubt → leave held +
-  ntfy). One action per invocation, max 3/night (`recover.count`, reset by
-  fire.sh), never touches engine/guardrails/other queues, logs to `recovery.log`.
+## Error handling — the loop is a program; every anticipated failure gets a handler
+
+The single biggest lesson (2026-08-10, a milestone that needed heavy manual
+recovery): **treat the build loop like production code.** A human should be paged
+only for the *genuinely unanticipated*; every known failure mode has an automated
+handler. Design these in from the start:
+
+**Prevent the mechanical class (so holds are rare):**
+- **Commit LAST, not first.** The worker only sees exit-code + worktree-cleanliness,
+  never test results. So: commit early to preserve progress → run the full suite →
+  if GREEN, a FINAL `git add -A && commit` to capture anything the suite regenerated
+  (mirrors, coverage) → clean tree merges. If RED, leave the tree dirty and name the
+  failing test — do NOT leave a clean tree (that merges broken code into main and
+  cascades into later slices). Committing *first* then running a suite that
+  regenerates a tracked file is the #1 cause of false dirty-worktree holds (hit K6
+  and K8).
+- **Generated files checked into git churn the worktree.** Any suite that
+  regenerates a committed artifact (a flat mirror, an index) must restore it —
+  `trap 'git checkout -- <generated-paths>' EXIT` in the test runner so a *failed*
+  suite still restores. Or don't commit generated files at all.
+- **Hardened foreground rule in review specs** (backgrounding a slow suite + waiting
+  for a notification that batch jobs never get killed two reviews). "THIS KILLED
+  PREDECESSORS" phrasing, not a soft note.
+
+**Auto-recover the rest (the error-handler watchdog):** a systemd `.path` unit on
+`held/`+`MSGW` fires a headless **sonnet** agent that is a full CLASSIFIER, not a
+one-trick preserver (`jobs-staged/hold-recovery-prompt.md` is the reference):
+- **A. Transient** (API/network/timeout, no real work) → release (retry).
+- **B. Dirty worktree, work complete** → run the suite foreground; GREEN → commit +
+  merge + release (slice saved); RED → case C.
+- **C. Real test failure** → commit work to branch, auto-author a FIX build+review
+  pair (original spec + the failing test as added AC), supersede the original,
+  release. **Test failures become fix-jobs automatically — no human.**
+- **D. Review died without a verdict** → resubmit it with the hardened template.
+- **E. Merge conflict** → trivial → merge; real → case F.
+- **F. Unknown / unsafe / per-job budget exhausted** → fixer issue + HANDOFF + ntfy.
+  **The only path to a human.**
+Per-JOB budget (≤2 remediations/job, then escalate), not a global nightly cap.
+
+**The error-handler needs its own error handling.** It died mid-K8 on systemd
+`start-limit-hit` — a persistent hold kept the `held/` dir non-empty, re-firing the
+`.path` unit faster than the rate limit allowed, killing the watchdog exactly when
+needed. Set `StartLimitIntervalSec=0` on the recovery `.service` (its own lock +
+per-job budget guard runaway); reset-failed it if it ever trips.
+
+**Nudge-loop** (`nudge-loop.sh`): a background poke that re-triggers the queue when
+the worker idles with jobs waiting — the inotify `.path` unit does NOT pick up
+pre-existing files after a restart, which silently stalls a resumed drain.
 - **FIFO stamps are second-granular** — sleep 1 between paired submits.
 - **CLOSE is a max-stamp held job** (`99999999-…` filename dropped straight into
   the queue dir): fix pairs' real date stamps always sort ahead, so CLOSE cannot
