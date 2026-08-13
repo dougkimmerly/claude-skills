@@ -323,7 +323,10 @@ Each subsidiary company uses this standard sub-structure. Sub-folders are create
 
 ### Personal (`/Volumes/Home Files`)
 
-*Spine sketch — designed branch by branch as we work through it.*
+*Subject category spine RATIFIED 2026-08-13 (ADR 0039): `People · Events · Trips · Home &
+Property · Vehicles · Boats · Finance · Health · Education · Hobbies & Projects`. The category
+list is locked; subjects and sub-structure within each are still discovered branch by branch.
+The physical type-axis layout below is separate from that subject spine.*
 
 ```
 Home Files/
