@@ -375,3 +375,33 @@ Thunderbolt controller (fixer #1237), batch exonerated, cap restored to 6.
   `for u in $(systemctl --user list-unit-files 'batchq@*.path' -o json 2>/dev/null); do systemctl --user is-active "$u"; done`
   — any inactive one with a non-empty queue/ is stranded. Nudge each (inotify won't
   fire on pre-existing files).
+
+- **Stale `worker.lock` after a crash blocks the queue FOREVER, silently
+  (2026-08-14, fixer #1353):** `worker.sh:81` is `mkdir "$LOCK" || exit 0` — no
+  staleness check, no log line. After any host crash mid-job, the worker "starts"
+  and instantly no-ops. Symptom: watcher fires, `systemctl` shows the service
+  Started+Finished in the same second, worker.log gains NOTHING. Fix: verify the
+  holder PID is dead (`cat engine/global.lock.N/holder`, `ps -p <pid>`), then
+  `rmdir <q>/worker.lock` and `rm -rf engine/global.lock.N` for slots whose
+  holders are dead. (Engine fix requested via engine HANDOFF 2026-08-14.)
+
+- **A stopping worker strands its pre-claimed jobs in `running/`** (2026-08-14):
+  with MAX_CONCURRENT>1 the worker can move several queue files into `running/`
+  before a hold stops it. On the next start, the startup autopsy treats ALL of
+  them as "stranded mid-job" → moves them to held/ + re-holds the queue, looping.
+  Before `-release` after any hold-with-strandings: `mv running/*.job queue/`
+  (they never executed — no worktree/log means never started), leave real crashed
+  jobs (those WITH a worktree/log) for proper disposition.
+
+## Traps for job authors (what kills a headless job)
+
+- **NEVER background a long command and end the turn to "wait for the
+  notification"** (2026-08-14, the HARDEN-conformance job): in an interactive
+  session backgrounded Bash re-invokes you when it exits — in a headless batch
+  job, ending your turn ENDS THE SESSION. The background child is orphaned, your
+  edits sit uncommitted, and the queue takes a dirty hold. Long commands
+  (test suites, builds) run FOREGROUND with an explicit generous `timeout`
+  parameter. If a job legitimately needs to outlive a command, poll it in a loop
+  — never yield the turn.
+- Related session-side trap already recorded: `done/`-log-streams-live (reading a
+  running job's log via `done/` path tails a live file — see Rules of the machine).
