@@ -78,6 +78,17 @@ left is at merge time (see "Sharing the repo" below).
 finished job: disposition + the job's own final summary. Registered queues:
 `shipslog`, `shard` (physically `~/.shard-batch`, symlinked — legacy).
 
+**Per-queue worktree provisioning (opt-in, fixer #1344).** A fresh worktree is a
+bare `git worktree add` — no `node_modules`, no `.env`, deps gitignored — so
+node/pg-heavy repos couldn't self-verify (`npm run test:unit`, DB queries). If a
+queue defines an **executable `$Q/setup.sh`** (i.e. `~/.batchq/<queue>/setup.sh`),
+the worker runs it *inside* the fresh worktree right after `worktree add` (both RO
+and RW lanes, `provision_worktree` in `worker.sh`). Opt-in (no-op for queues
+without it) and non-fatal (a failing hook is logged, the job still runs). Example
+(`music-library`): sources nvm (npm is not on the worker's default PATH) then
+`npm ci`. Note node/npm live under `~/.nvm`; there is **no host `psql`** — jobs
+reach the DB via `docker exec dk400-postgres psql` or the `pg` package.
+
 ## Job types
 
 - **Write job** (`sbmjob "…"` → `<stamp>-<slug>.job`): serial — queue lane +

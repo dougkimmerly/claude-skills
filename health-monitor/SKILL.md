@@ -28,7 +28,7 @@ Health monitoring is a **dk400 program**, not a separate daemon.
 │          (dk400-homelab/dk400/programs/health_check.py)             │
 ├─────────────────────────────────────────────────────────────────────┤
 │ 1. Reads targets from NetBox (VMs/devices with check_enabled=true)  │
-│ 2. Performs HTTP/HTTPS, TCP, ping, or docker checks                 │
+│ 2. Performs HTTP/HTTPS, TCP, ping, arp, or docker checks            │
 │ 3. Writes results to qsys._healthchk_* tables                       │
 │ 4. Cleans up orphan entries (deleted/disabled targets)              │
 │ 5. Detects flapping (3+ status changes in 10 min)                   │
@@ -76,6 +76,20 @@ is_flapping BOOLEAN
 window_start TIMESTAMPTZ
 last_alert_at TIMESTAMPTZ
 ```
+
+## The `arp` check_type — for ARP-present / ICMP-dark devices (added 2026-08-14)
+
+Cloud IoT devices — Wyze cams, smart appliances (Whirlpool), Control4/Wirepath
+`00:0f:ff` amps — sit on the LAN (ARP `REACHABLE` with their recorded MAC) but
+**ignore ICMP and serve no TCP port**, so a `ping` check is a permanent false-DOWN
+(Whirlpool #536 fired 17.5k×). Use `check_type: arp` instead of disabling the check.
+It probes L2 presence via `ip neigh` — but because the dk400 container is
+bridge-networked (172.18.0.0/16) with **no LAN L2 visibility**, the probe runs over
+**SSH on an on-segment host** (`ARP_PROBER_HOSTS` in `health_check.py`: `192.168.20.x`
+→ homecore). Uses `primary_ip4` like ping (no `check_url` needed). To set a device:
+verify ARP-reachable first (`ping <ip>; ip neigh show <ip>` from an on-segment host →
+`lladdr … REACHABLE/STALE`), then `jsonb_set(custom_field_data,'{check_type}','"arp"')`
+(+ `check_enabled=true` if it was off). Reserve `check_enabled:false` for RETIRED hardware.
 
 ## Diagnostic Steps
 
