@@ -245,6 +245,28 @@ ssh doug@192.168.20.19 "curl -s -H 'Authorization: Token $TOKEN' \
   'http://localhost:8000/api/dcim/devices/?cf_power_controller__ic=meross' | jq '.results[] | {name, power_controller: .custom_fields.power_controller, power_outlet: .custom_fields.power_outlet}'"
 ```
 
+## Documentation Custom Field (`manual_url`)
+
+Links a device to its manual/datasheet in the home imaging service so CCs can
+find docs easily (created 2026-08-14, type `url`, group "Documentation").
+
+Scoped to **both** `dcim.devicetype` and `dcim.device` — **prefer devicetype**
+(one manual covers every unit of a make/model, e.g. Synology DS1520+, a UPS,
+a switch); use **device** only for unit-specific manuals. Value = the imaging
+file URL, e.g. `http://192.168.20.19:3100/api/v1/documents/<id>/file`.
+
+```bash
+# Find devices/types that have a manual linked
+ssh doug@192.168.20.19 "curl -s -H 'Authorization: Token $TOKEN' \
+  'http://localhost:8000/api/dcim/device-types/?cf_manual_url__n=null' | jq '.results[] | {model, manual: .custom_fields.manual_url}'"
+
+# Set a manual on a device type
+ssh doug@192.168.20.19 "curl -s -X PATCH -H 'Authorization: Token \$TOKEN' \
+  -H 'Content-Type: application/json' \
+  -d '{\"custom_fields\":{\"manual_url\":\"http://192.168.20.19:3100/api/v1/documents/123/file\"}}' \
+  'http://localhost:8000/api/dcim/device-types/TYPE_ID/'"
+```
+
 ## Updating a Device
 
 Use PATCH to update specific fields:
