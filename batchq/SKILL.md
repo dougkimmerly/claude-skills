@@ -300,6 +300,12 @@ Refs: fixer issue #N, commits, log paths
   for broken jobs and blocks the queue; issues reach Doug via `/issue-review`
   (severity=info, send_notification=false — the ADR 0047 producer discipline).
   Attended boat work also goes in `fixer/docs/runbooks/stored-boat-plan.md`.
+- **Refs must quote issue TITLES, not bare numbers** (2026-08-15): a fixer
+  verify-job found a sender's "#1256" pointed at an unrelated, already-resolved
+  issue — the second satellite-CC mislabel in a week, and it cost the receiver
+  a DB round-trip to discover. Write `fixer #1353 "stale worker.lock blocks
+  queue"` so the receiver can sanity-check the mapping on sight; a bare ID
+  that mismatches silently resolves nothing.
 - **Jobs can't verify LAN endpoints** — the `tail.md` guardrail is localhost +
   Anthropic API only, so a job asked to confirm something on the LAN (a service
   on homecore, NetBox, another host) will correctly DECLINE rather than reach it.
