@@ -68,6 +68,8 @@ pgrep -af "signalk-server -c" || echo none  # must be none
 sudo systemctl start signalk
 # verify: ONE fresh server holds :3000 (and :123), battery SoC/position still flow, change is live
 ```
+**⚠ Manual restarts can false-trigger `sk-segv-watchdog.timer`** (5-min tick; it misread a deliberate 2026-08-15 restart's transition as a SEGV-loop and ran an unnecessary boot-self-heal + second restart). Until the deliberate-restart marker guard lands (fixer issue segv-watchdog-manual-guard-20260815), expect the watchdog may pile a recovery cycle onto your manual restart within ~5 min — check `journalctl -u sk-segv-watchdog` after any hand restart.
+
 A clean restart re-runs each plugin's startup fetch, so caches (e.g. openweather `/openweather/weather-cache`) repopulate within a minute. Durable fix for the orphan (unit `KillMode`/`Type` so restart cycles the real server) is tracked as a fixer task, not yet applied.
 
 ## Diagnostic chain — when paths are missing

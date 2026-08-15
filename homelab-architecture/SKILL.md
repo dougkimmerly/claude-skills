@@ -15,6 +15,10 @@ When asked to build, sync, replicate, mirror, back up, or route data between hom
 2. **For backup/replication work specifically: also read the canonical policy doc** at `infrastructure/homelab-runbooks/STRATEGY.md`. It defines the tier model, operating principles, and known gaps. Both tells you what already exists and what design rules apply. Skipping it has burned us more than once (built a redundant rsync mirror because Syncthing was already in place; later wiped 73 GB of audio because Tier 2 had no versioning — both were preventable by reading the doc first).
 
 ```bash
+# DOCTRINE (2026-08-16): boat→home is DATA-PLANE ONLY — Syncthing folders, postgres replication,
+# HTTP POSTs to specific home services. NO ssh from boat to home exists (Tailscale SSH ACL blocks it
+# and the last rsync-over-ssh path was migrated to Syncthing). Extend a Syncthing folder for new
+# boat→home file flows; never add an ssh path. See fixer docs/runbooks/boat-actor-inventory.md.
 # What Syncthing folders are configured between hosts?
 ssh doug@192.168.20.19 "docker exec syncthing wget -q -O- --header=\"X-API-Key: \$(docker exec syncthing sh -c 'grep -oE \"<apikey>[^<]+\" /var/syncthing/config/config.xml | sed s,\\<apikey\\>,,')\" http://localhost:8384/rest/config/folders" | jq '.[] | {id, path, type}'
 
