@@ -415,3 +415,10 @@ Thunderbolt controller (fixer #1237), batch exonerated, cap restored to 6.
   — never yield the turn.
 - Related session-side trap already recorded: `done/`-log-streams-live (reading a
   running job's log via `done/` path tails a live file — see Rules of the machine).
+- **`docker events` with naive timestamps hangs forever** (2026-08-15, the
+  churn-watchdog job: 80 min of serially-hung probes): dockerd parses a naive
+  datetime string (no timezone suffix) in the CLIENT'S LOCAL zone, so
+  `--until "$(date -u +%Y-%m-%dT%H:%M:%S)"` on a UTC-4 host points 4 hours
+  into the FUTURE and streams instead of exiting. Use epoch seconds
+  (`--since $(($(date +%s)-300)) --until $(date +%s)`) or relative durations,
+  and wrap every exploratory `docker events` in `timeout 10` regardless.
