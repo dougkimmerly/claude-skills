@@ -41,6 +41,8 @@ CentralSK is the only host that reads CLMD16 switch state directly. PNP also has
 
 ## Service control
 
+**⚠ Config dir is `/opt/signalk/.signalk` — NOT `~/.signalk`.** `~doug/.signalk` also exists (stale, ~5 plugin-config files) and will silently satisfy a lazy `ls` — a 2026-08-16 sweep audited the wrong dir because of it. Plugin configs: `/opt/signalk/.signalk/plugin-config-data/`; custom plugins: `/opt/signalk/custom-plugins/` (relinked at start by `relink-plugins.sh`). Note 2026-08-16: `signalk-netmonitor` there is deliberately `enabled:false` (retired per stored-boat plan ADR-0056 doctrine — do not re-enable; it crash-looped on a raw-socket/node-ABI mismatch anyway, and no `electrical.commands.reboot.*` handler exists on centralsk).
+
 **Since 2026-08-14 SK runs under the SYSTEM unit** `/etc/systemd/system/signalk.service` (enabled) — consolidated back from user-mode so the unit can hold `CAP_NET_BIND_SERVICE` for the `signalk-ntp-server` plugin (UDP 123, the NarwhalCore's time source). The old user unit at `~doug/.config/systemd/user/signalk.service` is stopped + disabled, kept for reference. Full rationale + drop-in inventory: `centralsk` skill (homelab repo), "SignalK service architecture".
 
 ```bash
