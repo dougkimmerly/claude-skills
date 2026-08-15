@@ -4,7 +4,7 @@ description: SignalK on CentralSK (192.168.22.15:3000) — the boat's primary N2
 
 # CentralSK SignalK
 
-SignalK runs on centralsk under user-mode systemd. It is the single authoritative SK instance the cruising-app and all dashboards read from. CentralSK has direct N2K access to **both** the PowerNet bus and the NavNet bus via two iKonvert USB gateways. When SK is dark on either side, the dashboards lie.
+SignalK runs on centralsk under the system-unit systemd service (since 2026-08-14; was user-mode before). It is the single authoritative SK instance the cruising-app and all dashboards read from. CentralSK has direct N2K access to **both** the PowerNet bus and the NavNet bus via two iKonvert USB gateways. When SK is dark on either side, the dashboards lie.
 
 For host-level concerns (hardware, services, network) see `homelab-centralsk`. This skill is just SK itself.
 
@@ -41,29 +41,30 @@ CentralSK is the only host that reads CLMD16 switch state directly. PNP also has
 
 ## Service control
 
-SK runs under user-mode systemd, NOT the old system unit. The system unit at `/etc/systemd/system/signalk.service` is disabled (kept on disk for reference). User unit at `/home/doug/.config/systemd/user/signalk.service`.
+**Since 2026-08-14 SK runs under the SYSTEM unit** `/etc/systemd/system/signalk.service` (enabled) — consolidated back from user-mode so the unit can hold `CAP_NET_BIND_SERVICE` for the `signalk-ntp-server` plugin (UDP 123, the NarwhalCore's time source). The old user unit at `~doug/.config/systemd/user/signalk.service` is stopped + disabled, kept for reference. Full rationale + drop-in inventory: `centralsk` skill (homelab repo), "SignalK service architecture".
 
 ```bash
-# Status / restart / journal — must export XDG_RUNTIME_DIR
-sudo -u doug XDG_RUNTIME_DIR=/run/user/1000 systemctl --user status signalk
-sudo -u doug XDG_RUNTIME_DIR=/run/user/1000 systemctl --user restart signalk
-sudo -u doug XDG_RUNTIME_DIR=/run/user/1000 journalctl --user -u signalk -f
+# Status / restart / journal
+sudo systemctl status signalk
+sudo systemctl restart signalk
+journalctl -u signalk -f
 ```
 
-Service unit has `StartLimitIntervalSec=60 StartLimitBurst=3` to cap SEGV-loops. After 3 restarts in 60s the unit goes to `failed`, which `sk-segv-watchdog.timer` (every 5 min) detects and runs `boot-self-heal` on. See `[[centralsk_bitrot_recovery]]` memory for details.
+The system unit carries the same protections via `consolidated.conf` drop-in: `StartLimitIntervalSec=60 StartLimitBurst=3` to cap SEGV-loops (after 3 restarts in 60s the unit goes `failed` — `sk-segv-watchdog.timer` detects and runs `boot-self-heal`; see `[[centralsk_bitrot_recovery]]` memory), plus CPU/memory caps and `After=user@1000.service` (BLE/dbus env, set by `session-env.conf`).
 
-### ⚠️ `systemctl restart signalk` alone does NOT reliably reload code — orphan trap (2026-06-27)
+### ⚠️ Split-brain trap (2026-08-12→14) — TWO SK instances
 
-The unit's launcher spawns the real `signalk-server` which **reparents to init (`ppid=1`)**; systemd's `MainPID` is only the launcher. So a plain `restart` starts a *new* server that can't bind port 3000 — the orphaned old one still holds it (`EADDRINUSE` / `Cannot lock port` in the journal) — and the **old code keeps serving**. Found 2026-06-27: a **4-day orphan** served stale plugin code through two "successful" restarts (new plugin file on disk + symlinked, but the cache never changed). Diagnose: `ps -o pid,ppid,etime -C node | grep "signalk-server -c"` (look for an old `ppid=1`), and `ss -ltnp | grep :3000` (who really holds it).
+While user-mode was canonical, a habitual `sudo systemctl restart signalk` started a SECOND (system-unit) instance that couldn't bind :3000 but silently ran for 2 days. If SK behaves oddly, FIRST check for duplicates: `pgrep -af "signalk-server -c"` and map each PID's cgroup (`cat /proc/<pid>/cgroup` — `system.slice` vs `user.slice`). Exactly one instance must own BOTH :3000 and UDP :123 (`sudo ss -tlnp | grep 3000; sudo ss -ulnp | grep :123`).
 
-**Always clean-restart to pick up plugin/code changes:**
+### ⚠️ Plain `restart` may not reload code — orphan trap (2026-06-27)
+
+The launcher spawns the real `signalk-server` which **reparents to init (`ppid=1`)**; systemd's `MainPID` is only the launcher. A plain `restart` can start a *new* server that can't bind :3000 — the orphaned old one still holds it (`EADDRINUSE` in the journal) — and the **old code keeps serving** (a 4-day orphan once survived two "successful" restarts). The 2026-08-14 system-unit restarts came up clean, but always VERIFY after a restart-for-code-change:
 ```bash
-export XDG_RUNTIME_DIR=/run/user/1000
-systemctl --user stop signalk
-pkill -9 -f "signalk-server -c"            # kill the orphan
+sudo systemctl stop signalk
+pkill -9 -f "signalk-server -c"            # kill any orphan
 pgrep -af "signalk-server -c" || echo none  # must be none
-systemctl --user start signalk
-# verify: ONE fresh server holds :3000, battery SoC/position still flow, change is live
+sudo systemctl start signalk
+# verify: ONE fresh server holds :3000 (and :123), battery SoC/position still flow, change is live
 ```
 A clean restart re-runs each plugin's startup fetch, so caches (e.g. openweather `/openweather/weather-cache`) repopulate within a minute. Durable fix for the orphan (unit `KillMode`/`Type` so restart cycles the real server) is tracked as a fixer task, not yet applied.
 
@@ -83,7 +84,7 @@ sudo lsof /dev/ikonvert-power /dev/ikonvert-nav
 # Expected: node process from signalk-server.
 
 # 3. Is SK's iKonvert provider successfully handshaking?
-sudo -u doug XDG_RUNTIME_DIR=/run/user/1000 journalctl --user -u signalk --since '5 min ago' | grep -i ikonvert
+journalctl -u signalk --since '5 min ago' | grep -i ikonvert
 # Healthy: empty (no NAK messages) or a single startup ALREADY_INITIALISED that's then handled.
 # Broken: repeated "iKonvert NAK: code=ALREADY_INITIALISED isSetup=true" lines.
 
@@ -134,7 +135,7 @@ for d in /dev/ikonvert-*; do
 done
 
 # 2. Stop SK
-sudo -u doug XDG_RUNTIME_DIR=/run/user/1000 systemctl --user stop signalk
+sudo systemctl stop signalk
 sleep 3
 
 # 3. Cycle BOTH USB devices, deauth → reauth, in one batch
@@ -147,11 +148,11 @@ sleep 5
 ls -la /dev/ikonvert-* /dev/ttyUSB*
 
 # 5. Start SK
-sudo -u doug XDG_RUNTIME_DIR=/run/user/1000 systemctl --user start signalk
+sudo systemctl start signalk
 
 # 6. Wait 30s, then verify
 sleep 30
-sudo -u doug XDG_RUNTIME_DIR=/run/user/1000 journalctl --user -u signalk --since '45 sec ago' | grep -i ikonvert
+journalctl -u signalk --since '45 sec ago' | grep -i ikonvert
 # Expected: empty OR a single ALREADY_INITIALISED that's handled (no repeating NAKs).
 
 curl -s http://localhost:3000/signalk/v1/api/vessels/self/electrical/switches | \
@@ -263,7 +264,7 @@ ssh doug@192.168.22.15 "curl -s 'http://localhost:3000/signalk/v1/api/vessels/se
 # value=null with advancing timestamps → plugin is consuming MQTT but producing null deltas
 
 # 4. Plugin error log
-ssh doug@192.168.22.15 "sudo -u doug XDG_RUNTIME_DIR=/run/user/1000 journalctl --user -u signalk --since '5 min ago' | grep -iE 'venus|TypeError|MqttClient'"
+ssh doug@192.168.22.15 "journalctl -u signalk --since '5 min ago' | grep -iE 'venus|TypeError|MqttClient'"
 ```
 
 ### Known plugin bug — TypeError on null CustomName (patched 2026-05-28)
@@ -300,13 +301,13 @@ Useful commands once in:
 
 1. **Patch venus plugin null-CustomName crash** (above) if not already applied. Restart SK. Verify `electrical.venus.dcPower` has a real value with a recent timestamp.
 2. **Restart SK plugin only** (if you have SK admin auth): `POST /skServer/plugins/signalk-venus-plugin/disable` then `/enable`. Cycles the MQTT connection.
-3. **Restart SK entirely**: `systemctl --user restart signalk`. ~30s SK downtime. Triggers fresh MQTT subscribe.
+3. **Restart SK entirely**: `sudo systemctl restart signalk`. ~30s SK downtime. Triggers fresh MQTT subscribe.
 4. **Reboot the Cerbo** via SSH: `sshpass -p transport ssh root@192.168.22.25 reboot`. ~60-90s Cerbo downtime. Use when DBus internal state itself is suspect (mosquitto_sub silent or values frozen at the broker).
 5. **Power-cycle Cerbo via PowerNet circuit** — last resort if SSH is also broken. Requires the Cerbo to be on a controllable CLMD16 channel.
 
 ### Zombie SK process holding stale MQTT connection (recovered 2026-05-28)
 
-If `systemctl --user restart signalk` reports success but `electrical.venus.*` values stay
+If `sudo systemctl restart signalk` reports success but `electrical.venus.*` values stay
 frozen at constant numbers (timestamps advance, values don't change), there may be a
 **zombie node process** from an earlier SK invocation still holding an MQTT connection
 to Cerbo. The new SK process is reading from the broker but the zombie is corrupting
@@ -339,7 +340,7 @@ The current SK process's MQTT subscription will start receiving fresh broadcasts
 seconds. `electrical.cerbo.dbusLive` should flip to `true` within ~90s.
 
 **Prevention:** when restarting SK, verify the OLD process actually died before
-running other diagnostics. `systemctl --user show signalk -p MainPID` shows the
+running other diagnostics. `systemctl show signalk -p MainPID` shows the
 current PID; cross-check `ps -ef | grep 'signalk-server -c /opt/signalk'` for
 extras.
 

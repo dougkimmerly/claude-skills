@@ -136,6 +136,16 @@ WHERE slot_type = 'logical' AND active = false AND slot_name LIKE 'pg_%_sync_%';
 
 After kill, fresh sync workers spawn automatically. With `max_sync_workers_per_subscription = 2` (default), tables process two at a time. If many zombies persist, the GUC value caps how many sync workers can run; raise it temporarily if needed.
 
+**The APPLY worker zombies too — and `ALTER SUBSCRIPTION DISABLE/ENABLE` will NOT clear it** (2026-08-14): after a network-path change (that night: applying a Peplink QoS bandwidth limit severed the established replication TCP), the main apply worker hung with frozen `received_lsn` and stale `last_msg_receipt_time`, SAME pid surviving a subscription bounce. Fix: `SELECT pg_terminate_backend(<apply worker pid>);` — launcher respawns it fresh and pending tablesyncs then proceed. Any router QoS/firewall/tunnel change on the replication path warrants an immediate `pg_stat_subscription` freshness check.
+
+### New table stuck in `d` — "permission denied for table X" (2026-08-14)
+
+**Symptom:** subscriber log loops `could not start initial contents copy for table "...": ERROR: permission denied for table ...` every ~5s; each failed attempt can leave an inactive `pg_%_sync_%` slot on the publisher.
+
+**Cause:** `replicator`'s SELECT grants on this cluster are PER-TABLE, not schema-default — every new table added to the publication needs an explicit grant, and the CREATE-TABLE migration files don't include it.
+
+**Fix (publisher):** `GRANT SELECT ON <schema>.<table> TO replicator;` then drop any orphaned `pg_%_sync_%` inactive slots (query above) and, if the sync worker has also zombied, terminate the apply worker (above). **Prevention:** put the GRANT in the migration SQL itself, or set default privileges once: `ALTER DEFAULT PRIVILEGES FOR ROLE dk400 IN SCHEMA cruising GRANT SELECT ON TABLES TO replicator;`
+
 ### Worker timeouts on slow links
 
 **Symptom:** Postgres log says `terminating logical replication worker due to timeout`. Sync workers cycle every 60s.

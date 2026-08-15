@@ -292,6 +292,12 @@ Refs: fixer issue #N, commits, log paths
 
 - **FYI-only findings are still jobs**: "What we ask: verify whether this
   changes your docs/skills/memory; update if so, otherwise no-op."
+- **Don't promise capabilities the owning queue forbids** (2026-08-14): a fixer
+  job spec told the cruising queue "live boat access IS available" — but that
+  queue's standing orders ban batch SSH to 192.168.22.x, so the job (correctly)
+  declined those parts as outcome 3. Live-host / actuation work goes in the
+  spec as "flag for interactive follow-up", not as an instruction; the sender
+  can't waive the receiving queue's guardrails.
 - **Escalation (outcome 3) is a fixer issue, never an MSGW hold** — MSGW is
   for broken jobs and blocks the queue; issues reach Doug via `/issue-review`
   (severity=info, send_notification=false — the ADR 0047 producer discipline).
