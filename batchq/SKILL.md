@@ -146,7 +146,8 @@ control surface, LAN-exposed, see engine `PARKING_LOT.md`); source
   it after — rare exception, never the norm.
 - **Write jobs: one per queue, `MAX_CONCURRENT` homecore-wide** (global slots,
   currently **6** — different queues may overlap). RO jobs ride outside the slots, `RO_MAX` per
-  queue. Lock-dir mtimes are heartbeats; stale-break only on genuinely old.
+  queue. Lock dirs record their holder's PID; stale-break on holder death
+  (mtime-age is the fallback), and every no-op lock exit is logged.
 - **A job must leave its WORKTREE clean and commit its work** — an uncommitted
   worktree or non-zero exit moves the job to `held/` + freezes the queue
   (`MSGW`), worktree kept for autopsy. Read the marker + `done/<job>.log`,
@@ -226,20 +227,17 @@ pattern: MON4, ETA-5c, VOY-START all one-shotted). `sbmjob -q <queue> "..."`
 or drop a file in `<queue>/queue/` named `YYYYmmdd-HHMMSS-<slug>.job`
 (`0N-` prefix = JOBPTY N; `.ro.job` = read-only).
 
-**Every job spec MUST carry the foreground-verification clause** (2026-08-07,
-after TWO jobs died the same way in one day): batch executors receive NO
-background-task notifications, so an executor that launches Playwright/builds
-with run_in_background and then "waits for the notification" idles until the
-worker kills it — with whatever it hadn't committed lost. Include in every
-write-job spec: "NEVER background any command (no run_in_background, no
-trailing &) — run tests/builds as plain foreground commands and wait for the
-exit code; dev servers: start, bounded port-poll (max ~60s), foreground tests,
-kill by exact PID. COMMIT FEATURE CODE FIRST, before docs/full-suite runs, so
-partial progress survives." A soft "run verification synchronously" note is
-NOT enough — the second death happened with that note present; use the hard
-phrasing. (Durable fix — a standing rule in the engine's `defaults/tail.md` —
-was requested from the engine queue the same day; keep this clause until the
-engine confirms it.)
+**Backgrounding is now engine-killed — the per-spec clause is retired**
+(2026-08-15, engine dfec97f; history: two jobs idle-waited to death 2026-08-07,
+three more auto-backgrounded to death 2026-08-14). The worker now runs every
+batch session with `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` (disables
+run_in_background AND harness auto-backgrounding) and raises
+`BASH_DEFAULT/MAX_TIMEOUT_MS` to the job's `MAX_MIN` ceiling so long suites
+finish in the foreground; a standing BACKGROUND TASKS section lives in
+`defaults/tail.md` and every registered queue's `tail.md`. Specs no longer
+need the defensive boilerplate. Still worth stating in specs: "COMMIT FEATURE
+CODE FIRST, before docs/full-suite runs, so partial progress survives" — that
+one is job-ordering advice the engine can't enforce.
 
 **Gotcha — never pass a rich job spec as an inline `sbmjob "..."` arg.** Job
 text almost always contains backticks (`` `file.js` ``) and parentheses
@@ -382,14 +380,14 @@ Thunderbolt controller (fixer #1237), batch exonerated, cap restored to 6.
   — any inactive one with a non-empty queue/ is stranded. Nudge each (inotify won't
   fire on pre-existing files).
 
-- **Stale `worker.lock` after a crash blocks the queue FOREVER, silently
-  (2026-08-14, fixer #1353):** `worker.sh:81` is `mkdir "$LOCK" || exit 0` — no
-  staleness check, no log line. After any host crash mid-job, the worker "starts"
-  and instantly no-ops. Symptom: watcher fires, `systemctl` shows the service
-  Started+Finished in the same second, worker.log gains NOTHING. Fix: verify the
-  holder PID is dead (`cat engine/global.lock.N/holder`, `ps -p <pid>`), then
-  `rmdir <q>/worker.lock` and `rm -rf engine/global.lock.N` for slots whose
-  holders are dead. (Engine fix requested via engine HANDOFF 2026-08-14.)
+- **Stale locks after a crash self-heal since 2026-08-15** (engine dfec97f;
+  was fixer #1353 — a stale `worker.lock` blocked a queue ~3h, silently): the
+  worker now breaks `worker.lock` and `global.lock.N` when the recorded holder
+  PID is dead (mtime is the fallback), logs every no-op "another worker holds
+  the lock" exit in worker.log, and a TERM trap releases locks on systemctl
+  stop/restart. If a queue still won't drain, read worker.log — the reason is
+  now always logged; manual `rmdir` is only for the rare PID-reuse case (a
+  live unrelated process wearing the dead holder's pid, and lock mtime <3h).
 
 - **A stopping worker strands its pre-claimed jobs in `running/`** (2026-08-14):
   with MAX_CONCURRENT>1 the worker can move several queue files into `running/`
