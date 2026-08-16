@@ -72,7 +72,13 @@ left is at merge time (see "Sharing the repo" below).
 
 `config` sets `REPO=` (and optionally `MAX_MIN=`, default 150-min job kill).
 `engine/config` sets `MAX_CONCURRENT` (global write slots), `RO_MAX`
-(concurrent read-only jobs per queue), `NTFY_SERVER`/`NTFY_TOPIC` (push).
+(concurrent read-only jobs per queue), `NTFY_SERVER`/`NTFY_TOPIC` (push), and
+the **host-impact budget** (`VETH_SAMPLE_MAX`/`VETH_STRIKES`): the worker kills
+any job sustaining docker-network churn ≥10 veth events/20s for 8 samples
+(~2 min) — per-test throwaway stacks wedge the host (fixer #1407 ×3, ADR 0063).
+Test harnesses must reuse ONE long-lived stack, O(1) network creations per run.
+Downstream backstops on homecore: churn circuit-breaker (~5 min, MSGWs all
+queues + TERMs batch jobs) and a beacon-fed hardware watchdog reboot (~12 min).
 `tail.md` = the welded standing orders; `next.md` = what a `NEXT` token means.
 `work/` holds the per-job worktrees (transient). `JOBLOG.md` = one entry per
 finished job: disposition + the job's own final summary. Registered queues:
@@ -263,6 +269,44 @@ between the submits so the stamps differ and FIFO holds. (Belt-and-suspenders ev
 so: write dependent jobs to be order-robust — "if the prereq isn't in your base yet,
 build it yourself" — since same-queue jobs serialize with a merge between and a
 truly independent stamp still can't guarantee which worker cycle grabs which.)
+
+## Right-sizing: decompose before you submit (2026-08-16, learned twice the hard way)
+
+A batch job is ONE fresh ~100k-token context with NO human feedback mid-run.
+Decomposition is the SUBMITTING session's work (Doug's small-jobs rule) — an
+oversized job doesn't fail fast, it burns a full attempt cycle (worktree, API
+spend, guard-kill, MSGW, Telegram) and then needs the decomposition anyway.
+Canonical failure: the #1407 harness-restructure job — "restructure ~100 test
+scripts so conformance churns zero docker networks" — failed twice IDENTICALLY
+(attempt 1: 52 veth/20s, attempt 2: 20 veth/20s, both engine-killed mid-
+validation) because restructure-everything + validate-everything doesn't fit
+one context.
+
+**Red flags that a spec is too big for one job — decompose if ANY apply:**
+- The change spans more files than the job can READ, understand, and verify
+  (rule of thumb: >~10 load-bearing files = split).
+- Validation requires a LONG-RUNNING observable (full test suite, full
+  conformance run, bulk data pass). The full proof belongs in a separate
+  final job — or the gate session — not welded onto every incremental job.
+- The verb is "restructure/migrate/convert ALL X" — that's a pipeline
+  (per-family jobs + integration job), not a job.
+- Success needs try-observe-adjust iteration against live behavior. Batch
+  can self-check but not iterate on surprises; expected-iterative work goes
+  interactive or gets a much smaller loop per job.
+- The task fights a resource budget (host-impact veth guard, IO gate,
+  MAX_MIN). Each sub-job must be able to validate WITHOUT approaching the
+  budget; if it can't, the shape is wrong.
+
+**The decomposed shape:** N small jobs, each with (a) an ENUMERATED read-set,
+(b) a narrow write scope, (c) minutes-scale self-contained validation that
+stays far inside host budgets, then (d) ONE integration/verification job (or
+the gate session) that runs the expensive full proof. Sequence with pty
+prefixes / 1s-spaced stamps; pairs (BUILD→REVIEW) per the `build-loop` skill
+when review rigor is needed.
+
+**Two-strikes rule:** a job that fails TWICE on the same acceptance criterion
+does not get a third identical submit. Stop, re-decompose (or take it
+interactive) — the failure is the spec's shape, not the executor's diligence.
 
 ## Cross-domain requests (verify-first — ADR 0048 in fixer)
 
