@@ -82,7 +82,8 @@ queues + TERMs batch jobs) and a beacon-fed hardware watchdog reboot (~12 min).
 `tail.md` = the welded standing orders; `next.md` = what a `NEXT` token means.
 `work/` holds the per-job worktrees (transient). `JOBLOG.md` = one entry per
 finished job: disposition + the job's own final summary. Registered queues:
-`shipslog`, `shard` (physically `~/.shard-batch`, symlinked — legacy).
+query live with `ssh 192.168.20.19 "ls ~/.batchq/"` — ~30 exist (state, don't
+enumerate here; earlier stale list caught 2026-08-16).
 
 **Per-queue worktree provisioning (opt-in, fixer #1344).** A fresh worktree is a
 bare `git worktree add` — no `node_modules`, no `.env`, deps gitignored — so
@@ -122,7 +123,9 @@ sbmjob -pty 1 "..."              # JOBPTY: expedite — runs BEFORE every normal
 sbmjob -q <name> ...             # target a queue from anywhere
 sbmjob -wrk                      # WRKJOBQ text view, all queues
 sbmjob -whichq                   # which queue does cwd resolve to?
-sbmjob -watch [hb_s]             # wake-on-event (run with run_in_background)
+sbmjob -q <name> -watch [hb_s]   # wake-on-event (run with run_in_background)
+                                 # -q is REQUIRED from the Mac: the forwarder can't
+                                 # resolve cwd->queue (fails "which queue?", 2026-08-16)
 sbmjob -release                  # clear MSGW hold + restart that queue's worker
 wrkjobq                          # curses 5250 in the terminal (ssh fallback)
 wrkjobq --once                   # one text snapshot to stdout
