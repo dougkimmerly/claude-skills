@@ -220,6 +220,14 @@ worker's pick).
 
 ## Submitting from a session
 
+**Start every job spec with an `INTENT:` line** — one, at most two sentences:
+what this job is about to do and why. The WRKJOBQ screens surface it (the
+per-queue screen shows the focused job's Intent; the main screen shows a
+descriptive active-job label instead of the repo path), so a glance at the
+queue answers "what is this job and what is it trying to do". It doubles as
+the executor's mission statement. For cross-domain jobs the INTENT line goes
+first, the verify-first preamble immediately after.
+
 When Doug decides something and says "queue it": write the decision INTO the
 job text — context, the chosen option, acceptance criteria, "update the
 ROADMAP/ADR yourself" — so the fresh session needs nothing else. **Acceptance
@@ -315,7 +323,7 @@ domain**, the delivery is a job on the OWNING repo's queue, not a HANDOFF.md
 entry (HANDOFF.md survives only for repos with no registered queue — `ls
 ~/.batchq/` to check). The job runs inside the owning repo, so its own
 CLAUDE.md/skills/memory make the judgment call the sender can't. Every such
-spec begins with this preamble, verbatim:
+spec begins with this preamble, verbatim (after the `INTENT:` line):
 
 ```
 CROSS-DOMAIN REQUEST from <sender CC> — VERIFY FIRST.
