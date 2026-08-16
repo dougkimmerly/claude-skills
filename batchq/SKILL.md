@@ -502,6 +502,18 @@ Also: after a memory-pressure or PCIe-storm wedge, verify it was actually the
 batch system before blaming `MAX_CONCURRENT` — the 2026-08-10 wedge was a faulty
 Thunderbolt controller (fixer #1237), batch exonerated, cap restored to 6.
 
+- **To HOLD a queue durably, `disable --now` (or drop an MSGW marker) — NEVER a
+  bare `stop`** (fixer #1498, 2026-08-16, cost an unattended conformance drain):
+  `systemctl --user stop batchq@<q>.path` leaves the unit ENABLED, so a
+  `daemon-reload`, a login/session event, or any `systemctl --user start`
+  silently restarts it and the queue auto-drains. The durable levers are
+  `systemctl --user disable --now batchq@<q>.path` (survives daemon-reload AND
+  boot) and/or a `~/.batchq/<q>/MSGW` marker (the WORKER refuses to drain while it
+  exists, independent of the watcher). Belt-and-suspenders for a critical hold:
+  do both. To later un-hold intentionally, `enable --now` the path (and clear
+  MSGW). Note the coupling: the churn-breaker only **re-arms when ALL MSGW clear**
+  — so if you hold via MSGW, layer 2 stays down estate-wide; prefer `disable` for
+  a long hold and keep MSGW for short ones, or clear MSGW + rely on `disable`.
 - **After a host-wide shed, re-enable EVERY watcher, not just the ones you're
   working on** (2026-08-11): a crash-recovery that does `systemctl --user stop
   batchq@*.path` must pair with re-enabling ALL of them on return — otherwise the
