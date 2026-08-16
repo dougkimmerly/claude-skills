@@ -316,6 +316,76 @@ when review rigor is needed.
 does not get a third identical submit. Stop, re-decompose (or take it
 interactive) — the failure is the spec's shape, not the executor's diligence.
 
+## Docker-heavy jobs: the host-impact churn budget (fixer ADR 0063, 2026-08-16)
+
+The engine KILLS any job whose run coincides with ≥10 kernel veth events per
+20s for 8 CONSECUTIVE 15s samples (~2 min) — exit 143 + MSGW, message names
+the churn. Two more layers behind it: a homecore circuit-breaker (MSGWs ALL
+queues at ≥30 veth/min ×5 min) and a hardware watchdog reboot. Background:
+container create/destroy churn cumulatively degrades kernel netlink/bridge
+state and has wedged homecore three times; pacing alone is DISPROVEN (wedge
+#3 hit with a 3s-spacing governor active).
+
+**⚠ UPDATE — the killer is the INTEGRAL, not the rate (wedge #4, #1498 / ADR
+0064).** Everything below (and all three ADR 0063 layers) bounds veth events
+*per window*. Wedge #4 blew past all three with every individual run rate-clean:
+~5,000 cumulative veth events since one boot (E1's killed run + 7 attended verify
+runs @~450 each + a forcing run + E1's rerun) degraded the kernel until it
+wedged — the SUM, not any single burst. So "one long-lived stack, O(1) network
+per run" (below) is necessary but NOT sufficient across MANY runs. Two hard
+rules on top: (1) **heavy docker-churning suites run ISOLATED** — a throwaway
+netns / rootless-nested-docker / short-lived VM whose teardown never touches the
+host bridge, so the host sees O(1) network objects regardless of test count
+(dk-w5 harness is the first instance; ADR 0064). (2) **Until that isolation
+exists, a heavy suite runs at most ONCE PER BOOT unattended, and nothing
+churn-heavy runs unattended on homecore at all.** The per-window verifier below
+tells you a single run is safe; it says NOTHING about the third run of the day.
+
+**The count is HOST-WIDE (`journalctl -k | grep veth`), not per-job.** Your
+churny interactive run can get an innocent batch job on another queue
+killed, and vice versa — check what else is running before blaming the job.
+
+Design rules for any job (or test harness) that touches docker — learned
+fixing dk-w5's conformance suite, 9 commits and 7 attended runs:
+
+- **One long-lived stack per run; per-iteration isolation = data reset**
+  (DROP SCHEMA / wipe fixture dir contents), never stack down/up.
+- **Never `docker compose run --rm` in a loop** — each call creates+destroys
+  a container AND its veth pair even against a running stack. `exec -T` into
+  a long-lived idle service instead (entrypoint `sleep infinity`, profile-
+  gated). Forward per-call env with `exec -e` — a long-lived container's
+  env and MOUNTS froze at create, so fixtures must be rewritten in place
+  under the pre-mounted path (and never delete a bind-mounted dir itself:
+  the recreated inode is invisible to the running container).
+- **Build images ONCE per run** — every buildx build mints a fresh image ID
+  even on full cache hits (provenance-attestation timestamps), and a new
+  image ID makes the next `up -d` silently RECREATE the container.
+  `BUILDX_NO_DEFAULT_ATTESTATIONS=1` helps; build-once is the real fix.
+- **A stopped-then-restarted DB strands sibling services' connection
+  pools** — restart dependents in place too, or the next caller dies on a
+  dead pool (and `curl -sf` under `set -e` dies SILENTLY — always
+  `--max-time` such curls).
+- **Unavoidable bursts are fine if they never CHAIN**: the guard kills on
+  consecutive hot windows, not totals. Space genuinely stack-churning steps
+  ≥30s apart (sleep) so each burst is an isolated blip.
+
+**Verify against the guard's own metric before submitting** (attended, from
+a session — never by letting a batch job run the un-fixed workload):
+
+```
+S=$(date +%s); <run the workload>; \
+journalctl -k --since "@$S" -o short-unix | grep veth | \
+  python3 -c 'import sys; from collections import Counter; \
+ws=Counter(int(float(l.split()[0])//20) for l in sys.stdin); \
+best=cur=0
+for w in range(min(ws),max(ws)+1):
+  cur=cur+1 if ws.get(w,0)>=10 else 0; best=max(best,cur)
+print(f"max consecutive hot windows: {best} (kill at 8)")'
+```
+
+Ship at ≤6 with a plan; a workload that measures 7–8 WILL die as a job the
+first time ambient churn stacks on top.
+
 ## Cross-domain requests (verify-first — ADR 0048 in fixer)
 
 When any session touches, fixes, or discovers something in **another repo's
@@ -455,6 +525,22 @@ Thunderbolt controller (fixer #1237), batch exonerated, cap restored to 6.
   (they never executed — no worktree/log means never started), leave real crashed
   jobs (those WITH a worktree/log) for proper disposition.
 
+- **Operator-finish a killed job whose worktree holds GOOD committed work**
+  (2026-08-16, the guard-killed harness job — don't burn a third attempt,
+  per the two-strikes rule): the worktree shares the clone's object DB, so
+  publish its branch from the clone —
+  `cd ~/batchq-repos/<repo> && git push origin job/<name>:refs/heads/<tmp>` —
+  fetch/merge/finish it interactively on the Mac, push main. Then clean up:
+  **move the held `.job` file OUT of `held/` BEFORE `-release`** (release
+  auto-resubmits held jobs — the finished work would re-run), then
+  `git worktree remove --force ~/.batchq/<q>/work/<name>`, delete the
+  `job/<name>` branch and the temp origin branch, and `-release` to clear
+  the MSGW with nothing left to resubmit.
+- **`pkill -f <pattern>` over ssh kills your own ssh** when the pattern
+  appears in the remote `bash -c` command line (exit 255 mid-script, twice
+  in one session). Use a pattern the wrapper doesn't contain, or
+  `pgrep`-then-`kill` by PID.
+
 ## Traps for job authors (what kills a headless job)
 
 - **NEVER background a long command and end the turn to "wait for the
@@ -474,3 +560,9 @@ Thunderbolt controller (fixer #1237), batch exonerated, cap restored to 6.
   into the FUTURE and streams instead of exiting. Use epoch seconds
   (`--since $(($(date +%s)-300)) --until $(date +%s)`) or relative durations,
   and wrap every exploratory `docker events` in `timeout 10` regardless.
+  Two more edges (2026-08-16): plain epochs only — an `@`-prefixed epoch
+  silently returns NOTHING; and the daemon's replay buffer is small, so on
+  an exec-heavy host a historical window comes back empty — for real
+  diagnosis tap live (`docker events ... > file &`) while the workload runs.
+  Multiline exec commands also embed newlines in `{{.Action}}` output —
+  filter with `--filter event=<one>` per call, not by grepping mixed lines.
