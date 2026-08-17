@@ -109,7 +109,10 @@ running), and (c) a global concurrency ceiling on remediation+build docker stack
 Until hardened, finish heavy milestones SEMI-ATTENDED: error-handler OFF, low
 MAX_CONCURRENT (2), nudge-loop ON (safe — it only re-triggers the queue), operator
 watching for holds. The nudge-loop and the estate build/review jobs were never the
-problem; the error-handler's re-fire-under-persistent-hold was.
+problem; the error-handler's re-fire-under-persistent-hold was. **→ UPDATE (M5,
+2026-08-17): unattended heavy drains became safe via an EXTERNAL host watchdog (the
+in-box iTCO was proven dead) + the shared-stack churn fix — see "The two-operator
+unattended run" below, which supersedes the "finish SEMI-ATTENDED" conclusion here.**
 
 **The error-handler needs its own error handling.** It died mid-K8 on systemd
 `start-limit-hit` — a persistent hold kept the `held/` dir non-empty, re-firing the
@@ -139,6 +142,82 @@ pre-existing files after a restart, which silently stalls a resumed drain.
   append <=3 terse trap/tip lines for successors; CLOSE prunes it at the gate.
   (Pilot lesson: a builder logged a trap "for the next job" that the next job,
   correctly minding its read-set, never saw.)
+
+## The two-operator unattended run — what wedged M5 five times and the rules that fix it (2026-08-17)
+
+M5 ran the loop unattended with a second operator (a "driver" CC owning the JOBS +
+a structure-owner CC — fixer — owning host safety). It wedged the host FIVE times
+and stalled repeatedly. Every stall was one of a handful of classes; these are the
+rules, most-corrective first.
+
+**Churn is the #1 killer, and the fix is the SHARED STACK — NOT an isolation
+boundary.** `scripts/conformance.sh` brings up ONE shared compose stack
+(`W5_CONFORMANCE_SHARED_PROJECT`) and runs every test against it: measured
+**0 network / 0 container / 0 veth over a full 994s run**. The wedge comes from
+running individual `test_*.sh` **standalone** — with no shared-project env each
+brings up its OWN throwaway stack; ~20 in a row tripped the estate veth
+circuit-breaker (all queues MSGW'd). **A nested-docker / netns "disposable
+boundary" does NOT fix this** (M5 built one — ADR 0064 — and it failed the review):
+the breaker meters the **netns-blind kernel veth log** (`journalctl -k | grep veth`),
+so churn inside a nested daemon STILL counts (195 kernel lines during a 37s
+in-boundary run while host `ip link` showed 0); and a nested boundary can't run the
+suite green from a worktree (unmounted gitdir) or reach the host appliance. **Rule:
+every test-running spec MANDATES `conformance.sh` and FORBIDS standalone `test_*.sh`;
+a structural pre-flight that refuses a host compose-up unless the shared-project env
+is set is the belt.** Don't reach for a fancy isolation boundary when the shared
+stack already measures ~zero.
+
+**Never fire host-wedging work unattended without a PROVEN external recovery
+backstop.** The in-box hardware watchdog (iTCO) was assumed working and was NOT
+(proven dead under test) — firing unattended caused wedge #5, hours dark. Only an
+**external** watchdog on a *different* host (M5: an AMT master-bus-reset from the
+pihole, capped at 2 fires then escalate) makes overnight safe. Verify the backstop
+actually fires before trusting it; the plan's "attended G-track" constraint was
+load-bearing, not a formality.
+
+**Monitor LAN-DIRECT; never over a mesh/relay.** `ssh <host>` resolving to a
+Tailscale name relayed through a DERP node showed `rx 0 / idle` — which IS the wedge
+symptom, not a path blip. An hour was lost thrashing the relay while the box sat on
+the same LAN. Pin `Host <host> → <LAN-IP>` in `~/.ssh/config`. "rx 0 / idle on the
+mesh" = treat as a wedge, check LAN first, don't thrash.
+
+**GO/HELD state is machine-readable, NOT prose.** A review job read a stale
+"STAND-DOWN" HANDOFF entry (superseded 20 min earlier but not deleted) and ESCALATED
+— dead-stopping the chain. Coordinate hold/release through a single-line flag file
+(`STATUS`: `GO` / `HELD:reason:who:ts` / `READY:commit`) that JOBS and monitors read
+FIRST; HANDOFF prose only narrates history. This is "never write prose that describes
+state" applied to the operator seam. The structure-owner's holds are already
+machine-readable (unit enabled/active, MSGW files) — give the driver's readiness the
+same, and add a timer that auto-acts on `READY` so flow doesn't wait on a human relay.
+
+**Silent stalls page no one — close them.** A review ESCALATE does NOT fire the tail
+duty → the queue empties with no held job and no page. So do a tail-duty/marker miss
+and a governance doc going stale. Make ESCALATE **ntfy a human**; make the monitor
+treat "queue+running empty but milestone incomplete" as a resume trigger; keep a
+hold-age escalator (MSGW older than ~2h → re-page).
+
+**Recovery can be silently dead when you need it.** The recovery watchdog's caps are
+correct (bounded per-job + nightly), but: (a) its **reset was coupled to `fire.sh`**,
+which the resume path never runs → recovery stayed capped-dead after a re-enable —
+decouple the reset, reset counts explicitly at resume; (b) the host **circuit-breaker
+killed the recovery `.path` unit as a side effect** (an MSGW flood trigger-limit-hit
+it) — the breaker should `reset-failed` what it trips.
+
+**Operator roles: driver owns the JOBS, structure-owner owns the HOST.** The driver
+runs/root-cause-fixes/finishes jobs to CLOSE; the structure-owner owns the watchdog,
+breaker, and estate-wide holds. Both failure directions happened in one night:
+over-reach (firing unattended → wedge) and over-defer (calling a job-fix "structure's
+call"). A crash whose cause is in the job's design is ALWAYS the driver's to fix —
+change the spec so it can't recur (a `find /` that hung → template guard; churn →
+shared-stack clause; a 7× regen loop → bound it), never blind-retry. "Can't validate
+while held ≠ can't fix while held" — prep the fix while the queue is frozen so the
+slice is ready the instant it clears; but recommend, don't apply-blind, test-infra
+changes you can't run.
+
+**Run an adversarial review of the OPERATIONAL SETUP before resuming a stalled
+unattended drain.** M5's did exactly this and caught a broken fix (the boundary)
+before the next slice face-planted, plus dead recovery and stale-governance landmines.
+The setup, not the jobs, is the schedule risk in a two-operator unattended run.
 
 ## Morning protocol
 
