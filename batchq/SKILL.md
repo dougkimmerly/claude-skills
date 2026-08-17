@@ -357,6 +357,25 @@ and peaked 4 of 5 minutes twice more. When watching an attended suite pass,
 monitor consecutive minutes ≥30, and never let two docker-touching jobs
 overlap — the breaker MSGWs every queue on the host when it fires.
 
+**A shared-stack suite still has a churn TAIL — gate it, and run it once.**
+(dk-w5, 2026-08-17, all-38-queues MSGW.) Even after you move a suite to one
+long-lived stack (rules below), a handful of tests GENUINELY can't share it:
+the ones whose subject IS the stack lifecycle — restart persistence, dual-
+volume identity divergence, two-instances-in-parallel comparison. Each spins
+its own throwaway stack, so *all* your residual host churn concentrates in
+that small tail. Two rules make it safe:
+- **Gate the tail behind an env flag, default OFF.** Per-slice build/review
+  jobs run the cheap shared-stack body only (near-zero churn); the milestone
+  CLOSE/regression job — which runs ALONE at drain-end, nothing overlapping —
+  sets the flag to run the tail ONCE. Don't smear the churny tail across every
+  per-slice review; no single slice usually even owns a tail test.
+- **Run a churn-heavy suite EXACTLY ONCE per job.** The actual trigger here
+  was a review that ran the whole suite TWICE in one job — once inline, once
+  re-invoked to capture output to a temp file — doubling the tail's churn past
+  the breaker. If you need the log, `tee` the single run; never re-invoke.
+- Corollary: "the suite measures 0/0/0 veth" is a claim about the shared-stack
+  BODY. Always state which part you measured — the tail is not zero.
+
 Design rules for any job (or test harness) that touches docker — learned
 fixing dk-w5's conformance suite, 9 commits and 7 attended runs:
 
