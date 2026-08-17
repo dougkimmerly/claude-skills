@@ -348,6 +348,15 @@ tells you a single run is safe; it says NOTHING about the third run of the day.
 churny interactive run can get an innocent batch job on another queue
 killed, and vice versa — check what else is running before blaming the job.
 
+**The layer-2 breaker (30/min × 5 consecutive min) is the tight constraint
+for a WELL-BEHAVED suite, not the engine guard** (M4 gate sitting data,
+2026-08-16): dk-w5's fully-fixed conformance suite passes the engine guard
+at 4–6 of 8 windows but runs 30–65 veth/min through its hot stretch — it
+TRIPPED the breaker once (review-worktree builds + ambient stacked on top)
+and peaked 4 of 5 minutes twice more. When watching an attended suite pass,
+monitor consecutive minutes ≥30, and never let two docker-touching jobs
+overlap — the breaker MSGWs every queue on the host when it fires.
+
 Design rules for any job (or test harness) that touches docker — learned
 fixing dk-w5's conformance suite, 9 commits and 7 attended runs:
 
