@@ -346,6 +346,30 @@ read-only). Fire the heaviest as a CANARY first, watch host PSI
 (`/proc/pressure`) to completion, then release the rest. E1a (heaviest) ran
 dead-flat (io-psi peak 1%); the box never noticed.
 
+**Two orthogonal wedge axes → two different fixes; a job can need BOTH.**
+Decomposition fixed the E1 monolith's RESOURCE axis — but the very first
+decomposed leg (E1b, M2 regression) was then killed by the CHURN axis: it ran 12
+destructive-drill sub-scripts, each spinning its OWN throwaway compose stack,
+back-to-back → 104 veth/20s → the L1 host-impact guard (#1407) TERM'd it. Same
+job, a completely different kill. The distinction to hold:
+- **Resource stacking** (memory/IO integral of many heavy legs in one job) → fix
+  = DECOMPOSE (one heavy op per job, single-lane sequential).
+- **Churn rate** (docker network create/destroy per unit time) → fix = PACE.
+  Decomposition does NOT touch this: a single leg that spins N throwaway stacks
+  still churns. Tests that genuinely need throwaway stacks (compose down/up
+  survival, dual-volume epoch divergence — lifecycle is the thing under test, so
+  they CAN'T share the long-lived stack) must **space their stack bring-ups** so
+  no 8 consecutive hot 20s windows accrue: `sleep 30` between drills (the same
+  fix conformance.sh's multistack tail already uses), tunable via an env knob.
+  That also keeps the rate under the L2 breaker's 30/min.
+- **The cumulative integral** (fixer ADR 0064): even correctly PACED, don't batch
+  churny legs back-to-back — the netlink/bridge state degrades over total
+  create/destroy cycles, not just rate. Run each churny leg as its own job and
+  let the host recover between them (fire one, verify, then the next).
+- **Never weaken the guard to pass the job** (fixer ADR 0041): 104 veth/20s
+  sustained 2 min IS the wedge signature (took homecore down 5×) — the guard
+  firing is correct. Make the job churn-safe, not the monitor blind.
+
 **Two corollaries for heavy-suite jobs:**
 - **Cap re-runs of a heavy suite PER JOB.** A job that re-runs the full suite
   to "confirm green" over and over is the same exhaustion by looping (E1's
