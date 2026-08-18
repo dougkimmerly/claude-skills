@@ -15,12 +15,15 @@ these jobs (2026-07-20). Engine history + design rationale: `~/.batchq/engine/`
 is a git repo (`github.com/dougkimmerly/batchq`) — see its `DECISIONS.md` (v2
 worktree rework, 2026-07-24) and `PARKING_LOT.md`.
 
-## ⚠️ homecore is now a SYSTEM-managed subsystem (2026-08-18 — fixer ADR 0068, mid-build)
+## ⚠️ homecore is a SYSTEM-managed subsystem (2026-08-18 — fixer ADR 0068, PHASE 1 COMPLETE)
 
-**Homecore batchq is being rebuilt into an AS/400-style subsystem (ADR 0068). Phase 0+1
-are DONE & LIVE; the broker + rest are pending.** What changed on **homecore only** (the
-**boat centralsk is STILL `--user` manager** — do NOT apply these there until the engine
-code is multi-site-updated):
+**Homecore batchq is now an AS/400-style subsystem (ADR 0068). PHASE 1 is COMPLETE &
+LOAD-PROVEN** (partition + admission broker + victim-scoped breaker + subsystem controller,
+verified under a real 16-cpu/12G/IO-flood: console+Postgres+Frigate untouched). **Phase 2
+(per-job scopes, CLASS tiers, docker containment) is next** — see the runbook's "▶ PHASE 2
+— START HERE". What is LIVE on **homecore only** (the **boat centralsk is STILL `--user`
+manager** — the engine now branches on `/etc/systemd/system/batchq@.service`, so the boat
+path is unchanged; do NOT hand-apply homecore steps there):
 - Workers now run under the **SYSTEM manager**: `batchq@<q>.service`/`.path` in
   `/etc/systemd/system`, `User=doug`, `Slice=batchq.slice`. (Not `--user` anymore.)
 - **Subsystem controller = `batchq.target` (STRSBS/ENDSBS).** Take the WHOLE subsystem
@@ -31,11 +34,20 @@ code is multi-site-updated):
   **cores 0-3** (`host.slice/host-reserved.slice` — the dash nests it under `host.slice`)
   with a 1G floor; **jobs confined to cores 4-23**, `batchq.slice` capped **28G mem /
   16-core CPU**, nvme on **bfq**, oomd@50%. The box is un-wedgeable by construction now.
-- **⚠️ `sbmjob -release` kick is DEGRADED on homecore** (still calls `systemctl --user
-  start` → errors; its resubmit still fires the system `.path` so release *mostly* works,
-  but the fallback could spawn a worker in the ssh-session cgroup). **If a queue needs a
-  worker kicked, use `sudo systemctl start batchq@<q>.service`** (lands in `batchq.slice`),
-  not bare `sbmjob -release`. Proper fix pending (multi-site engine work + the broker).
+- **Admission broker LIVE (`batchq-admit`).** A daemon in `host-reserved.slice` gates how
+  many jobs run at once (activity-level): class-weighted budget + churn mutex + `batchq.slice`
+  PSI governor; parks excess inert (0 footprint). Workers `REQUEST` admission before
+  `worktree add`; if the socket is down they fall back to the retained `global.lock.*`
+  (boat has no daemon → always falls back). **Inspect it:** `python3 ~/.batchq/engine/admit-client.py
+  STATUS --sock ~/.batchq/admit.sock` (shows budget/used/admitted). A queue stuck with nothing
+  admitted while the box is idle → check the daemon (`systemctl status batchq-admit`) + its
+  starvation alarm (`~/.batchq/engine/admit.starved`).
+- **Per-queue tier/churn profile** — a queue's `$Q/config` may set **`TIER=bulk|normal|priority`**
+  (budget cost) and **`CHURN_HEAVY=1`** (serialize via the churn mutex — e.g. dk-w5). Unset =
+  `normal`, no churn.
+- **`sbmjob -release` FIXED (system-manager-aware).** Works on homecore now (kicks the system
+  unit via `sudo -n systemctl start`). **Arg order matters: `sbmjob -q <name> -release`** (`-q`
+  is a leading flag; `-release -q <name>` fails to resolve the queue).
 - `batchq.slice` **materializes only while a job runs** (empty otherwise — don't panic if
   `/sys/fs/cgroup/batchq.slice` is absent when idle).
 - Full state + next steps: `fixer/docs/runbooks/batchq-subsystem-build.md` (▶ EXECUTION
