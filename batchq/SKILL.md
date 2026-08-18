@@ -15,11 +15,38 @@ these jobs (2026-07-20). Engine history + design rationale: `~/.batchq/engine/`
 is a git repo (`github.com/dougkimmerly/batchq`) — see its `DECISIONS.md` (v2
 worktree rework, 2026-07-24) and `PARKING_LOT.md`.
 
+## ⚠️ homecore is now a SYSTEM-managed subsystem (2026-08-18 — fixer ADR 0068, mid-build)
+
+**Homecore batchq is being rebuilt into an AS/400-style subsystem (ADR 0068). Phase 0+1
+are DONE & LIVE; the broker + rest are pending.** What changed on **homecore only** (the
+**boat centralsk is STILL `--user` manager** — do NOT apply these there until the engine
+code is multi-site-updated):
+- Workers now run under the **SYSTEM manager**: `batchq@<q>.service`/`.path` in
+  `/etc/systemd/system`, `User=doug`, `Slice=batchq.slice`. (Not `--user` anymore.)
+- **Subsystem controller = `batchq.target` (STRSBS/ENDSBS).** Take the WHOLE subsystem
+  down/up as a unit: `sudo systemctl stop batchq.target` (ENDSBS — watchers stop
+  admitting) / `sudo systemctl start batchq.target` (STRSBS). Use this before any estate
+  rebuild so nothing fires mid-change.
+- **Host protection LIVE:** console (ssh/dbus/logind/journald + your sessions) pinned to
+  **cores 0-3** (`host.slice/host-reserved.slice` — the dash nests it under `host.slice`)
+  with a 1G floor; **jobs confined to cores 4-23**, `batchq.slice` capped **28G mem /
+  16-core CPU**, nvme on **bfq**, oomd@50%. The box is un-wedgeable by construction now.
+- **⚠️ `sbmjob -release` kick is DEGRADED on homecore** (still calls `systemctl --user
+  start` → errors; its resubmit still fires the system `.path` so release *mostly* works,
+  but the fallback could spawn a worker in the ssh-session cgroup). **If a queue needs a
+  worker kicked, use `sudo systemctl start batchq@<q>.service`** (lands in `batchq.slice`),
+  not bare `sbmjob -release`. Proper fix pending (multi-site engine work + the broker).
+- `batchq.slice` **materializes only while a job runs** (empty otherwise — don't panic if
+  `/sys/fs/cgroup/batchq.slice` is absent when idle).
+- Full state + next steps: `fixer/docs/runbooks/batchq-subsystem-build.md` (▶ EXECUTION
+  LOG), ADR 0068, memory `batchq-subsystem-project`.
+
 ## Where it runs (homecore, since 2026-08-05 — fixer ADR 0049)
 
 The worker, all queue state (`~/.batchq/<queue>/`), the engine, and the dashboard
-run on **homecore** (192.168.20.19), fired by **systemd `--user`** units
-(`batchq@<queue>.path` → `batchq@<queue>.service`) — not launchd. Repos are
+run on **homecore** (192.168.20.19), fired by **systemd** units
+(`batchq@<queue>.path` → `batchq@<queue>.service`; **system manager on homecore since
+2026-08-18, `--user` on the boat** — see the subsystem note above) — not launchd. Repos are
 dedicated clones under `~/batchq-repos/` on homecore (NOT `/var/syncthing`; git
 remotes are the only sync bus). Staying current is **event-driven, not a poll**:
 the worker `fetch`+`ff-only`s each clone to origin **before every job** (jobs run
