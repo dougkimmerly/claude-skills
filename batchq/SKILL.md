@@ -307,6 +307,11 @@ one context.
 - The task fights a resource budget (host-impact veth guard, IO gate,
   MAX_MIN). Each sub-job must be able to validate WITHOUT approaching the
   budget; if it can't, the shape is wrong.
+- **The job runs MULTIPLE heavy operations in one pass** (e.g. a full
+  conformance suite THEN a regression cascade THEN a bulk reconcile), even
+  sequentially. This is the one red flag that has NOTHING to do with context
+  size — a job whose context fits fine still WEDGES the host by stacking
+  cumulative memory/IO across legs. Rule: **one heavy operation per job.**
 
 **The decomposed shape:** N small jobs, each with (a) an ENUMERATED read-set,
 (b) a narrow write scope, (c) minutes-scale self-contained validation that
@@ -318,6 +323,40 @@ when review rigor is needed.
 **Two-strikes rule:** a job that fails TWICE on the same acceptance criterion
 does not get a third identical submit. Stop, re-decompose (or take it
 interactive) — the failure is the spec's shape, not the executor's diligence.
+
+**The resource-exhaustion wedge — why "one heavy op per job" is load-bearing**
+(dk-w5 M5-E1, 2026-08-17, fixer #1500 — wedged homecore TWICE, physical
+power-cycle each). A monolith forcing job ran `conformance.sh`(+multistack) THEN
+`m4_forcing_run.sh`→(nested)`m3`→`m2` THEN a ledger reconcile — all in one job.
+Cumulative memory/IO across the stacked legs exhausted the host into a SOFT
+WEDGE: it still answered ping (layer-3 up) but sshd was too starved to complete
+a handshake, and the AMT/ME management engine starved WITH the host so its own
+watchdog reset got no response — only a physical power-cycle recovered it. Two
+distinct properties to internalize:
+- This is a DIFFERENT class from veth churn (the ADR 0063/0064 gate). veth
+  stayed low the whole time; the churn-breaker never applied. Decomposition is
+  the fix churn-gating cannot provide.
+- The queue is single-lane (one write job at a time), so N small jobs run
+  SEQUENTIALLY with teardown between — the host absorbs one bounded leg, frees
+  it, then the next. That is the entire mechanism. The monolith defeated it by
+  putting all the legs inside ONE job.
+The decomposition that worked: 5 jobs — `E1a` conformance+multistack, `E1b` m2,
+`E1c` m3 (skip nested m2), `E1d` m4 (skip nested m3+m2), `E1e` ledger (light,
+read-only). Fire the heaviest as a CANARY first, watch host PSI
+(`/proc/pressure`) to completion, then release the rest. E1a (heaviest) ran
+dead-flat (io-psi peak 1%); the box never noticed.
+
+**Two corollaries for heavy-suite jobs:**
+- **Cap re-runs of a heavy suite PER JOB.** A job that re-runs the full suite
+  to "confirm green" over and over is the same exhaustion by looping (E1's
+  sibling B3 looped conformance 5× and wedged the box before the cap existed).
+  A per-job counter that exits 75 on run #4 stops it. Re-running a heavy suite
+  >2–3× in one job is a design smell, not diligence.
+- **Verification/test-RUN legs should be UNPAIRED — don't adversarially
+  re-run them.** The build-loop's BUILD→REVIEW pairing is for CODE; a review
+  that "runs the tests itself" to audit a test-run DOUBLES the heavy load. Have
+  each run-leg record its verdict to a committed doc, and let the GATE/CLOSE
+  job AUDIT the recorded docs instead of re-running any suite.
 
 ## Docker-heavy jobs: the host-impact churn budget (fixer ADR 0063, 2026-08-16)
 
@@ -525,6 +564,25 @@ watcher won't self-heal:
    start are invisible. Re-trigger by touching the top job:
    `cd queue; F=$(ls|sort|head -1); mv "$F" "../$F.t" && mv "../$F.t" "$F"`.
    New jobs (fix pairs, next batch) trigger normally once the watcher is live.
+3. **Killing a RUNNING job by hand HOLDS THE WHOLE QUEUE** (dk-w5, 2026-08-17).
+   `pkill` a running job → it exits 137 → the worker treats that as a failure and
+   drops a `~/.batchq/<q>/MSGW`, which then stops the worker on EVERY later job
+   ("queue is HELD — worker stopping" in `worker.log`) — nothing runs and it looks
+   like a silent stall. If you deliberately kill a job, expect the queue-hold and
+   clear it with `~/.batchq/engine/sbmjob -q <q> -release` (clears MSGW + restarts
+   the worker; the release does NOT auto-resubmit the killed job — that's a
+   separate resubmit). Also SCOPE the kill: `pkill -9 -f claude` is estate-wide and
+   can take out OTHER queues' jobs — target the worktree path or the exact pid.
+4. **Dropping a job by hand: use a CREATE (`cp`/`sed > file`), not a bare `mv`
+   in from elsewhere** — the path-unit fires on the create/MOVED_TO event; a job
+   that lands without the right event just sits unprocessed. And NEVER
+   `touch ~/.batchq/<q>/queue/*glob*.job` unless you KNOW the glob matches — if the
+   real job already moved to `running/`, the glob stays literal and `touch` creates
+   a garbage file literally named `*glob*.job` that the worker later chokes on.
+5. **`systemctl --user start batchq@<q>.service` BLOCKS** — it's a `Type=oneshot`
+   that runs the worker synchronously, so `start` does not return until the job it
+   picks up finishes (can be many minutes). Don't `sleep`-poll behind it in the
+   same shell; fire-and-check in a separate connection.
 
 Also: after a memory-pressure or PCIe-storm wedge, verify it was actually the
 batch system before blaming `MAX_CONCURRENT` — the 2026-08-10 wedge was a faulty
