@@ -17,11 +17,16 @@ worktree rework, 2026-07-24) and `PARKING_LOT.md`.
 
 ## ⚠️ homecore is a SYSTEM-managed subsystem (2026-08-18 — fixer ADR 0068, PHASE 1 COMPLETE)
 
-**Homecore batchq is now an AS/400-style subsystem (ADR 0068). PHASE 1 is COMPLETE &
-LOAD-PROVEN** (partition + admission broker + victim-scoped breaker + subsystem controller,
-verified under a real 16-cpu/12G/IO-flood: console+Postgres+Frigate untouched). **Phase 2
-(per-job scopes, CLASS tiers, docker containment) is next** — see the runbook's "▶ PHASE 2
-— START HERE". What is LIVE on **homecore only** (the **boat centralsk is STILL `--user`
+**Homecore batchq is now an AS/400-style subsystem (ADR 0068). PHASE 1 + PHASE 2 substantively
+COMPLETE & LIVE (2026-08-18).** Phase 2 added: per-job **systemd scopes** (each job in
+`batchq-job-<q>-<base>.scope`, killed as a cgroup — reaches setsid'd children), **CLASS tier
+slices** `batchq-{bulk,normal,priority}.slice` (CPU/IO 25:100:400 + per-job Memory/Tasks/OOM/
+RuntimeMax/RLIMIT_CPU caps, routed by `TIER=`), **per-worktree disk quota** (worktrees on the
+prjquota fs at `~/.batchq/work-quota`, tier caps 30/20/10G), breaker→scope-kill + per-job
+STOPPED feedback, broker scope-exact recovery. Docker containment delegated to dk-w5 (done:
+`cgroup_parent` + capped buildx builder). Remaining = only dependent tails (W5 VM builder) +
+Phase 3 (freeze/thaw + live THROTTLED/ADMISSION_HELD). Detail: runbook "▶ PHASE 2".
+What is LIVE on **homecore only** (the **boat centralsk is STILL `--user`
 manager** — the engine now branches on `/etc/systemd/system/batchq@.service`, so the boat
 path is unchanged; do NOT hand-apply homecore steps there):
 - Workers now run under the **SYSTEM manager**: `batchq@<q>.service`/`.path` in
@@ -42,6 +47,15 @@ path is unchanged; do NOT hand-apply homecore steps there):
   STATUS --sock ~/.batchq/admit.sock` (shows budget/used/admitted). A queue stuck with nothing
   admitted while the box is idle → check the daemon (`systemctl status batchq-admit`) + its
   starvation alarm (`~/.batchq/engine/admit.starved`).
+- **Deploying an ENGINE change** (worker.sh, batchq-admit, …): commit + push, then homecore's
+  `batchq-engine-sync.service` (5-min timer) `git pull --ff-only`s the clone; force it now with
+  `sudo systemctl start batchq-engine-sync`. **Then RESTART the affected long-running unit** —
+  `batchq-admit.service` for daemon changes (workers pick up worker.sh fresh per job, no restart
+  needed). **GOTCHA (2026-08-18): never `scp` a TRACKED engine file into the homecore clone** —
+  a local mod makes `git pull --ff-only` abort and the auto-sync unit goes `failed` (silent
+  until you look). To test unpushed changes on homecore, use an **untracked** name (worker.sh's
+  `.new` A/B seam) or a temp path — never overwrite the tracked file. Recover a wedged sync:
+  `git -C ~/.batchq/engine reset --hard origin/main && sudo systemctl reset-failed batchq-engine-sync`.
 - **Per-queue tier/churn profile** — a queue's `$Q/config` may set **`TIER=bulk|normal|priority`**
   (budget cost) and **`CHURN_HEAVY=1`** (serialize via the churn mutex — e.g. dk-w5). Unset =
   `normal`, no churn.
