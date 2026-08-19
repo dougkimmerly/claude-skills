@@ -308,7 +308,9 @@ as part of the batchq **productization** pass, the reusable chassis + mechanics 
 `~/.batchq/engine`: templates (fire.sh, BUILD/REVIEW/CLOSE + review-template, plan-review
 method, CLAUSE-COVERAGE/LDA shapes) and the engine-native mechanics (`recover.sh`,
 `nudge-loop.sh`, the `w5recover.*` units, model-tiering, max-stamp CLOSE, `SYSTEM`/`sysjob`
-— **several currently UN-GIT-TRACKED under `~/.batchq/dk-w5/`, overdue to track**). dk-w5
+— **`recover.sh`/`nudge-loop.sh`/`w5recover.*` SNAPSHOTTED to git 2026-08-19 at engine
+`build-loop/reference-dk-w5/`; still live-wired from `~/.batchq/dk-w5/`, generalize+rewire at
+productization**). dk-w5
 keeps only its own instance. Until then, copy from dk-w5 but know the end-home is the
 engine. Full note + the broader "sweep for other mis-homed pieces" mandate: engine
 `PARKING_LOT.md` ("Productize batchq for portability").
