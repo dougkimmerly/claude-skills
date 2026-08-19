@@ -23,7 +23,9 @@ hold-recovery prompt), `docs/plan-review.md` (plan-review method),
 3. **Decompose into paired jobs**, staged in-repo (`jobs-staged/`), submitted by
    one `fire.sh`: per slice a BUILD job + a REVIEW job (parametrized template,
    instantiated at fire time). Specs written up front, blind — inter-slice
-   contracts come from the plan, not from seeing prior output.
+   contracts come from the plan, not from seeing prior output. **Bulk-submit the
+   ready slices in dependency-stamp order — do NOT chain per-hop fire-duties** (see
+   "Submission model" below; the queue already serializes).
 4. **Drain unattended.** Worker merges green builds (no human merge gate); each
    REVIEW audits the merged diff against the build's AC/NG/claimed clauses, runs
    the tests itself, and closes its own fix loop (writes fix pairs into the queue
@@ -39,6 +41,44 @@ hold-recovery prompt), `docs/plan-review.md` (plan-review method),
    the NEXT milestone's planning job AND its adversarial plan-review job, stops.
 6. **Morning merge session** (interactive): human + strong model merge plan +
    review, decompose, fire the next milestone. One human session per milestone.
+
+## Submission model: bulk-submit in dependency-stamp order — do NOT chain per-hop fire-duties
+
+The M5/M6 "each review fires the next slice via a tail duty" chain is **DEPRECATED**
+(Doug, 2026-08-19). It put a precondition check on every hop, and a check that can't run
+where the duty runs silently stalls the whole drain — M6 R0→R3 died overnight because a
+review-duty ran `fire-*next.sh` from inside its job worktree, where the ADR-0068
+system-manager gives NO user D-Bus, so `systemctl --user is-active w5recover.path`
+returned "No medium found" and the fire aborted as "not armed". The queue already
+serializes (one worker, lexical `ls|sort|head -1` FIFO), so chaining buys nothing over
+bulk submission. Default model instead:
+
+1. **Bulk-submit every READY slice up front, in dependency order.** FIFO runs them in
+   stamp order, one after another, automatically. Independent slices submit together;
+   dependent slices just get later stamps.
+2. **Fix pairs stamp AHEAD of downstream — not at `date +now`.** A CHANGES-REQUESTED fix
+   pair must sort immediately after the slice it fixes and BEFORE any already-queued
+   downstream slice: stamp it off the failing slice's own base stamp + a `-fixN` suffix.
+   Current-time stamps sort AFTER downstream → downstream reads un-fixed output (the
+   freshness hazard the old chain existed to prevent). This is the whole reason the old
+   design gated — solved by a stamp convention, not a fire-duty.
+3. **Stop the chain by HOLDING THE QUEUE, only for a genuine must-halt.** Fix-forward +
+   the 2-round cap mean most failures continue the drain; ADR 0068 turns host trouble
+   into throttle/scope-kill, not a wedge. The rare true-stop (a heavy leg that would
+   wedge the host if the next ran) is the failing review's last act: MSGW-hold the queue
+   (`sbmjob -q <q> -release` to resume) or `-hold-queued` the specific downstream jobs.
+4. **Defer-queue ONLY the genuinely-not-ready.** A clock-gated job (fires on a calendar,
+   days out) or a rendezvous job (needs two independent tracks both done) is the only
+   thing that legitimately stays OUT of the queue until its condition — dropped by an
+   external timer or a single event-driven fire when the last key lands.
+
+**The sandbox rule (root cause of the stall above):** any check a job spec or an
+event-driven fire performs must be doable from a batchq job sandbox — clean env, no
+`XDG_RUNTIME_DIR`, no user D-Bus under the system manager. Make bus/systemd checks
+bus-tolerant (proceed on "no bus"; abort only on a definite negative from a REACHABLE
+bus) or use a marker-file check instead. **Test the fire path by running it under
+`env -i`, not by reading the engine** — M6's fire-readiness review read `worker.sh`/
+`deploy.sh` but never ran a fire script from a sandbox, so it missed this entirely.
 
 ## Paid-for rules (each earned on the pilot; keep them)
 
@@ -226,8 +266,55 @@ logs only on surprise. If held: read `recovery.log` + the MSGW marker before
 touching anything — the watchdog may have already tried its one move. Then the
 merge session (step 6).
 
+## Run 2 — batchq engine Phase 3 (2026-08-18, fixer) — new lessons
+
+Second instance, first on a repo other than dk-w5: built the batchq **control plane**
+into the engine repo. Drained 5/5 slices approved (one auto fix-round), then an
+attended promote. Two lessons worth keeping:
+
+- **Live-fire is load-bearing; offline stub-tests pass VACUOUSLY on host primitives.**
+  A slice's "finding-1 fix" — pause systemd `RuntimeMaxSec` on freeze — had a green
+  offline test that STUBBED `systemctl` and asserted the *call*. The attended live-fire
+  found systemd flatly REJECTS `set-property RuntimeMaxSec` on a running scope: the fix
+  was a silent no-op the whole time. **Rule: when a slice touches a host/kernel/systemd
+  primitive (a unit property, a cgroup op, a scheduler behavior), a stubbed unit test
+  proves the CALL, never the EFFECT.** Such slices need an explicit **attended live-fire
+  gate** against the real primitive before the claim is trusted — bake it into the plan's
+  acceptance, don't let a green stub-suite stand in for it. Add a spec NG: "a test that
+  stubs the primitive it's validating proves nothing about the primitive."
+
+- **Build-looping self-modifying infrastructure is safe via BRANCH isolation + an inert
+  seam.** Building the batchq engine *with* batchq is a snake-eating-its-tail hazard. It
+  was made safe by two independent layers: (1) a dedicated queue whose clone sits on a
+  `phase3` branch — the live engine tracks `main` and `engine-sync` hardcodes
+  `pull origin main`, so nothing on `phase3` can reach the running engine; (2) the
+  `worker.sh.new` A/B seam so even merging `phase3→main` is non-activating until an
+  attended rename. **The build-loop builds inert; a human promotes.** Generalizes to any
+  self-hosting/estate-critical target: isolate the build on a branch the live system
+  can't pull, keep an inert seam, and make activation a separate attended step. Verify
+  the isolation claim (what does the live puller actually pull?) — don't assume.
+
 ## Skill maintenance
 
-This skill is PILOTING (first run fired 2026-08-09, dk-w5 milestone 1). After each
-run, fold the CLOSE retro's lessons in here; when stable, propose the fix-loop +
-recovery patterns upstream into the batchq engine + skill.
+This skill has run on dk-w5 (milestones 1–6, 2026-08-09 →) and the batchq engine
+(Phase 3, 2026-08-18 — first cross-repo run). After each run, fold the CLOSE retro's
+lessons in here; when stable, propose the fix-loop + recovery patterns upstream into the
+batchq engine + skill.
+
+**DECIDED END-HOME (Doug, 2026-08-19): the build-loop graduates INTO the batchq engine.**
+It currently lives inside dk-w5 as "the reference to copy" — that's a temporary mis-home
+(a project wearing estate-wide clothes). **Trigger: when the dk-w5 build (M6/M7) is done**,
+as part of the batchq **productization** pass, the reusable chassis + mechanics move into
+`~/.batchq/engine`: templates (fire.sh, BUILD/REVIEW/CLOSE + review-template, plan-review
+method, CLAUSE-COVERAGE/LDA shapes) and the engine-native mechanics (`recover.sh`,
+`nudge-loop.sh`, the `w5recover.*` units, model-tiering, max-stamp CLOSE, `SYSTEM`/`sysjob`
+— **several currently UN-GIT-TRACKED under `~/.batchq/dk-w5/`, overdue to track**). dk-w5
+keeps only its own instance. Until then, copy from dk-w5 but know the end-home is the
+engine. Full note + the broader "sweep for other mis-homed pieces" mandate: engine
+`PARKING_LOT.md` ("Productize batchq for portability").
+
+**BANKED FOR M7 (Doug, 2026-08-19):** the "Submission model" section above supersedes the
+per-hop fire-duty chain. M6 finishes on the now-fixed chain; **M7's plan + fire.sh adopt
+bulk-submit-in-stamp-order + stamp-ahead fix pairs + hold-to-stop by default** — no tail
+RELEASE-DUTY chain except the one legitimately-deferred rendezvous fire. CLOSE-M6's
+M7-planning spec should cite this section.

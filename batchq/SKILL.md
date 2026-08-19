@@ -15,17 +15,19 @@ these jobs (2026-07-20). Engine history + design rationale: `~/.batchq/engine/`
 is a git repo (`github.com/dougkimmerly/batchq`) — see its `DECISIONS.md` (v2
 worktree rework, 2026-07-24) and `PARKING_LOT.md`.
 
-## ⚠️ homecore is a SYSTEM-managed subsystem (2026-08-18 — fixer ADR 0068, PHASE 1 COMPLETE)
+## ⚠️ homecore is a SYSTEM-managed subsystem (2026-08-18 — fixer ADR 0068, REDESIGN COMPLETE)
 
-**Homecore batchq is now an AS/400-style subsystem (ADR 0068). PHASE 1 + PHASE 2 substantively
-COMPLETE & LIVE (2026-08-18).** Phase 2 added: per-job **systemd scopes** (each job in
+**Homecore batchq is an AS/400-style subsystem (ADR 0068). Phases 0–3 COMPLETE & LIVE
+(2026-08-18) — the build loop is DONE.** Phase 2 added: per-job **systemd scopes** (each job in
 `batchq-job-<q>-<base>.scope`, killed as a cgroup — reaches setsid'd children), **CLASS tier
 slices** `batchq-{bulk,normal,priority}.slice` (CPU/IO 25:100:400 + per-job Memory/Tasks/OOM/
 RuntimeMax/RLIMIT_CPU caps, routed by `TIER=`), **per-worktree disk quota** (worktrees on the
 prjquota fs at `~/.batchq/work-quota`, tier caps 30/20/10G), breaker→scope-kill + per-job
 STOPPED feedback, broker scope-exact recovery. Docker containment delegated to dk-w5 (done:
-`cgroup_parent` + capped buildx builder). Remaining = only dependent tails (W5 VM builder) +
-Phase 3 (freeze/thaw + live THROTTLED/ADMISSION_HELD). Detail: runbook "▶ PHASE 2".
+`cgroup_parent` + capped buildx builder). **Phase 3 (control plane) added the operator surface +
+the submitter-feedback plane — see "Operator control plane" + "Submitter-feedback plane" below.**
+Remaining = only dependent tails: **W5 VM builder** (hardware-blocked) + **P5 live-inquiry** (own
+future phase) + **boat `--scope --user`** (attended boat session). Detail: runbook "▶ PHASE 2/3".
 What is LIVE on **homecore only** (the **boat centralsk is STILL `--user`
 manager** — the engine now branches on `/etc/systemd/system/batchq@.service`, so the boat
 path is unchanged; do NOT hand-apply homecore steps there):
@@ -66,6 +68,42 @@ path is unchanged; do NOT hand-apply homecore steps there):
   `/sys/fs/cgroup/batchq.slice` is absent when idle).
 - Full state + next steps: `fixer/docs/runbooks/batchq-subsystem-build.md` (▶ EXECUTION
   LOG), ADR 0068, memory `batchq-subsystem-project`.
+
+### Operator control plane (Phase 3, LIVE — homecore only)
+
+Act on a **running** job's systemd scope (or a **queued** job's file). All via `sbmjob`; homecore
+only (the boat `--user` path has no scopes → these refuse cleanly). NEVER `pkill -f`/`ps|grep|kill`
+to stop a job — your session argv contains the job text, so a pattern kill matches YOU (a job
+killed itself this way, exit 137). Use these instead:
+- `sbmjob -q <q> -hold <job>` — freeze a running job in place (`cgroup.freeze`); inspect/reprioritize.
+- `sbmjob -q <q> -resume <job>` — thaw it. **Short-holds-ONLY (v1):** systemd's `RuntimeMaxSec` is
+  activation-time-only and CANNOT be paused on a live scope, so a long hold gets force-killed at
+  `start+RuntimeMaxSec` (and a held agent's Anthropic stream times out). `-hold` prints the hard
+  ceiling. Hold = quick inspect → resume, not a park. (The worker's `secs`/MAX_MIN timer IS paused
+  while frozen — that's the real protection.)
+- `sbmjob -q <q> -reprioritize <job> <bulk|normal|priority|WEIGHT>` — live CPU re-prioritize
+  (writes `cpu.weight` on the scope = CHGJOB RUNPTY).
+- `sbmjob -q <q> -end <job>` — controlled end (TERM + grace → KILL). `sbmjob -q <q> -kill <job>` —
+  immediate `cgroup.kill` (whole subtree, one syscall). Both write a `.kill-reason`.
+- `sbmjob -q <q> -hold-queued <job>` / `-release-queued <job>` — hold/release a **queued** job file,
+  independent of the queue-level MSGW. (`sbmjob -q <q> -release` = queue-level MSGW release, unchanged.)
+- **Review a running job:** the WRKJOBQ web UI (`:8250`) shows per-job live cpu/mem/PSI from the
+  scope + a "current step" the worker writes.
+
+### Submitter-feedback plane (Phase 3, LIVE) — the system tells you WHY a job parked/throttled/stopped
+
+Throttling is now the NORMAL case ("slow down, don't die"). Each job gets a per-job append-only
+`done/<job>.messages.jsonl` (schema `{ts,severity,code,dimension,text,conform_hint}`), a digest
+folded into `done/<job>.summary.md` + `JOBLOG.md` (what reviewers read), and ntfy for the
+escape-severity ones. Three codes — **read them before resubmitting:**
+- `ADMISSION_HELD` (broker parked it — budget / PSI headroom / churn token): payload = reason +
+  **queue position**. For a `CHURN_HEAVY` queue: "this serializes; expect waits" — NORMAL, not a
+  stall; don't panic-resubmit.
+- `THROTTLED` (sustained per-scope PSI stall, debounced): a chronic one carries a **conform hint** —
+  right-size / declare a higher `TIER=` / decompose. A transient dip stays silent.
+- `STOPPED` (mechanically killed — veth-churn guard / MAX_MIN / oomd / breaker / operator): carries a
+  **FIX** text saying which cause + what to do. Two-strikes: same STOP twice → re-decompose, don't
+  resubmit identical.
 
 ## Where it runs (homecore, since 2026-08-05 — fixer ADR 0049)
 
