@@ -160,6 +160,18 @@ unattended run" below, which supersedes the "finish SEMI-ATTENDED" conclusion he
 needed. Set `StartLimitIntervalSec=0` on the recovery `.service` (its own lock +
 per-job budget guard runaway); reset-failed it if it ever trips.
 
+**SECOND, distinct root cause of the same `trigger-limit-hit` (diagnosed live 2026-08-19,
+had failed ≥3×):** `recover.sh` writes a `MSGW.orig` backup of the marker during a
+remediation and **leaves it behind on exit**; the `.path` unit's `PathExistsGlob=…/MSGW*`
+then keeps matching that stale `.orig` → re-fires → `trigger-limit-hit` → **watchdog silently
+`failed` on a live unattended drain** (no recovery net). Note `recover.sh` itself ignores
+`.orig` (`grep -v '\.orig$'`) — only the *systemd glob* is wrong. Fixes: narrow the trigger to
+exact `PathExists=…/MSGW` (not the glob), OR have recover.sh clean up its own `MSGW.orig` on
+exit — plus the `StartLimitIntervalSec=0` above. **Manual re-arm:** `mv $Q/MSGW.orig $Q/done/…;
+systemctl --user reset-failed w5recover.path && systemctl --user start w5recover.path` (a bare
+reset-failed WON'T hold while the stale `.orig` still matches the glob). This lands in the engine
+when the watchdog graduates (engine `build-loop/README.md`).
+
 **Make remediation VISIBLE** (2026-08-11): the error-handler runs as a systemd
 process against a HELD job, so it's NOT in the monitor's running/ list — a hold under
 active auto-repair looks identical to a wedged one. Have the recovery wrapper write a
