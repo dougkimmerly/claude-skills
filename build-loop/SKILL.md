@@ -306,6 +306,19 @@ attended promote. Two lessons worth keeping:
   can't pull, keep an inert seam, and make activation a separate attended step. Verify
   the isolation claim (what does the live puller actually pull?) — don't assume.
 
+## Conformance/forcing churn vs the estate breaker (2026-08-19)
+
+Conformance and forcing legs churn ~30–65 veth/min (ADR 0064's *legitimate* band) and
+repeatedly tripped the estate churn-breaker (M5 ×2, M6 ×1). Fixer's interim fix: a
+**sanctioned-window exemption** — a `CHURN_HEAVY=1` queue with a running job gets the
+estate breaker's veth threshold raised to 90/min (keep the tag). Two limits survive it:
+the estate ceiling is 90 (a real runaway still trips + re-MSGWs the estate, two-strikes),
+and the **per-job veth guard in worker.sh is unchanged and exemption-blind** (kills a
+single job sustaining >30/min for ~2 min — conformance/forcing bounce below it, but a
+mis-converted drill won't). **The real fix is off-host isolation (a KVM VM, ADR 0064
+W5-ISOLATE) — do NOT redesign the harness around the exemption; the VM removes the class.**
+Full detail: the reference instance's `docs/BUILD-LOOP.md` "Drain SOP" §7.
+
 ## Skill maintenance
 
 This skill has run on dk-w5 (milestones 1–6, 2026-08-09 →) and the batchq engine
