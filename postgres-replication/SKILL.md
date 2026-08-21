@@ -170,7 +170,16 @@ Existing workers keep their old timeout values; bounce them via `ALTER SUBSCRIPT
 
 **Do NOT stack retries** — a second `REFRESH` blocks on an `object` **Lock** held by the first, so you get two stuck backends. Cancel with `pg_cancel_backend(pid)` (the existing apply worker is a *different* backend and is unaffected — verify with the `pg_stat_subscription` freshness check after).
 
-**The safe add-a-table order** (so a hang never risks the subscriber): (1) create the table on the SUBSCRIBER first with the identical DDL; (2) `ALTER PUBLICATION … ADD TABLE` on the PUBLISHER; (3) `REFRESH PUBLICATION` on the subscriber (run as `homelab_admin`, single attempt, patient). A publisher that publishes a table the subscriber isn't tracking is **benign** — the subscriber ignores those changes; the mismatch self-resolves whenever a `REFRESH` finally succeeds. So if the refresh won't take, it's safe to DEFER: leave the table published + created-both-sides, and complete the refresh from a calmer window or driven from the boat side. The hourly-log path (HTTP `?full=1` pull) does NOT depend on this replication, so deferring costs nothing user-facing.
+**The real cause & fix:** the hang is the **initial-data COPY** the refresh sets up for the new table (a `tablesync` worker), NOT link congestion — so waiting for "a calmer window" does nothing. The fix is to **skip the initial COPY**:
+
+```sql
+-- run as homelab_admin on the SUBSCRIBER; returns instantly, table goes straight to srsubstate 'r'
+ALTER SUBSCRIPTION cruising_sub REFRESH PUBLICATION WITH (copy_data = false);
+```
+
+This adds the table **forward-only** (future changes replicate; pre-existing rows are NOT back-copied). Correct when the new table is **empty or near-empty** (which a just-created usage table is — `cell_usage` had 0 rows both sides, so nothing was lost). If the table already holds rows you need at home, run the `copy_data=false` refresh anyway, then one-time `COPY`/`INSERT … SELECT` the handful of pre-existing rows across by hand — far more reliable than letting the tablesync COPY stall over SpeedFusion.
+
+**The safe add-a-table order** (so a hang never risks the subscriber): (1) create the table on the SUBSCRIBER first with identical DDL; (2) `ALTER PUBLICATION … ADD TABLE` on the PUBLISHER; (3) the `copy_data=false` refresh above. A publisher that publishes a table the subscriber isn't tracking is **benign** in the meantime — the subscriber ignores those changes. And the app-level path (e.g. an HTTP `?full=1` pull) never depends on this replication, so it's independently safe to defer if you must.
 
 ### After MTU/network change, replication still stalled
 
