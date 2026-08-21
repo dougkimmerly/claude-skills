@@ -164,6 +164,14 @@ SELECT pg_reload_conf();
 
 Existing workers keep their old timeout values; bounce them via `ALTER SUBSCRIPTION ... DISABLE` then `ENABLE`, or terminate and let them respawn.
 
+### `ALTER SUBSCRIPTION … REFRESH PUBLICATION` hangs over the slow link (adding a new table) — 2026-08-21
+
+**Symptom:** adding a newly-published table to the subscription (`REFRESH PUBLICATION`) hangs indefinitely — the command sits in `pg_stat_activity` with `wait_event = LibPQWalReceiverReceive` (waiting on the publisher over SpeedFusion) — even though the **existing** replication is perfectly healthy (apply worker alive, `last_msg_receipt_time` advancing). Adding `cruising.cell_usage` hung this way 3× (2026-08-21).
+
+**Do NOT stack retries** — a second `REFRESH` blocks on an `object` **Lock** held by the first, so you get two stuck backends. Cancel with `pg_cancel_backend(pid)` (the existing apply worker is a *different* backend and is unaffected — verify with the `pg_stat_subscription` freshness check after).
+
+**The safe add-a-table order** (so a hang never risks the subscriber): (1) create the table on the SUBSCRIBER first with the identical DDL; (2) `ALTER PUBLICATION … ADD TABLE` on the PUBLISHER; (3) `REFRESH PUBLICATION` on the subscriber (run as `homelab_admin`, single attempt, patient). A publisher that publishes a table the subscriber isn't tracking is **benign** — the subscriber ignores those changes; the mismatch self-resolves whenever a `REFRESH` finally succeeds. So if the refresh won't take, it's safe to DEFER: leave the table published + created-both-sides, and complete the refresh from a calmer window or driven from the boat side. The hourly-log path (HTTP `?full=1` pull) does NOT depend on this replication, so deferring costs nothing user-facing.
+
 ### After MTU/network change, replication still stalled
 
 **Symptom:** Network path tests fast (e.g., `psql -c` from subscriber container takes <1s), but sync workers still stuck.
