@@ -437,6 +437,24 @@ read-only). Fire the heaviest as a CANARY first, watch host PSI
 (`/proc/pressure`) to completion, then release the rest. E1a (heaviest) ran
 dead-flat (io-psi peak 1%); the box never noticed.
 
+**⚠ ROOT CAUSE CORRECTION (wedge #6, 2026-08-21, fixer #1529 / ADR 0074).** The
+resource-exhaustion wedge is NOT primarily the ADR 0064 veth *integral* — that
+was the wrong-axis theory, and decomposition/per-boot-caps only reduce its
+frequency. VERIFIED cause: **a batch job's docker containers escape `batchq.slice`
+into `/system.slice/docker-*.scope` — uncapped memory, all cores.** ADR 0068 caps
+the *agent* process (the `claude` proc, 20 G in `batchq.slice`) but NOT the
+containers it spawns, so a conformance suite's compose stack runs unbounded and
+IO-starves the host. Diagnostic signature to diff against: **veth LOW +
+containers in `system.slice` + IO-starvation freeze (journal frozen mid-write) +
+systemd-oomd silent (it kills on memory, this is IO) + AMT dead in-fire (#1488).**
+Wedge #6 had ZERO veth in the final 10 min; the "18,390 veth" was an ~80-hour
+integral, not one boot's cascade. Real fix (ADR 0074, fixer-owned, NOT a
+veth-integral "Meter C"): contain docker under a capped `cgroup_parent` slice +
+an IO-aware instantaneous trip (Meter B's 3-min average is slower than a <2-min
+freeze) + a smart-plug for out-of-band recovery + unblock gpucore (ADR 0070).
+Until docker containment lands, a SINGLE sanctioned heavy run can still wedge the
+box — "one heavy op per job" below remains load-bearing as interim protection.
+
 **Two orthogonal wedge axes → two different fixes; a job can need BOTH.**
 Decomposition fixed the E1 monolith's RESOURCE axis — but the very first
 decomposed leg (E1b, M2 regression) was then killed by the CHURN axis: it ran 12
@@ -495,7 +513,17 @@ netns / rootless-nested-docker / short-lived VM whose teardown never touches the
 host bridge, so the host sees O(1) network objects regardless of test count
 (dk-w5 harness is the first instance; ADR 0064). (2) **Until that isolation
 exists, a heavy suite runs at most ONCE PER BOOT unattended, and nothing
-churn-heavy runs unattended on homecore at all.** The per-window verifier below
+churn-heavy runs unattended on homecore at all.** *(Wedge #5, 2026-08-21 — root cause CORRECTED by
+fixer #1529: NOT the integral; the suite's docker containers run in
+system.slice/docker-*.scope OUTSIDE batchq.slice — uncapped mem/IO — and one
+run's IO starved the host (ADR 0068's "un-wedgeable by construction" had this
+hole; verified live on any container's /proc/<pid>/cgroup). dk-w5's
+conformance.sh machine-enforces once-per-boot as EXPOSURE REDUCTION — not
+structural safety — and reviews AUDIT the build's recorded log instead of
+re-running suites. Structural containment (cgroup_parent capped slice +
+instantaneous IO trip) is fixer's. NOTE: homecore currently has NO
+out-of-band recovery — iTCO watchdog proven dead #1498, AMT dead #1488 — a
+wedge means a physical power-cycle until the smart-plug lands.)* The per-window verifier below
 tells you a single run is safe; it says NOTHING about the third run of the day.
 
 **The count is HOST-WIDE (`journalctl -k | grep veth`), not per-job.** Your
@@ -632,6 +660,30 @@ you, then exits — waking the session. Wake conditions: **MSGW** · **held/**
 RELAUNCH the watcher (one launch = one wake). It can only wake a LIVE
 session; with no session alive, ntfy push covers the human directly.
 Clearing a hold is a judgment call, never automated.
+
+## Satellite-host workers: auth done right (learned 2026-08-21, ci-builder VM)
+
+A worker on another host must NOT share homecore's `~/.claude/.credentials.json`
+— OAuth refresh tokens ROTATE, so the busiest host's refresh silently orphans
+every copied credential (the ci-builder R-track died exactly this way hours
+after a copied credential had worked). The durable pattern:
+1. Mint the host its OWN long-lived CI token: `claude setup-token` (browser
+   flow; run it in tmux on the target and capture the printed `sk-ant-oat…` —
+   BEWARE: it may write an EMPTY credentials file while still printing a valid
+   token; the printed string is the artifact, not the file).
+2. Store as `~/.claude-oat` (`CLAUDE_CODE_OAUTH_TOKEN=<token>`, chmod 600) and
+   wire via a systemd user drop-in:
+   `~/.config/systemd/user/batchq@.service.d/token.conf` →
+   `[Service]\nEnvironmentFile=%h/.claude-oat`. Delete any half-written
+   `.credentials.json` (an empty-token file makes claude fail auth even with
+   the env set in some paths — remove the ambiguity).
+3. If the host is a recreatable VM: bake the token into the golden
+   snapshot/image, or every watchdog recreate loses it.
+4. Prove it with a queue-path canary (a report-only job), not a bare
+   `claude -p` — the worker's systemd environment is the thing under test.
+Also: worker.sh resolves claude at `$HOME/.local/bin/claude` — npm-global
+installs need a symlink there or the job dies as a silent 15s "done (report
+only)" with a zero-byte log (engine fix requested 2026-08-21).
 
 ## Registering a new repo
 
