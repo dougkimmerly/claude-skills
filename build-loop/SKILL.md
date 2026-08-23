@@ -415,11 +415,64 @@ fix-forward round the paired review caught. Lessons:
   the mechanical acceptance CHECK (here the D7.0 grep) into the BUILD, and have the REVIEW re-run it
   and reproduce the risky live cases with its OWN fixtures, not the shipped tests.
 
+## Run 4 — batchq messaging plane / MSGQ M1 (2026-08-22, fixer) — new lessons
+
+Two ADRs (0072 QSYSOPR + 0073 MSGQ) unified into one phased plan; the **unified planloop**
+converged (4 rounds), then a **9-slice build drain went 9/9 APPROVED, one fix-forward, zero
+holds, zero host-contention** — the cleanest drain yet. Lessons:
+
+- **Merge-hop chaining CAN be made reliable — with imperative wording.** Run 3 concluded
+  merges don't self-chain (they treat themselves as done after the commit). The fix that
+  actually worked: reword the trailing call from `LAST ACT: bash fire-*.sh --next X` to
+  **"MANDATORY FINAL STEP — this is an ACTION, not a note. Do NOT write this command into
+  your summary and stop; RUN it with the Bash tool as your very last action, and do not end
+  your turn until it prints 'queued'."** After that reword, every merge self-chained. So
+  forceful "RUN-don't-describe" phrasing beats hand-firing; bake it into the fire template.
+- **Cheap proof, NO docker — the big one (generalizes Doug's budget-refusal doctrine).** A
+  milestone whose tests are **file/process-based** (not a conformance-suite) must NOT import
+  the dk-w5 "one long-lived scratch stack" framing — it needs **zero containers**: the
+  `tests/run-tests.sh` scratch-`~/.batchq` + fake-claude harness. Concentrate the one
+  heavy/real-estate proof at the **attended CLOSE live-fire**. Payoff was decisive: the
+  builds created **zero veth churn**, so they couldn't be a churn source and couldn't
+  collateral-wedge — the whole "fire when the host is quiet" worry dissolved. Put a standing
+  clause in the REVIEW template: **a slice test that spins up docker or runs the real estate
+  is CHANGES-REQUESTED**; "deferred to CLOSE live-fire" is a *correct outcome, not a hold*.
+- **Churn-collateral-kills are not the job's fault.** A cheap/read-only job on queue A gets
+  exit-143'd by the **netns-blind per-job veth guard** during queue B's (dk-w5) *sanctioned*
+  churn — the guard meters host-wide veth and attributes it to whatever's running. Recovery:
+  a manual mini-QSYSOPR — wait for a churn **lull** (`journalctl -k | grep -c veth` low),
+  set the correct model for the held stage, `-release`. A churn-kill is **NOT** a two-strikes
+  re-decompose (the ADR-0063 FIX text's "resubmit identical" rule is for jobs whose OWN
+  behavior churns). The sanctioned-window exemption covers the estate breaker but NOT the
+  per-job guard — off-host isolation (ADR 0070) is the real fix.
+- **"Inert file-seam on `main`" is WRONG for code that RUNS on merge.** That framing only
+  fits a systemd unit you decline to enable. MSGQ's worker-emit + `sbmjob` changes execute
+  the instant they merge — so inertness needs a **fail-safe runtime marker** (missing/
+  unreadable ⇒ off; NEVER gate on the tracked `config`, a local mod there aborts
+  `git pull --ff-only` estate-wide), and activation is a **separate seam** (create the marker
+  + register the hooks). Two seams, not one. A planloop round caught this (r1) — worth
+  checking on any run whose code isn't purely unit-gated.
+- **Interim artifact to unblock a cross-phase dependency.** A phase-1 slice (S1c) referenced
+  a later attended step's output (the `claude -p` probe result). Committing an **interim
+  result file with the ruled default** made the cold job deterministic (no hold on the
+  missing file); the real attended step overwrote it later. Cheaper than re-sequencing a
+  fired drain.
+- **Scope a UNIFYING planloop to the new surface only.** Merging two plans, the loop reviewed
+  M1 + the shared-substrate contract + the M2 *delta*, and explicitly cited the already-
+  converged M2 internals as **not to re-review** — spends rounds on the boundary, not on
+  settled work.
+- **Self-hosting dogfood is a live validator.** Building batchq's messaging plane *with*
+  batchq, the submitter-identity feature went **live-but-inert on the engine mid-build** (the
+  two-seam marker kept the emit off) — you literally see the built feature working (`from:
+  unknown` on submits) before promote. Safe because inert; reassuring because real.
+
 ## Skill maintenance
 
 This skill has run on dk-w5 (milestones 1–6, 2026-08-09 →), the batchq engine
-(Phase 3, 2026-08-18 — first cross-repo run), and cruising-app (friend-fleet, 2026-08-21 —
-first planning-loop + drain on a non-build-loop queue). After each run, fold the CLOSE retro's
+(Phase 3, 2026-08-18 — first cross-repo run), cruising-app (friend-fleet, 2026-08-21 —
+first planning-loop + drain on a non-build-loop queue), and the batchq messaging plane
+(MSGQ M1, 2026-08-22 — first zero-docker file/process milestone; cheap-proof + two-seam
+lessons above). After each run, fold the CLOSE retro's
 lessons in here; when stable, propose the fix-loop + recovery patterns upstream into the
 batchq engine + skill.
 
