@@ -125,6 +125,27 @@ unloaded but retained. Deviations & gotchas (inotify limits, XDG-over-SSH,
 10-char queue names): `~/.batchq/engine/PARKING_LOT.md` +
 `fixer/docs/runbooks/batchq-homecore-migration.md`.
 
+**⚠ REMOTE queues (since 2026-08-22 — ADR 0075 Phase A, the batch VM).** A
+queue may now RUN on a remote host (the disposable `batch` KVM guest):
+homecore's `~/.batchq/<q>/config` carries `REMOTE_SSH="doug@<vm-ip>"`, and the
+REAL queue state (`queue/ running/ done/ held/`, `MSGW`, `worker.log`, the
+repo clone at the config's `REPO=` path) lives on THAT host — homecore's dir is
+a stub/mirror. Three lessons from the first night (dk-w5, 2026-08-22):
+- **Diagnosing a hold: check `config` for `REMOTE_SSH` FIRST.** Homecore's
+  `queue/`/`running/`/`MSGW` looking empty while `sbmjob -wrk` shows a held/
+  running job means the queue is remote — inspect via
+  `ssh 192.168.20.19 'ssh doug@<vm-ip> "..."'` (VM IPs are libvirt NAT,
+  reachable only through the hypervisor host). An MSGW's `git -C <path>` fix
+  instructions are paths ON the remote host, not homecore.
+- **Converting a queue to remote does NOT carry repo-specific control files**
+  (engine files `tail.md`/`next.md`/`config` yes; extras like dk-w5's `STATUS`
+  + `m*-fired` batch markers no) — a queue whose jobs gate on such files must
+  have them copied to the remote queue dir at conversion, or the next
+  gate-checking job escalates on their absence (dk-w5's first remote review
+  did exactly that).
+- Remote guests may log **UTC** — job stamps/JOBLOG times can read hours ahead
+  of homecore's local time.
+
 **Never use in-session CronCreate for autonomy — proven to never fire on this
 Mac (2026-07-20 canary test).** This queue is the replacement.
 
