@@ -17,9 +17,38 @@ hold-recovery prompt), `docs/plan-review.md` (plan-review method),
    client call sequence + forcing-test exit checklist + components + Explicitly-OUT
    + decomposition table. Where the plan compresses a spec/ADR, QUOTE it — lossy
    paraphrase was the pilot's worst defect class.
-2. **Adversarial plan review** (fresh session/job — author ≠ reviewer, always):
-   four lenses (spec-conformance, evidence, estate-reality, sequencing/scope),
-   hostile verifiers with stated strongest refutations. Author applies findings.
+2. **THE PLANNING LOOP — staged multi-model adversarial refinement (Doug's
+   standard, 2026-08-20; proven on the M7 plan: kill rates 28→33→38→58%,
+   converged in 4 rounds).** Not one review — a chain, each round a LENS the
+   prior round can't have:
+   - **Round 1 (opus):** the four-lens first pass (spec-conformance, evidence,
+     estate-reality live re-query, sequencing/scope), strongest-refutation
+     discipline, refuted set recorded with kill rate. → **merge (opus)**.
+   - **Round 2 (sonnet, merge-fidelity):** verify every round-1 finding
+     applied; hunt half-applications and table-vs-prose drift (the class a
+     first pass structurally cannot see). → **merge (sonnet)**.
+   - **Round 3 (opus, deep structure):** adversarial gate-chain execution
+     simulation (hostile scheduler over every reachable ordering),
+     cold-builder spec-as-executed on the riskiest slices, ledger/clause
+     arithmetic end-to-end. → **merge (opus)**.
+   - **Round 4 (fable, final):** verify round 3; accretion audit (stale
+     cross-references after N generations of edits); convergence judgment
+     (rising kill rate + falling top-severity + closing defect families =
+     converged; else say another round is needed); explicit fire-readiness
+     verdict. → **merge (fable)**.
+   Rules that make it work: **each merge runs on the SAME model as the review
+   it applies** (the mind that found the issues applies them); merges are
+   MECHANICAL — apply confirmed findings, take named recommendations, PARK
+   every judgment call in a DECISIONS-PENDING doc, never rule; **every review
+   round re-verdicts all parked decisions** (STANDS / NOW-DETERMINED with
+   evidence / STALE with reason) so the pending list stays live; reviews run
+   as cold-context queue jobs (model via the queue's `model` file, deleted as
+   each round's first act). The human merge session then receives a CONVERGED
+   plan + N review docs + a minimal live decisions list, and does RULINGS
+   ONLY. Reference instance: dk-w5 `docs/m7-plan-review*.md` (the four
+   documents) + `jobs-staged/fire-m7-planloop.sh` (the queue-native chain
+   CLOSE invokes). Run it interactively for a first plan; wire it into CLOSE
+   for every subsequent milestone.
 3. **Decompose into paired jobs**, staged in-repo (`jobs-staged/`), submitted by
    one `fire.sh`: per slice a BUILD job + a REVIEW job (parametrized template,
    instantiated at fire time). Specs written up front, blind — inter-slice
@@ -38,9 +67,44 @@ hold-recovery prompt), `docs/plan-review.md` (plan-review method),
    submits the jobs itself and re-drops its own max-stamp hold — budget max 3
    gate passes (`gate.count`, reset by fire.sh); anything it can't spec, or at
    cap → honest report + HANDOFF + stop. On COMPLETE → report + retro → chains
-   the NEXT milestone's planning job AND its adversarial plan-review job, stops.
+   the NEXT milestone's planning job AND the full planning loop (stage 2's chain, via a planloop fire script), stops.
 6. **Morning merge session** (interactive): human + strong model merge plan +
    review, decompose, fire the next milestone. One human session per milestone.
+
+## Heavy-verification budgets: budget-refused is a RECORDED-CORRECT outcome (wedge #5 doctrine, 2026-08-22)
+
+When a host carries a hard budget on a heavy verification workload (dk-w5's
+reference: `conformance.sh` refuses unattended run #2+ per boot while docker
+containment is unbuilt), a naive loop DEADLOCKS: every BUILD spec mandates the
+heavy run, build #2 gets refused (exit 75), holds, and release-retry hits the
+same budget forever. Neither escape is acceptable — an attended override runs
+the exact workload the budget exists to prevent, and a host reboot to reset a
+counter is disproportionate. The fix is doctrinal, in four pieces:
+
+1. **BUILD specs**: "run the heavy suite once IF the budget allows; a
+   budget-refusal (exit 75) is a RECORDED, CORRECT outcome — log the refusal
+   line verbatim in your summary, ship on your slice-level targeted-test
+   evidence (which must be green and recorded), never hold for the suite,
+   NEVER override."
+2. **REVIEW specs**: audit whichever evidence the budget allowed — the suite
+   log when it ran, the targeted-test log + the refusal record when it
+   didn't. Reviews NEVER run the heavy suite themselves (that's how the
+   budget got eaten in the first place).
+3. **ONE integration leg owns the full proof** (dk-w5: the E1a gate leg) —
+   scheduled as the FIRST heavy run of its boot/budget window, or after a
+   deliberate maintenance reset. Interim builds prove their slice; the gate
+   proves the whole.
+4. **Hold-recovery for a build that already held on the refusal**: commit its
+   dirty notes on the job branch, merge (its targeted tests are the slice
+   proof), park the held .job OUT of held/ before -release, re-spec the
+   queued review per (2), release. Do NOT resubmit the build — the retry
+   deadlocks on the same budget.
+
+Write (1)-(3) into the repo's BUILD-LOOP doc + the review template so specs
+inherit it; the budget guard itself is ~10 lines in the suite runner (counter
+keyed on /proc/sys/kernel/random/boot_id in /var/tmp; exit 75; attended
+override env var that logs a reason). Relax the budget only when the
+underlying containment (the reason the budget exists) actually lands.
 
 ## Submission model: bulk-submit in dependency-stamp order — do NOT chain per-hop fire-duties
 
@@ -319,10 +383,43 @@ mis-converted drill won't). **The real fix is off-host isolation (a KVM VM, ADR 
 W5-ISOLATE) — do NOT redesign the harness around the exemption; the VM removes the class.**
 Full detail: the reference instance's `docs/BUILD-LOOP.md` "Drain SOP" §7.
 
+## Run 3 — cruising-app friend-fleet redesign (2026-08-21) — planning loop + build drain on a NON-build-loop queue
+
+First run of the full **planning loop** (stage 2) + build drain on a generic repo queue
+(`cruising`) that had no build-loop scaffold. It worked — 5 planning rounds (kill rates
+35→50→57→69→73 %, the invariant only closed at round 5), then S1–S4 built + reviewed, one
+fix-forward round the paired review caught. Lessons:
+
+- **Merge-hop self-chaining is UNRELIABLE on a tail.md that isn't build-loop-aware.** The
+  planning-loop fire script chains each stage from the prior stage's LAST act (`bash
+  fire-*.sh --next <succ>`). **REVIEW jobs ran that last act reliably; a MERGE job did not**
+  — merge3 finished its edit, committed, and exited WITHOUT running its trailing `sbmjob`,
+  so the chain silently stopped (queue DRAINED, no hold). The generic queue's welded "do ONE
+  unit of work only, then exit" discourages the second submit. Reviews (which only READ + write
+  one doc) apparently treat the chain call as part of their unit; merges (which EDIT the plan)
+  treat themselves as done after the commit. **Mitigations:** (a) hand-fire the next stage on a
+  DRAINED-but-incomplete wake — cheap, the watcher wakes you; (b) better for a cross-repo run,
+  don't rely on merge-hop chaining at all — drive the merges from the session, or make the
+  target queue's tail.md build-loop-aware first. Reviews chaining reliably ≠ merges will.
+- **`fable` round 4 → use `opus` on a queue.** The reference `model_for` sets fable for round 4,
+  but the batchq rule is "never fable on a queue"; a fire-readiness verdict wants a capable model
+  anyway. Switched review4/merge4 to opus.
+- **Merge jobs must delete the queue `model` override first-act too** (not just reviews) — else the
+  last stage leaves a stale `opus`/`fable` model file that escalates the NEXT unrelated queue job.
+- **The narrow "freeze" round earns its place.** Round 4 called S1 "READY after one edit"; the
+  narrow round-5 verify found TWO more real S1 leaks (an ~11 h silent window, a pure-AIS
+  regression) the edit missed. Do not skip the freeze round because round 4 sounds confident.
+- **The paired REVIEW catches what the BUILD's own green tests miss via fixture artifacts.** S1's
+  build passed 10 tests + 529 suite + a clean grep, but the review reproduced two defects hidden by
+  fixture coincidences (a 1 h arrival window under the resume threshold; `passage_legs: []`). Bake
+  the mechanical acceptance CHECK (here the D7.0 grep) into the BUILD, and have the REVIEW re-run it
+  and reproduce the risky live cases with its OWN fixtures, not the shipped tests.
+
 ## Skill maintenance
 
-This skill has run on dk-w5 (milestones 1–6, 2026-08-09 →) and the batchq engine
-(Phase 3, 2026-08-18 — first cross-repo run). After each run, fold the CLOSE retro's
+This skill has run on dk-w5 (milestones 1–6, 2026-08-09 →), the batchq engine
+(Phase 3, 2026-08-18 — first cross-repo run), and cruising-app (friend-fleet, 2026-08-21 —
+first planning-loop + drain on a non-build-loop queue). After each run, fold the CLOSE retro's
 lessons in here; when stable, propose the fix-loop + recovery patterns upstream into the
 batchq engine + skill.
 
