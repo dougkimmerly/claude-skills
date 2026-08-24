@@ -667,10 +667,20 @@ Refs: fixer issue #N, commits, log paths
   on homecore, NetBox, another host) will correctly DECLINE rather than reach it.
   Put the verification *result* in the spec, or do the LAN check from an
   interactive/LAN session (cost two needless command-ce jobs, 2026-08-05).
-- Submit per the inline-arg gotcha above: Write the spec to a file, then
-  `sbmjob -q <owning-queue> "$(cat /tmp/spec)"` (the forwarder, NOT
-  `~/.batchq/engine/sbmjob` — that strands the job on the Mac's dead local
+- Submit per the inline-arg gotcha above, **with `-from <your-repo>`** so the
+  completion message routes to YOUR inbox, not the orphan `unknown`: write the
+  spec to a file, then
+  `sbmjob -q <owning-queue> -from <your-repo> "$(cat /tmp/spec)"` (the forwarder,
+  NOT `~/.batchq/engine/sbmjob` — that strands the job on the Mac's dead local
   queue). No parallel HANDOFF entry — one fact, one home; JOBLOG.md is the record.
+- **Always pass `-from <your-repo>` on a cross-domain submit (MSGQ, ADR 0073).**
+  `-from` is the SENDER's entity — the repo you're delegating *from*. When the
+  owning queue finishes your verify-first job, the completion (`📬
+  <owning-queue>/<job>: done`) lands in *your* per-entity inbox and surfaces in
+  your next interactive turn — you're told your delegated work is back without
+  polling. Omit it and the message falls to `unknown`, which nobody drains
+  (that pile IS the tell that a submitter skipped `-from`). This applies to any
+  system/scripted submit too, not just cross-domain.
 
 ## Watching a queue as reviewer (wake-on-event)
 
