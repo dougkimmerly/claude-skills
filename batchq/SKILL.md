@@ -5,6 +5,18 @@ description: Doug's AS/400-style batch job queue for unattended Claude work (~/.
 
 # batchq — the batch job queue
 
+> **⚠️ HOST MOVED 2026-08-24 (ADR 0076): the worker + all queues now run on the
+> dedicated `batchq` Proxmox guest at `192.168.20.13` (E-core-pinned, IO-capped),
+> NOT homecore.** The Mac's `sbmjob` forwards straight to `.13` (one hop; the old
+> homecore→NAT relay is retired). The dashboard is `http://192.168.20.13:8250`.
+> **"homecore" references below are stale pending a full pass by the batchq/migration
+> owner** — mentally substitute `.13` for the worker host. **Also live (ADR 0073):
+> the MSGQ submitter-messaging plane** — a completed job posts a message to its
+> submitter's per-entity inbox, delivered to interactive CC sessions via the Mac
+> `~/.claude` hooks (announce on session-open + a `📬` between-turn reminder). Always
+> `sbmjob -from <your-repo>` so completions route to you, not the orphan `unknown`
+> (see "Cross-domain requests").
+
 One engine, one JOBQ per repo. Jobs are files; the OS's file-watcher (systemd
 `.path` on homecore) fires the worker the moment one lands; the worker drains
 FIFO, running each job as a **fresh headless `claude -p` session in its own git
