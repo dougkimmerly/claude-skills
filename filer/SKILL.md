@@ -169,6 +169,33 @@ useful hint, so folder-structure-as-hint doesn't apply here the way it does for 
 3. The `database/`, `private/`, lock files are the app's internal SQLite/cache — no photo content, always
    safe to Quarantine (not delete, see cardinal rule above) once the real files are extracted.
 
+**A rescued Mac user home's `~/Library/` LOOKS like all scaffolding but harbors real personal data — do
+NOT blanket-quarantine it** (learned R023, 2026-08-24, draining a `dsn` Mac home). Most of `Library/` IS
+rebuildable junk (`Caches/`, `Containers/`, `Preferences/`, `Fonts/`, `Saved Application State/`,
+`Cookies/`, `Logs/`, `.app` bundles) → Quarantine those whole (same-volume `mv` of a dir is instant, no
+slow recursive walk needed). But **extract these real-data pockets first, to `_to-sort/_needs-doug/<source>/`
+with a README flagging the owning CC** — they're personal data a document audit reads as "no content" while
+being exactly what other domains want:
+- `Library/Mail/` (Apple Mail `V2/` store), `Library/Messages/` (iMessage) → **Archive** (mail/timeline;
+  siblings of the Notes `.nsf` mailboxes).
+- `Library/Calendars/*.calendar/Events/*.ics` → **Archive** (timeline; per the calendar-files rule above).
+- `Application Support/AddressBook/` (Contacts), `Application Support/CallHistoryDB`/`CallHistoryTransactions`
+  → **Archive** (contacts/timeline).
+- `Library/Keychains/` → **Doug** (credentials — sensitive; never extract blindly).
+- `Application Support/Google`/`BraveSoftware`/etc. browser profiles, `Library/Safari/` → bookmarks/history
+  worth a look; `Autosave Information/` can hold unsaved documents; `.ssh/` → check for private keys (vs a
+  bare `known_hosts`, which is just scaffolding).
+A batchq verify-first job to the owning queue **can't do this extraction** — the batch worker has no NAS
+mount — so the README in `_needs-doug/` is the durable flag; extraction runs from an interactive NAS session.
+
+**A drive-rescue of a whole Mac user home splits into LANES that route OUT, not one filing pass** (R023
+synthesis): the VM (`.pvm`/`.pvmz`/`.hdd`) → **fixer** `drive-salvage` via verify-first job (attended
+crack, same as R008/R020/R021 — the batch worker can't mount a VM either); Lotus Notes trees → move INTACT
+to `_mailboxes-to-extract/` (keep `user.id`+`names.nsf` with the mail for decryption; copy the `.id` to
+`_notes-id-vault/` too); real documents → file/dedup; `Library/` → pockets-then-quarantine per above. The
+bulk GB is almost always the VM + the mailboxes (both leave filer's lane); the actual document-filing is a
+small remainder.
+
 **Video-editing project bundles** (Final Cut `.fcpbundle`, iMovie `.imovielibrary`/`Final Cut Events`/
 `iMovie Events.localized`/`.rcproject`) — **preserve intact as a unit, do NOT hand-extract "the real
 files."** These aren't a media dump with a few cache files mixed in — the edit itself (timeline, cuts,
@@ -1058,6 +1085,21 @@ Treat it as a **SOURCE, not a destination:**
 
 ### QuickBooks — two `.QBW` for the same company
 Pick the **larger** one as live (more recent data); smaller → `Accounting/Backups/`.
+
+**A rescued QB company-files folder is mostly already-filed dups + rebuildable app junk — dedup HARD,
+expect a tiny keeper tail** (R023, 2026-08-24: a `dsn` Mac home's `Quickbooks/` = 709 files → only **7
+genuinely unique**; 640 already on DSN by name+size, 121 QB internal junk). Two rules that made it fast:
+1. **QB internal-junk classes to quarantine (rebuildable, never business data):** `.ND`/`.TLG`/`.DSN`
+   (multi-user + transaction-log sidecars), `*.QBW.SearchIndex/` dirs and their Lucene guts
+   (`.cfs`/`.cfx`/`segments*`), `QuickBooksAutoDataRecovery/` + `*.ADR`/`*.ADR.old`, `QBBackupTemp */`
+   validate-copies, `~qbofx*`, `CONNLOG.TXT`/`CONNOLD.TXT`. **`*_MigrationReport.xml` — READ before
+   quarantining** (the skill says it can reveal other companies); in practice they're often empty stubs
+   (all-empty `<TaxCodes/>`/`<MemorizedTransactions/>` sections) → then they're junk too.
+2. **Dedup the rest by (name.lower, size) against the DSN catalog, and verify the canonical still exists
+   on disk** (`os.path.exists`) before calling it a dup — the DSN Other Companies structure is mature and
+   already holds most of it. The live `.QBW`s were the trap: rescued Ciliarus/MHoldings `.QBW` were
+   *smaller* than DSN's current live book → they're older working states → `<co>/Accounting/Backups/`
+   (named by what they are, e.g. `MHoldings (older working state).QBW`), NOT the live root.
 
 ### Google Drive link stubs (`.gdoc`/`.gsheet`/`.gslides`) — park, don't file
 These are ~200-byte JSON pointers to cloud documents, no local content. Filing them by subject is
