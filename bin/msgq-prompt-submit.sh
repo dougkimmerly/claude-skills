@@ -69,10 +69,13 @@ else
 fi
 [ -n "$out" ] || exit 0
 
-unread=$(printf '%s\n' "$out" | sed -n '1{s/^[^:]*: \([0-9]\{1,\}\) unread$/\1/p}')
+# portable parse (POSIX awk — BSD sed on macOS rejects the `1{...}` block +
+# `\{1,\}` interval; this hook runs on the interactive host, often a Mac):
+# msgq's header line is "<entity>: <N> unread" / "<entity>: <N> remaining".
+unread=$(printf '%s\n' "$out" | awk '/unread$/{print $(NF-1); exit}')
 [ -n "${unread:-}" ] && [ "$unread" -gt 0 ] 2>/dev/null || exit 0
 
-remaining=$(printf '%s\n' "$out" | sed -n 's/^[^:]*: \([0-9]\{1,\}\) remaining$/\1/p')
+remaining=$(printf '%s\n' "$out" | awk '/remaining$/{print $(NF-1); exit}')
 [ -n "${remaining:-}" ] || remaining=0
 
 lines=$(printf '%s\n' "$out" | grep '^{')

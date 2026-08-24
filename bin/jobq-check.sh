@@ -59,7 +59,7 @@ if [ -f "$whichq" ]; then
       peek_out=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "$WORKER_HOST_SSH" \
         "~/.batchq/engine/msgq peek '$entity'" 2>/dev/null)
     fi
-    unread=$(printf '%s\n' "$peek_out" | head -1 | sed -n 's/^[^:]*: \([0-9]\{1,\}\) unread$/\1/p')
+    unread=$(printf '%s\n' "$peek_out" | awk '/unread$/{print $(NF-1); exit}')  # portable: BSD sed rejects the GNU form (this runs on the Mac)
     if [ -n "${unread:-}" ] && [ "$unread" -gt 0 ] 2>/dev/null; then
       plural=""; [ "$unread" = "1" ] || plural="s"
       inbox_note="📬 $unread unread message${plural} for $entity — msgq read"
