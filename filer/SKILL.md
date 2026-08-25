@@ -1191,3 +1191,21 @@ in **`/Volumes/Home Files/_DriveRescue/RETRIEVAL-LOG.md`** (status `staged`). Wh
 `_DriveRescue/<folder>/` into canonical homes, **set that row's Status to `completed` + fill the Completed
 date** — that's the signal the source drive is fully processed and safe to wipe. The folder name is the
 handoff key. Don't wipe/clear a folder whose row you haven't marked `completed`.
+
+**When a rescue contains a VM, it's a TWO-PHASE handoff — the row stays `staged` across both** (R023,
+2026-08-24): (1) filer drains everything filable and **routes the VM out to fixer via a verify-first job**
+(fixer owns VM cracking — batch workers can't mount a `.pvm` and have no NAS anyway, so fixer parks it as
+attended Parallels-Mac work and replies to the filer queue when done). (2) Fixer cracks it, files a
+CONTENT-VERIFIED note under the RETRIEVAL-LOG row, and stages the VM's uniques into a **new** rescue folder
+(e.g. `_DriveRescue/2008Mac-xpvm/`) plus any mailboxes into `_mailboxes-to-extract/<vm>/`. Filer then closes:
+- **Drain the new `_DriveRescue/<vm>/`** (dedup its files vs the NAS — VM-era QuickBooks/docs are usually
+  already covered; expect a tiny unique tail) and confirm the mailboxes are in their extract lane.
+- **The `.pvm` blob itself gets a PERMANENT home, not deletion** — there's an established VM archive at
+  `Home Files/Data/Documents/System & Tools/Parallels/` (holds the live Win11/Ubuntu VMs). Move the
+  byte-safe `.pvm` there with a descriptive name (`Windows XP (<source> <profile>).pvm`); niche in-VM
+  formats fixer chose not to separately extract (Skype/BlackBerry/Control4 configs) stay preserved inside it.
+- **Then** flip the row to `completed` + Completed date — THAT is when the physical drive is wipe-cleared
+  (the physical wipe stays the requesting domain's action, e.g. hardware-roadmap for gpucore reuse).
+- **`.dbx` (Outlook Express) mailboxes are a known extractor gap** — the mail pipeline handles `.nsf`/
+  `.mbox`/`.emlx` but not `.dbx`; drop a `README-DBX-GAP.md` in the `_mailboxes-to-extract/<vm>/` folder so
+  the mail domain knows it needs a `.dbx` parser before those extract. Filer only stages/flags them.
