@@ -185,8 +185,16 @@ being exactly what other domains want:
 - `Application Support/Google`/`BraveSoftware`/etc. browser profiles, `Library/Safari/` → bookmarks/history
   worth a look; `Autosave Information/` can hold unsaved documents; `.ssh/` → check for private keys (vs a
   bare `known_hosts`, which is just scaffolding).
-A batchq verify-first job to the owning queue **can't do this extraction** — the batch worker has no NAS
-mount — so the README in `_needs-doug/` is the durable flag; extraction runs from an interactive NAS session.
+**Deliver these to the owning domain as a verify-first JOB, not just a README** (learned the hard way,
+R023 2026-08-25 — Doug caught that a flag-only handoff never actually asks the owner). The batch worker
+has no NAS mount so it *can't do the extraction* — but that is NOT a reason to skip the job: the job's
+job is the DECISION, not the extraction. The owning domain (archive, for calendars/mail/messages/contacts)
+reads the finding, decides ingest-or-not, and PARKS the attended NAS work in its own backlog — exactly how
+fixer handled the R023 VM and how archive replied to the R023 pockets (ingest Calendars/Mail/Messages,
+skip browser profiles, log the `.dbx` gap). Spell out the no-NAS caveat in the spec so the owner parks
+rather than attempts. Do BOTH: submit the verify-first job (the delivery/decision) AND drop a `README` in
+`_needs-doug/`/`_mailboxes-to-extract/` as co-located context — annotate the README with the job id so it
+reads as *delivered*, not an open TODO. "The batch worker can't reach the NAS" ≠ "don't send the job."
 
 **A drive-rescue of a whole Mac user home splits into LANES that route OUT, not one filing pass** (R023
 synthesis): the VM (`.pvm`/`.pvmz`/`.hdd`) → **fixer** `drive-salvage` via verify-first job (attended
