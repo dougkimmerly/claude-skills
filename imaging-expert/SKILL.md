@@ -157,6 +157,13 @@ POST   /documents              Upload file(s) — multipart
                                 Required: 'app' field
                                 Optional: category, caption, source, doc_type,
                                           tags (JSON), job_id, equipment_id, vendor
+POST   /documents/consulting-invoice  Render consult's invoice JSON → PDF
+                                (pdfkit, ADR 0017) and store it. owner-only,
+                                app=consulting. HOME-ORIGIN: consult POSTs to the
+                                HOME instance; boat only receives the replicated
+                                copy (boat-local POST 500s EACCES by design, like
+                                household/medical). Body needs number, issue_date
+                                (YYYY-MM-DD), client.name; category = client slug.
 GET    /documents              List/filter
                                 ?app=maintenance&category=JOB-1074&doc_type=invoice
                                 &job_id=&equipment_id=&extracted=&limit=&offset=
