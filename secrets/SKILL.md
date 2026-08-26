@@ -71,6 +71,12 @@ sops exec-env secrets/home/<file>.sops.yaml -- docker compose up -d --build <svc
 ```
 compose forwards each var: `environment: { VAR: ${VAR:-} }`. `sops exec-env` puts the secret in the shell env, compose interpolates it, and docker **bakes the value into the container config at `up` time** — so it survives restart/reboot. A bare `docker compose up` ships empty vars — always deploy via the wrapper (a `deploy.sh` makes that the default).
 
+**Need TWO SOPS files in one container** (e.g. a service's own secrets + another domain's canonical file you don't want to duplicate — one fact, one home)? `sops exec-env` takes one file, so NEST it (proven in `dk400-homelab/deploy.sh`, 2026-08-26 — dk400.sops.yaml + consult-gmail.sops.yaml):
+```bash
+sops exec-env "$SECRETS_A" "sops exec-env '$SECRETS_B' 'docker compose up -d --build <svc>'"
+```
+The outer decrypt runs `sh -c` on the middle string (`$SECRETS_B` expands now, in double quotes); the inner decrypt runs `sh -c` on the innermost (single-quoted) compose command. `SOPS_AGE_KEY_FILE` (exported before the call) is inherited by both. Beats copying the second file's keys into the first (which would drift).
+
 ⚠️ **Do NOT render secrets to a tmpfs `env_file`** (`/run/...`) for a container with `restart: unless-stopped`: `/run` evaporates on reboot, the container auto-restarts, and it comes up with **missing secrets**. Tmpfs `.env` is only safe for a one-shot process. Convert an `env_file: .env` service to `environment: ${VAR}` interpolation instead.
 
 **Deploy `deploy.sh` shape** (single-quote the command so `$VAR` expands in the shell `sops exec-env` spawns, not when the script is read):
