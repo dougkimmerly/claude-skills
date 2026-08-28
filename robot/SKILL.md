@@ -104,6 +104,16 @@ Found 2026-07-02: all 8 `HEALTH_*` jobs at BOTH sites were dead this way for wee
 | `300` | Every 5 minutes | - |
 | `3600` | Every hour (interval style) | - |
 
+**No "Nth weekday of month".** The vocabulary above is the whole set — there's
+no native way to express "3rd Monday of the month" or similar sparse cadences
+(`*MONTHLY` is always the 1st). Pattern: schedule **`*WEEKLY`** on the target
+weekday, then **self-gate the date test inside the program** (e.g. `15 <=
+now.day <= 21` for the 3rd week) — return `{"status":"skipped","reason":…}` on
+non-matching days (no-op, no error). Give the program a **`force=True`** kwarg
+to bypass the gate for on-demand runs / catching up a missed period. Reference
+implementation: `dk400-homelab/programs/consult_invoice.py` `_is_third_monday()`
+(job `CONSULT_INV`, `*WEEKLY MON 09:00`).
+
 ## Adding/Removing Programs
 
 ### Add a new scheduled program
