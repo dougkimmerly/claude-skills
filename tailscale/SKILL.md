@@ -287,6 +287,15 @@ sudo /opt/tailscale/tailscale --socket=/var/run/tailscale/tailscaled.sock <cmd>
 - **Fix:** Always specify all routes: `sudo tailscale set --advertise-routes=192.168.20.0/24,192.168.22.0/24`
 - **Verify:** `sudo tailscale debug prefs | grep -A5 AdvertiseRoutes`
 
+### 9. Tailscale shadows Zscaler ZPA (Private Access) on the Mac (2026-09-04)
+
+- **Symptom:** Zscaler Client Connector shows Private Access ON + Authenticated, tunnel to broker healthy — but **Statistics show 0 bytes ever transferred**, and ZPA-published hostnames (e.g. `xtl400.xtl.com` for Doug's XTL work) resolve to their public IPs and route direct instead of returning a ZPA synthetic 100.64.x.x address. Looks exactly like "no app segment assigned" — it isn't.
+- **Cause:** Both products intercept DNS / claim utun routes on macOS; with Tailscale in the way, Zscaler's DNS hook never sees the queries, so ZPA never claims its hostnames. (Both also use CGNAT 100.64/10 — Tailscale for the tailnet, ZPA for synthetic IPs — so route overlap is possible too.)
+- **Fix (verified 2026-09-04):** **disconnect Tailscale — ZPA connects immediately**, no Zscaler restart needed. `dig` on the ZPA hostname flips from public IP to 100.64.x.x and all app-segment ports flow. Use `vpnmode xtl` / `vpnmode home` / `vpnmode status` (`~/.local/bin/vpnmode`) to switch/report.
+- **Coexistence experiment (open):** try `tailscale set --accept-dns=false` so Tailscale keeps tailnet/subnet routing but stops owning DNS — Zscaler's resolver hook may then claim its hostnames with Tailscale still up. Risk: both use CGNAT 100.64/10, so ZPA synthetic IPs may still get swallowed by the tailnet route; test with `vpnmode status` after toggling. Homelab-by-IP (192.168.x) should survive; MagicDNS names won't.
+- **Verify:** `dig +short <zpa-hostname>` → 100.64.x.x = ZPA owns it; public IP = still shadowed. Zscaler's Statistics bytes counter starts moving.
+- **Watch the reverse:** with Tailscale down/subordinated, homelab reachability (MagicDNS, subnet routes to 192.168.20/22) may need re-checking when switching back — treat the two VPNs as per-work-context toggles on this Mac.
+
 ---
 
 ## Quick decision flow
