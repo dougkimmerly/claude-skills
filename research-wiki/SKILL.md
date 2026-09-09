@@ -122,6 +122,25 @@ docs/research/
     miscount in the founding-run era, and on 2026-09-09 it converted seven agent
     reports into findings safe to write into a design document. Verify the claims that
     would change a decision; ignore the rest.
+14. **Make every agent separate the mechanism from the present tense.** The
+    characteristic multi-agent error when researching a live system is being *right
+    about the code and wrong about what is currently happening*: it happened twice in
+    one session (2026-09-09), both times as "X renders/does Y **today**" where the
+    mechanism was real but the symptom had never fired. Both would have entered a
+    design document as live bugs. Require the distinction in the prompt — **live**
+    (observed happening) vs **latent** (would happen; say what makes it fire) — and
+    spot-check every "today" claim, because that is the word that carries the error.
+15. **A new lens over an old corpus is a first-class run, and cheaper than new
+    research.** 2026-09-09: six pages on interface over 46 system pages written
+    months earlier for an entirely different question, with most of the evidence
+    already sitting in them under other headings. What makes it work is not new
+    sources but (a) a schema rule forcing every page to end in a **verdict** against
+    a named principle rather than a summary, and (b) telling each lens to mine the
+    existing pages before searching. Budget it as an ingest pass, not a founding run.
+16. **Lint links by depth when the wiki has nested folders.** A `concepts/` page is
+    one level deeper than a `systems/` page, and agents write the shallower path:
+    12 broken links in two pages on the first nested run, all `../../` where
+    `../../../` was needed. One shell loop over every relative link catches it.
 
 ## Ingest-spec traps (paid for 2026-08-10, Cole Medin rounds 1–2)
 
