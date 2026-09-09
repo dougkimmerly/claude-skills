@@ -164,6 +164,58 @@ SELECT pg_reload_conf();
 
 Existing workers keep their old timeout values; bounce them via `ALTER SUBSCRIPTION ... DISABLE` then `ENABLE`, or terminate and let them respawn.
 
+### Livelock **past** an adequate timeout — the 5-min fix stops working (2026-09-09)
+
+**This is the recurrence of the above, and the fix above does not catch it.** Both
+ends were already at 5 min from the May 2026 mitigation, and `cruising_sub` still
+died — silently, for **five weeks**.
+
+**Symptom, and why nothing alerts:** the log shows the same
+`terminating logical replication worker due to timeout`, but now on a **~5-minute
+cycle that exactly matches `wal_receiver_timeout`** rather than the 60s cycle of
+the original. Meanwhile **every health signal reads green**:
+
+| Looks fine | Actually |
+|---|---|
+| `subenabled = t`, all tables `srsubstate = 'r'` | never applies anything |
+| apply worker alive, `last_msg_receipt_time` current | that's keepalives, not data |
+| slot `active`, `wal_status = 'reserved'`, small `behind` | restart_lsn never advances |
+| row counts match both sides | only because the table was quiet |
+
+**The one query that catches it** — everything above can lie, this cannot:
+
+```sql
+-- On the subscriber, run twice ~15s apart. If these do not move, it is dead.
+SELECT subname, received_lsn, latest_end_lsn, now()::time(0) FROM pg_stat_subscription;
+```
+
+Corroborate with a business column rather than a replication one:
+
+```sql
+-- Compare on both sides. A five-week gap is not lag.
+SELECT max(updated_at) FROM cruising.jobs;
+```
+
+**Mechanism:** the publisher spends long stretches decoding WAL that the
+publication filters out (boat `dk400` carries far more traffic than the `cruising`
+tables). It emits nothing the subscriber counts as progress, the subscriber hits
+`wal_receiver_timeout`, restarts **from the same `restart_lsn`**, and re-decodes
+the same backlog — so each cycle does the same work and dies at the same place.
+**Raising the timeout further only lengthens the cycle unless the publisher emits
+keepalives during long decode.** Rule out the link first: this was diagnosed at
+105 ms RTT with 0% loss, so "slow link" was not the cause.
+
+**Before you fix it, plan the catch-up.** Restarting a subscription that is weeks
+behind releases a large burst of WAL. Tested on two throwaway PG 16.13 containers
+(2026-09-09): **a catch-up burst generated enough WAL to invalidate the *other*
+direction's slot**, turning a one-way outage into a two-way one. Watch both slots,
+and note that recovery via `copy_data = false` restores streaming instantly,
+reports `srsubstate = 'r'`, and **silently discards the entire backlog** —
+the failure looks exactly like success.
+
+**Standing lesson:** *a healthy-looking subscription is not evidence of a complete
+log.* Monitor LSN movement and a business timestamp, never subscription status.
+
 ### `ALTER SUBSCRIPTION … REFRESH PUBLICATION` hangs over the slow link (adding a new table) — 2026-08-21
 
 **Symptom:** adding a newly-published table to the subscription (`REFRESH PUBLICATION`) hangs indefinitely — the command sits in `pg_stat_activity` with `wait_event = LibPQWalReceiverReceive` (waiting on the publisher over SpeedFusion) — even though the **existing** replication is perfectly healthy (apply worker alive, `last_msg_receipt_time` advancing). Adding `cruising.cell_usage` hung this way 3× (2026-08-21).
