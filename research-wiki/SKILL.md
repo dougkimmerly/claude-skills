@@ -20,7 +20,7 @@ big one. This skill encodes those lessons; the instance shows them at full scale
 ```
 docs/research/
   SCHEMA.md            # page types, naming, frontmatter, citation rules — WRITE FIRST
-  index.md             # catalog: every page, one-line hook, by category — DERIVED (see rule 6)
+  index.md             # catalog: every page, one-line hook, by category — DERIVED (see rule 7)
   log.md               # append-only chronology: ## [YYYY-MM-DD] ingest|lint|refresh | title
   systems/<name>.md    # one entity page per system/paper/case: what it is, core model,
                        #   documented failure modes, sources
@@ -72,20 +72,56 @@ docs/research/
    documented weakness is unfinished research." Without it you get vendor brochures.
 2. **One file per agent; single-writer files named in EVERY prompt** — non-owners get
    an explicit "do not touch index.md/log.md", not just the owner getting "you own it".
-3. **Bulk payloads move between stages as FILES, never prompt-embedded JSON.** The
+   **The rule must bind SUB-agents too** (bosun assistants wiki, 2026-09-09): two of
+   eight lenses spawned their own helpers, which wrote pages outside their scope.
+   Both parents caught it and merged rather than leaving duplicates — but that was
+   their diligence, not the design. Say in every prompt: *you may spawn helpers, but
+   YOU are the only writer; helpers return text to you.*
+3. **Check the web-search budget BEFORE a fan-out.** It is a shared per-session
+   resource (default 200 calls, `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION`) spent by
+   the parent and every subagent, and it runs out **silently** — the first sign is a
+   researcher mentioning it in passing, by which point the run is degraded. For a
+   large run, start a fresh session. Note which lenses are search-independent
+   (repos via `gh api`, video via `yt-dlp`) and schedule those first when it is
+   scarce.
+4. **Bulk payloads move between stages as FILES, never prompt-embedded JSON.** The
    founding run's one hard failure: a single merge agent fed 600KB inline died
    mid-stream and ~2M tokens went to verifying duplicates.
-4. **No single agent ever holds the whole corpus.** Merge/dedup is a fan-out of small
+5. **No single agent ever holds the whole corpus.** Merge/dedup is a fan-out of small
    cluster editors (21 agents finished in 7 min what one agent died doing).
-5. **Amend SCHEMA.md the moment an agent improvises around it** — improvised
+6. **Amend SCHEMA.md the moment an agent improvises around it** — improvised
    conventions left unrecorded become next batch's inconsistency.
-6. **Derive index.md mechanically from page frontmatter (`hook:` field).** Hand-written
+7. **Derive index.md mechanically from page frontmatter (`hook:` field).** Hand-written
    index hooks are copies; in the founding run they rotted within one afternoon.
-7. **Tier reasoning effort:** mechanical stages (splitting, index assembly, block
+8. **Tier reasoning effort:** mechanical stages (splitting, index assembly, block
    merges) at low effort; research/verify stages at default or higher.
-8. **Scale expectation:** the founding run — 155 pages, ~640 sources, full adversarial
+9. **Scale expectation:** the founding run — 155 pages, ~640 sources, full adversarial
    review — cost ~15M subagent tokens / 214 agents / ~3h20m. Scale lenses and review
    depth to the ask; a landscape-only run without review is roughly half.
+10. **When the research serves a system that EXISTS, point every prompt at the running
+    system, not only at the literature.** The highest-value finding of the bosun
+    design review (2026-09-09) came from an agent told to check a design claim against
+    the live database: the rule the entire autonomy model rests on turned out to be
+    *unimplemented* — 13 audit rows across 60 records, none written by shipped code —
+    which no amount of web research could have found. Give researchers the repo paths,
+    the DB, the log files and the live hosts, and say explicitly that the design's own
+    claims are hypotheses to be tested. Web-only prompts return what other people did;
+    system-pointed prompts return what YOU did. Both matter, and the second is the one
+    that changes the design.
+11. **Run the thing if it can be run.** Same session: a test script that had been cited
+    as evidence for a day could never have worked — it passed the server's flags to
+    `docker run` and died on the first container. Two throwaway containers turned a
+    desk-researched "yes, with conditions" into four observed failure modes, one of
+    which (the documented recovery path silently discarding the backlog and reporting
+    healthy) reversed a design decision. **An unrun test is not evidence.**
+12. **Budget parent agents at about a third of the concurrency ceiling.** Prompts that
+    permit helpers mean each parent may hold several slots; a 7-parent fan-out hit the
+    20-subagent limit at 5. Launch in waves and fire the rest as capacity frees.
+13. **Spot-check each returning agent's most checkable claim before folding it in** —
+    a line count, a row count, a grep. It costs one command per agent, it caught a
+    miscount in the founding-run era, and on 2026-09-09 it converted seven agent
+    reports into findings safe to write into a design document. Verify the claims that
+    would change a decision; ignore the rest.
 
 ## Ingest-spec traps (paid for 2026-08-10, Cole Medin rounds 1–2)
 
