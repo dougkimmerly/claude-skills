@@ -142,6 +142,18 @@ docs/research/
     12 broken links in two pages on the first nested run, all `../../` where
     `../../../` was needed. One shell loop over every relative link catches it.
 
+## Standing watch (built 2026-09-11, adaptive 2026-09-12)
+
+For subjects that keep publishing (a founder's channel, a live system's
+write-ups), the reference wiki runs a watch list — `docs/research/WATCH.md`,
+one row per page, kind `youtube-channel` or `web` — driven by
+`scripts/research/wiki-watch.sh` from a daily homecore timer. Each row paces
+itself from its own yield (new → halve the interval; nothing → lengthen ×1.5;
+a failed fetch never lengthens and is logged as "could not reach"), per the
+estate's measure-it-and-adjust principle. `wiki-watch.sh --status` shows the
+per-row intervals. To watch something new: add a row. The ingest obeys the
+scope test (design input, not a news scrapbook) and commits its own log entry.
+
 ## Fetching sources that block non-browser clients (learned 2026-09-11, Cerebras)
 
 Some sites serve the full article with an HTTP 4xx/5xx to anything that is
