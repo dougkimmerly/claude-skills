@@ -552,7 +552,7 @@ Imaging is deployed on multiple hosts from **one shared repo** (see "Multi-site 
 
 **Smoke-checks for a new replica:**
 
-- `curl http://localhost:3100/health` should return `status: ok` and `postgres: connected`. `chunks: …` may report errors if `imaging.document_chunks` is absent — known imaging-side noise (B8d guards missed the chunk-stats query path); flag to imaging session.
+- `curl http://localhost:3100/health` should return `status: ok` and `postgres: connected`. On a host without pgvector, `chunks` is simply absent from the response rather than an error — `db.chunkStats()` probes for the table first and `/health` wraps the call (fixed; the older "chunk-stats noise" note no longer applies).
 - From inside the imaging container: `nc -zv <peer-tailscale-ip> 3100` should connect. Docker bridges DO route to Tailscale on a stock host (IP forwarding + bridge MASQUERADE handles 100.x like any external destination); do **not** switch to `network_mode: host` — unnecessary and disruptive.
 - If the sync worker is timing out on `/sync/changes` first-page, the symptom looks like a network problem but is usually large embedding payloads exceeding the worker's HTTP timeout. Test with `wget --timeout=120` to a peer's `/sync/changes`; if it eventually returns MB of data, the bottleneck is payload size, not routing.
 
