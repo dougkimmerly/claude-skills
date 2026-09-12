@@ -475,15 +475,88 @@ holds, zero host-contention** — the cleanest drain yet. Lessons:
   two-seam marker kept the emit off) — you literally see the built feature working (`from:
   unknown` on submits) before promote. Safe because inert; reassuring because real.
 
+## Run 5 — proj-security master-plan review (2026-09-09/10) — planning loop with no build drain at all, on a doc-only milestone
+
+First run where the "milestone" was a planning document, not code, and the loop never
+reached a build/decompose/drain stage — Doug asked specifically for "the planning loop
+found in the build loop skill," i.e. stage 2 alone. Four rounds (four-lens opus →
+merge-fidelity sonnet → deep-structure opus → freeze fable), kill rates **0.355 → 0.538 →
+0.423 → 0.75**, converged (no new defect family in round 4, rising kill rate + falling
+severity). Then a fold pass applied the converged output across 12 live repo docs, and a
+separate repo-wide consistency/trim pass followed. Lessons:
+
+- **The four lenses translate cleanly from code to a planning doc, with no reframing
+  needed beyond substituting the domain.** "Gate-chain execution simulation" became
+  literally walking the plan's own dependency graph and hostile-scheduler-ing every legal
+  execution order; "cold-builder spec-as-executed" became literally trying to run the
+  riskiest CL/SQL commands in the doc as written (round 3 found a `SECAUDIT` deployment
+  spec that would silently produce zero output rows — three commands between "run the
+  SQL" and "schedule the job" existed only inside a source-file *comment*). "Ledger/clause
+  arithmetic" became reconciling every count and cross-reference in the merged output.
+  Nothing about the four-lens structure is code-specific; it's a general adversarial-review
+  shape.
+- **"Run it interactively for a first plan" (already in this skill) is the right call when
+  no queue exists for the repo** — checked (`ssh <batchq-vm> "ls ~/.batchq/"`) before
+  starting, found none registered for this repo, ran every round as a plain `Agent` call
+  with a `model` override (opus/sonnet/opus/fable) instead of batchq queue jobs. No
+  fire.sh, no LDA, no hold-recovery — just sequential foreground agent calls, each briefed
+  cold (fresh agent, zero shared context) with the prior round's report as required reading.
+  This is a legitimate, much lighter-weight mode of the loop for a single interactive
+  session — don't reach for batchq machinery when there's no queue and no unattended
+  requirement.
+- **A must-fix that survives is often a wrong fact copied into 3+ documents, not a wrong
+  fact in one place.** Round 1's single highest-value catch (`*NETCMN` does not audit
+  telnet — `*NETTELSVR` does) was live-verified against a newly-attached RAG the draft's
+  own citations predated; it had already propagated into four documents before the loop
+  ran and a repo grep during the later cleanup pass found three MORE instances the fold
+  had missed. **Grep the whole repo for a falsified claim's exact token after fixing the
+  N places you found by reading** — reading finds most instances, grep after fixing finds
+  the rest.
+- **Round 2 (merge-fidelity) earns its place by auditing the auditor, not the artifact.**
+  Its findings weren't new facts — they were "Merge 1 said it swept the repo for every
+  instance of X and undercounted." Twice more in this run (Merge 2 auditing Merge 1, then
+  a repo-cleanup pass finding what the fold still missed) the same pattern repeated: every
+  round's sweep-completeness claim was itself incomplete, checkable, and worth a
+  dedicated audit rather than trusting the round's own count.
+- **Splitting a combined multi-pass diff into separate logical commits, after both passes
+  already ran on the same live working tree with no snapshot in between, is possible but
+  needs a specific technique — `git apply`/`git add -p` against the dirty tree does NOT
+  work.** `git apply` matches hunks against the CURRENT index/working tree, which by
+  definition no longer contains the "old" text a `git diff HEAD` hunk is searching for
+  (it's already been replaced by the combined result) — every attempt to reapply a slice
+  of that diff against the live tree fails with "patch does not apply," even when the hunk
+  content demonstrably matches `git show HEAD:<file>` byte-for-byte. The fix: (1) `git diff
+  -U0` (zero context) on each touched file — real edits from two independent passes are
+  almost always on different lines/paragraphs, so a 0-context diff usually splits them into
+  non-overlapping hunks even when a 3-context diff would have merged them into one; (2)
+  categorize each hunk by content against what you know each pass did; (3) extract one
+  pass's hunks into a patch file and apply it with the standalone **`patch --fuzz=0`**
+  command (not `git apply`) against a **detached copy** of `git show HEAD:<file>` — `patch`
+  doesn't care about git's index state, only the file it's pointed at; (4) copy that
+  reconstructed "pass 1 only" content into the real file, stage, commit; (5) restore the
+  saved final (both-passes) content, stage the rest, commit. **Verify with `git diff --stat
+  <commit-before-split>..<HEAD>` and confirm it exactly matches the original combined
+  diff** — this catches any hunk-categorization mistake immediately. Where a hunk
+  genuinely contains both passes' edits on the same line (pass 2 edited text pass 1 had
+  just written), perfect separation isn't well-defined — attribute the whole hunk to
+  whichever pass dominates it and disclose the approximation rather than chase perfection.
+- **Read the doc's own convergence signal, don't just trust the stated round count.** The
+  freeze round (4) was told it was "the final round" but was explicitly instructed to say
+  so if it wasn't and to name what a round 5 would need — it found zero must-fix, and gave
+  an actual reasoned verdict (kill rate direction + no new defect family) rather than
+  rubber-stamping "done" because it was told it was last.
+
 ## Skill maintenance
 
 This skill has run on dk-w5 (milestones 1–6, 2026-08-09 →), the batchq engine
 (Phase 3, 2026-08-18 — first cross-repo run), cruising-app (friend-fleet, 2026-08-21 —
-first planning-loop + drain on a non-build-loop queue), and the batchq messaging plane
+first planning-loop + drain on a non-build-loop queue), the batchq messaging plane
 (MSGQ M1, 2026-08-22 — first zero-docker file/process milestone; cheap-proof + two-seam
-lessons above). After each run, fold the CLOSE retro's
-lessons in here; when stable, propose the fix-loop + recovery patterns upstream into the
-batchq engine + skill.
+lessons above), and proj-security (master-plan review, 2026-09-09/10 — first planning-loop-
+only run with no build/drain stage at all, on a pure documentation milestone; the commit-
+splitting technique above is reusable well beyond this skill). After each run, fold the
+CLOSE retro's lessons in here; when stable, propose the fix-loop + recovery patterns
+upstream into the batchq engine + skill.
 
 **DECIDED END-HOME (Doug, 2026-08-19): the build-loop graduates INTO the batchq engine.**
 It currently lives inside dk-w5 as "the reference to copy" — that's a temporary mis-home
