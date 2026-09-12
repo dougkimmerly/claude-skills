@@ -295,6 +295,12 @@ sudo /opt/tailscale/tailscale --socket=/var/run/tailscale/tailscaled.sock <cmd>
 - **Coexistence experiment (open):** try `tailscale set --accept-dns=false` so Tailscale keeps tailnet/subnet routing but stops owning DNS — Zscaler's resolver hook may then claim its hostnames with Tailscale still up. Risk: both use CGNAT 100.64/10, so ZPA synthetic IPs may still get swallowed by the tailnet route; test with `vpnmode status` after toggling. Homelab-by-IP (192.168.x) should survive; MagicDNS names won't.
 - **Verify:** `dig +short <zpa-hostname>` → 100.64.x.x = ZPA owns it; public IP = still shadowed. Zscaler's Statistics bytes counter starts moving.
 - **Watch the reverse:** with Tailscale down/subordinated, homelab reachability (MagicDNS, subnet routes to 192.168.20/22) may need re-checking when switching back — treat the two VPNs as per-work-context toggles on this Mac.
+- **MagicDNS-only names are the automation trap (learned 2026-09-12):** `homecore` exists ONLY in
+  MagicDNS — Pi-hole has no record — so with Tailscale down it resolves nowhere, even on the home
+  LAN where the host is one hop away. The dk-knowledge enrichment runner failed three passes this
+  way while 192.168.20.19 answered in 0.7 ms the whole time. Rule: anything unattended
+  (LaunchAgents, timers, scripts) addresses homelab hosts by IP, never by MagicDNS name — IPs work
+  on the LAN directly AND remotely via subnet routes, in both VPN modes.
 
 ---
 
