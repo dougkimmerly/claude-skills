@@ -70,6 +70,15 @@ hold-recovery prompt), `docs/plan-review.md` (plan-review method),
    the NEXT milestone's planning job AND the full planning loop (stage 2's chain, via a planloop fire script), stops.
 6. **Morning merge session** (interactive): human + strong model merge plan +
    review, decompose, fire the next milestone. One human session per milestone.
+   **The human DECIDES; the interactive session EXECUTES** (Doug's ruling
+   2026-09-10, dk-w5 M8 gate). Anything a plan marks "Doug's act", "operator
+   act", or "driver session" — the kick, an admission call, a live-query
+   bundle, the attended deploy — means: ask Doug one yes/no, then run it from
+   the session. Never hand Doug a command to type. The batch-VM restrictions
+   (no live appliance, no boat) bind JOBS; the interactive session on the LAN
+   is the operator's hands and is not bound by them. Gate-0 prerequisites
+   (quoting live facts, probing a remote surface, checking a mount HEAD) are
+   the session's to do before it asks for the yes.
 
 ## Heavy-verification budgets: budget-refused is a RECORDED-CORRECT outcome (wedge #5 doctrine, 2026-08-22)
 
