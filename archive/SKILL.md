@@ -61,6 +61,49 @@ python3 pipeline/ingest.py dump --domain dsn --kind email --source notes-dsn,dsn
 ```
 Sensitivity: `ingest.py` classifies (confidential by source/subject; ADR 0001), scrub-and-harvests secrets to a 0600 file → SOPS, redacts to `[REDACTED]`. **Mail domain is per-MESSAGE, not per-mailbox** — the `kbl` mailbox was Doug's *personal* email (`doug@kimmerlyblacksmith.com` is personal); only `handforgediron.ca` is the KBL business.
 
+## People, classification and geo (added 2026-09-12)
+
+Three schemas beyond `corpus.*`, all derived and rebuildable, all readable by
+`corpus_reader` (so bosun can query them). Full spec: `docs/PEOPLE.md`.
+
+- **`people.*`** — 18,784 resolved people from nine Notes address books +
+  Contacts.app + vCards + 383k mail headers. Facts are **bi-temporal**: a person
+  who moved keeps the old address with a `valid_to`, because "where did Serge
+  live when we visited" is the question the archive exists to answer. Carries
+  identifiers-with-date-windows, affiliations, addresses, per-year interaction
+  counts, topics, and stays. Build: `contacts_resolve.py load` then
+  `people_enrich.sql`, `geocode.sql`, `people_stays.sql`.
+- **`corpus.doc_label` / `doc_meta`** — content classification at DOCUMENT grain
+  (`pipeline/classify.py`). Four stages: structural rules, embedding triage,
+  local-model adjudication, plus a deterministic bulk-mail pass. **45% of the
+  corpus is newsletters and marketing** — exclude `doc_meta.bulk` before any
+  expensive pass. Multi-label: 90% of sensitive docs carry more than one category.
+- **`geo.*`** — offline gazetteer (43k postal codes, 236k cities, 1.5M street
+  points) + a geocode cache. **Never use a geocoding API here**: the addresses
+  are Doug's contacts' homes, and egress is the thing this domain controls.
+
+**`corpus.chunk.sensitivity` IS NOT A CONTENT CLASSIFICATION.** It is set from
+four DSN folder names plus a subject regex, so 98% of `confidential` is DSN
+paperwork while ~90% of the genuinely private material sits in `internal`.
+Measurements: `docs/CLASSIFIER-AUDIT.md`. Use `corpus.doc_label_effective`.
+
+## Tests — run them before trusting a change
+
+```
+python3 tests/test_resolve.py                      # pure fns, golden fixtures, metamorphic
+psql ... < tests/invariants.sql                    # whole-pipeline invariants on real data
+```
+Every case encodes a bug that actually happened. The suite found a real defect on
+its first run. **Before any new pass, check the invariants** — `person_stay` was
+once silently clobbered by a second writer with no error.
+
+**The cross-product trap, three times in one session:** never put a regex or
+`LIKE '%'||x` in a JOIN predicate here. Matching 3,028 venues against 236k cities
+is 714M evaluations and never finishes; tokenise one side into a temp table and
+equality-join instead (0.6s). Same shape hit the interaction query and the first
+stays query. Also: killing the ssh session does NOT kill the server-side query —
+use `pg_terminate_backend`.
+
 ## Hard-won gotchas (these cost hours — see STATE.md "Hard-won gotchas")
 - **HNSW + bulk writes: DROP the index FIRST, ALWAYS.** Loading/UPDATEing 100k+ rows of `corpus.chunk` with `chunk_hnsw` present runs for *hours* (per-row graph insertion). `DROP INDEX corpus.chunk_hnsw` → write → `ingest.py index`. Forgetting it → a lock pileup that hangs the DB (slow write → queued DROP → SELECTs queue behind). **pgvector's HNSW build ignores `pg_cancel_backend`** — use `pg_terminate_backend`.
 - **dk400-postgres RAM gates the HNSW build** — build memory scales with rows (~4 GB `maintenance_work_mem` / 6 GB container for ~990k; spill NOTICE = "no longer fits"). `max_parallel_maintenance_workers=0` (container `/dev/shm` too small for parallel). Container mem persisted in `homelab-dk400/compose.yaml`.

@@ -66,6 +66,8 @@ Proven 2026-06-14: extracted 69,965 Notes messages (XTL 48,389 + DSN 21,576) + 2
 
 ## Generic document extraction + credential probing (2026-06-18, DSN/Archive)
 
+**Address books → `extract_person.vbs`/`.ps1`** (`apps/archive/pipeline/notes/`). `extract_docs` is WRONG for these: a Person doc has no subject and no rich-text body, so it returns empty rows — every field that matters is a named item (`FirstName`/`LastName`/`InternetAddress`/`OfficePhoneNumber`/`CompanyName`/…). Gotcha: **Notes `MailAddress` is frequently a distinguished name, not SMTP** (`CN=Serge Gagnon/O=XTL`, `serge gagnon/xtl@xtl`) — reject values containing `/` rather than importing them as email. Output feeds `contacts_extract.py import-notes`.
+
 Beyond mail/calendar, **whole document DBs** (DSNGENER, DSNLet, SALESMAN, the NAS docs, A_JKNOX) extract via **`extract_docs.vbs`** (`apps/archive/pipeline/notes/`): iterate `db.AllDocuments`, emit form/subject/body/date/attachments JSONL. 5,452 DSN docs loaded this way → `dsn.document` (the Archive corpus path; supersedes "feed to imaging" for that store).
 - **`doc.Created` is a Date *variant*, NOT a NotesDateTime object** — format it directly (`If IsDate(d) Then Year(d)&"-"&…`). The `.LSGMTTime` path (correct for *item* DateTimeValues like `StartDateTime`) returns the **1899-12-30 epoch** on a document property — silently dated 498 docs to 1899 before the fix.
 - **Body fallback:** if `GetFirstItem("Body")` is empty, concatenate non-`$` text items (`itm.Text`) — catches form-field docs with no rich-text body.
@@ -257,6 +259,7 @@ Some copies are **locally encrypted** with the owner's ID (active working mailbo
 The archive is built; to fold in a *new* source (e.g. the 2008 Mac if it ever gets Notes, or a found NSF) follow the same shape — all of it ran from `/tmp/dsncal/` scripts:
 1. **Inventory** the host over SSH (`find -type f -iname '*.nsf' ... -printf '%s|%p'`).
 2. **Classify** data vs system/template (drop `bookmark/names/log/help*/lccon*/*.ntf/...` and `.metadata/.projects` dirs). ~70% is plumbing.
+   - ⚠️ **`names*.nsf` IS NOT PLUMBING — it is the personal address book.** Dropping it from the *inventory* (which this step does) left HANDOFF carrying "Lotus Notes Personal Address Book — location UNCONFIRMED" from 2026-08-25 to 2026-09-11, while **nine** address books sat in `C:\NotesArchive\` the whole time. Classify `names*` as DATA. Confirmed 2026-09-12: `names1.nsf` 1,824 Person docs, `names2.nsf` 1,792, `OLDNAMES.NSF` 1,731, `mknames.nsf` 858 (Maggie's), `xtlnames.nsf` 414, plus NAMES_190202/NAMES_OLD/namesdsn/dsnnames — **7,022 Person documents**, all opening with `dougXTL.id`. (`NEWERNAMES`/`NAMESold`/`contact.nsf` are encrypted to a keypair we do not hold; `contact.nsf` is the Salesplace CRM, already on the known-locked list.)
 3. **Hash** the data files (run `md5sum` *on the host*, write to a host-local file; an interrupt-able ssh-pipe loop drops). Push the path list via `ssh "cat > /tmp/x"` (Synology SFTP is chrooted — `scp` to it fails).
 4. **Dedup by content** across all sources → distinct databases; `primary\` = largest of each name, `copies\` = other distinct versions (name them `<base>__<src><ext>`).
 5. **Copy to XPS** (`C:\NotesArchive\{primary,copies}\`) reading source via `ssh cat`/local, scp to XPS, **hash-verify on read**, resumable (skip if dest size already matches).

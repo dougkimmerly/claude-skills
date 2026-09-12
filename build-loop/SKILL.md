@@ -546,13 +546,43 @@ separate repo-wide consistency/trim pass followed. Lessons:
   an actual reasoned verdict (kill rate direction + no new defect family) rather than
   rubber-stamping "done" because it was told it was last.
 
+## Run 6 — bosun M1/M3/M6a/M7 drain (2026-09-12) — the review contract's one-word ambiguity
+
+First run on the `bosun` queue; seven paired slices + a max-stamp CLOSE, fixture-only
+(the batch VM reaches nothing but itself, so zero docker, zero network, zero veth —
+Run 4's "cheap proof" framing applied cleanly and the whole churn worry dissolved
+again). Two lessons, and the first cost a whole gate pass:
+
+- **"Write the fix pair into the queue directory" is ambiguous, and half the reviewers
+  read it as STAGE.** S1's and S2's reviewers submitted with `sbmjob` and their fixes
+  ran; S3–S7's reviewers wrote their pairs into the repo's `jobs-staged/` and stopped.
+  The drain then DRAINED with a green 186-test suite and **five real defects live on
+  `main`** — an event that would never fire, a promise broken weeks early, a poller
+  recovering 9× too slowly from the exact failure it exists to prevent, dead code on
+  the one surface that runs hourly, and a write path that crashed on every real call
+  after committing an orphaned insert. CLOSE caught all five *by checking the merged
+  code rather than trusting the reports*, and gated FAILS. **Fix: the Run-4 imperative
+  belongs in the REVIEW template too, not just the fire template** — "MANDATORY FINAL
+  STEP — this is an ACTION, not a note. RUN it with the Bash tool as your last action
+  and do not end your turn until it prints `queued`. **Staging is not submitting.**"
+- **Make CLOSE's gate check the CODE, not the verdicts.** This CLOSE re-read `main`
+  for each named defect and found all five still present. A CLOSE that had reconciled
+  JOBLOG verdicts against a green suite would have passed the drain. Bake into the
+  CLOSE spec: *for every CHANGES-REQUESTED finding, confirm the fix in the merged
+  source by file and line — a green suite is not evidence that a staged fix landed.*
+- **Corollary on CLOSE's own authority:** this CLOSE was told "do not fire more jobs",
+  so it correctly stopped and handed back — which cost a human round-trip for a
+  mechanically obvious action. The skill's gate-and-remediate budget (max 3 passes)
+  exists precisely for this; say so explicitly in the CLOSE spec rather than
+  forbidding submission outright.
+
 ## Skill maintenance
 
 This skill has run on dk-w5 (milestones 1–6, 2026-08-09 →), the batchq engine
 (Phase 3, 2026-08-18 — first cross-repo run), cruising-app (friend-fleet, 2026-08-21 —
 first planning-loop + drain on a non-build-loop queue), the batchq messaging plane
 (MSGQ M1, 2026-08-22 — first zero-docker file/process milestone; cheap-proof + two-seam
-lessons above), and proj-security (master-plan review, 2026-09-09/10 — first planning-loop-
+lessons above), bosun (M1/M3 drain, 2026-09-12 — the review-contract ambiguity above), and proj-security (master-plan review, 2026-09-09/10 — first planning-loop-
 only run with no build/drain stage at all, on a pure documentation milestone; the commit-
 splitting technique above is reusable well beyond this skill). After each run, fold the
 CLOSE retro's lessons in here; when stable, propose the fix-loop + recovery patterns
