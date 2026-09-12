@@ -142,6 +142,25 @@ docs/research/
     12 broken links in two pages on the first nested run, all `../../` where
     `../../../` was needed. One shell loop over every relative link catches it.
 
+## Fetching sources that block non-browser clients (learned 2026-09-11, Cerebras)
+
+Some sites serve the full article with an HTTP 4xx/5xx to anything that is
+not a browser; cerebras.ai returns the whole post under a 500, and the
+Internet Archive holds the same block. WebFetch, curl and archive lookups all
+report "unreachable" while the page renders fine in Chrome. **When a primary
+returns an error or an empty shell, read it with the browser before writing
+"primary unavailable":**
+
+```
+~/.venvs/wiki-watch/bin/python ~/Programming/dkSRC/w5/scripts/research/browser_fetch.py <URL>
+```
+
+(Playwright headless Chromium; prints readable text; exits 2 only when no
+real content came back.) The same script runs on homecore inside the weekly
+`wiki-watch.sh`. A page built from secondaries because the primary "failed"
+imported invented mechanism detail once — the Cerebras security section —
+and had to be rewritten.
+
 ## Ingest-spec traps (paid for 2026-08-10, Cole Medin rounds 1–2)
 
 - **Test the operator's ACTUAL hypothesis, not a proxy the convenient sources can
@@ -182,3 +201,93 @@ corpora always rot (the wiki's own declared-metadata-rot lesson applies to itsel
 After each substantial run, fold that run's METHOD-NOTES lessons back into this file —
 this skill is itself the compounding artifact for the process, as the wikis are for the
 content.
+
+## Tooling instructions must reach the HELPERS, not just the lens (2026-09-11, bosun EA run)
+
+Rule 2 makes the single-writer rule bind sub-agents. **The browser fallback needs
+the same treatment and did not get it.** Three lenses were each given
+`browser_fetch.py` in their prompt. One of them spawned three helpers to do the
+actual searching and synthesised their returns itself — correctly, per rule 2 —
+but the helpers were never told the fallback existed. Their report came back
+*"r/ExecutiveAssistants and equivalent forums were unreachable by every tool
+across all three passes; WebFetch refuses reddit.com outright"*, and the page
+shipped with the candid-practitioner layer recorded as a permanent gap.
+
+It was reachable. `browser_fetch.py` returns **HTTP 200 and ~33k chars** on the
+same URL, first try.
+
+Two fixes, both cheap:
+1. **Every prompt that permits helpers must say the helpers inherit the tooling** —
+   name `browser_fetch.py` and require it be passed down, the same sentence that
+   passes down the single-writer rule.
+2. **"Unreachable" is a claim that needs the fallback tried**, exactly like a
+   `verified` citation needs the primary opened. Reddit, Discourse forums,
+   Substack, X and most JS-rendered sites refuse WebFetch and render fine in
+   Chromium — that is the normal case, not an exception, so a lens reporting a
+   whole source class as unreachable has almost certainly not tried it.
+
+Generalisation worth holding: the parent obeys the process rules it is given and
+then writes its own prompts for its helpers from scratch. Anything the run
+depends on has to be stated as *"and tell your helpers this"*, or it stops at the
+first generation.
+
+## The estate already has a YouTube transcript tool — and it needs a cert on the Mac
+
+Two traps in one, both hit 2026-09-12 researching a video-first builder.
+
+**1. Look in `w5/scripts/research/` before installing anything.** It holds
+`yt_packet.py` beside `browser_fetch.py` — the same directory this skill already
+sends you to for the browser fallback. It builds a markdown packet of a
+channel's videos (title, URL, description, **full auto-caption transcript**) from
+the YouTube RSS feed, and `youtube_transcript_api` is already in the
+`wiki-watch` venv. A session started `brew install yt-dlp` without opening the
+folder it had been using all day.
+
+```
+~/.venvs/wiki-watch/bin/python w5/scripts/research/yt_packet.py <channel_id> <since_iso8601> <out.md>
+```
+
+Exit 3 means nothing new. It takes a **channel ID**, not an `@handle` — get it
+from the page source (`curl -sL -A Mozilla/5.0 <channel-url> | grep -oE 'canonical[^>]*channel/UC[A-Za-z0-9_-]{22}'`).
+The `"channelId"` fields scattered through the page belong to *other* channels;
+the `canonical` link is the one.
+
+**2. On the Mac it fails with `CERTIFICATE_VERIFY_FAILED`.** The venv is built on
+the python.org framework build, which ships no system CA bundle — `wiki-watch.sh`
+normally runs this on homecore, where it never bites. Point it at certifi:
+
+```
+CERT=$(~/.venvs/wiki-watch/bin/python -c "import certifi;print(certifi.where())")
+SSL_CERT_FILE="$CERT" REQUESTS_CA_BUNDLE="$CERT" ~/.venvs/wiki-watch/bin/python …
+```
+
+Same fix applies to anything else in that venv that uses `urllib` or `requests`
+from the Mac. `browser_fetch.py` is unaffected — Playwright carries its own trust
+store, which is why it works and its neighbour does not.
+
+## Go to the artifact, not the description of it (2026-09-12)
+
+A video said *"I turned Obsidian into a life OS and gave it away."* The instinct
+was to fetch the transcript. The description carried a GitHub link, and the repo
+answered every question the transcript would have, better: the behavioural
+contract the author wrote for his agent, the CI check that is the only thing
+enforcing any of it, and — decisive — **three verbatim statements in the repo
+that the contract "is a policy, not a technical guarantee."** No talk-track says
+that as plainly as the source does.
+
+So: **when a subject has published code, the repo is the primary and the video
+is the index to it.** Read the description for links before queuing transcript
+work. This also sidesteps the next item.
+
+## YouTube rate-limits by IP, and it is silent until it is total
+
+`youtube_transcript_api` raises `IpBlocked` after a burst — 15 transcripts in one
+session was enough. It then fails for **every** video from that address,
+including ones fetched fine minutes earlier. homecore shares the house IP, so it
+is blocked too; the only genuinely different IPs in this estate are the boat's,
+and spending a metered link on transcripts is not a fix.
+
+Practical rules: **pull a channel's packet ONCE per session, early**, since one
+call gets every video; expect the block to be sticky for hours; and when it hits,
+`browser_fetch.py` still returns the page's **title, chapters and description**,
+which is usually enough to decide whether the transcript was worth having.
