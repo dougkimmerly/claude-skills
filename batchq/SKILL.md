@@ -534,6 +534,35 @@ job, a completely different kill. The distinction to hold:
 
 ## Docker-heavy jobs: the host-impact churn budget (fixer ADR 0063, 2026-08-16)
 
+**⚠ FIRST — this is about CREATING docker networks, not about REACHING the
+network. Three different things get conflated here; keep them apart
+(untangled 2026-09-13):**
+
+1. **The churn kill (this section).** Kills jobs that create/destroy docker
+   networks too fast. Symptom — job TERMed, queues MSGW'd, "something
+   network" — reads exactly like an access rule. It isn't one.
+2. **The LAN guardrail — a POLICY, and the real one.** Each queue's `tail.md`
+   welds *"No network beyond localhost and the Anthropic API. No downloads."*
+   into every job prompt (dk-w5 `tail.md:22`). A job asked to hit a LAN
+   endpoint correctly DECLINES. **This is a standing order, not a technical
+   limit — and it is changeable.** `tail.md` already carries the precedent for
+   a scoped carve-out (dk-w5 `:69-71`: `docker pull` of images named in the
+   spec is permitted). Widening it for a specific endpoint is Doug's call, in
+   that file, in the same shape.
+3. **The technical capability — unrestricted.** `batchq.slice` carries
+   `IPAddressAllow=`/`IPAddressDeny=` both EMPTY, no private netns, no sandbox
+   (jobs run `claude -p --dangerously-skip-permissions`), and the worker
+   *requires* egress (`worker.sh:141` `net_ok()` curls `api.anthropic.com` as a
+   precondition). Proven: batch VM → `192.168.20.19:8510/mcp` = HTTP 200.
+
+**Why the distinction earns its keep:** "jobs can't reach the LAN" read as a
+technical fact leads to designing *around* it permanently. dk-w5's M11 plan
+asserted "no remote-queue worktree can connect" and built a fixture-only test
+harness on that premise — when the real answer is that a one-line `tail.md`
+exception would have let the harness measure against the live appliance.
+**When a job can't reach something, ask which of the three it is before
+designing around it.**
+
 The engine KILLS any job whose run coincides with ≥10 kernel veth events per
 20s for 8 CONSECUTIVE 15s samples (~2 min) — exit 143 + MSGW, message names
 the churn. Two more layers behind it: a homecore circuit-breaker (MSGWs ALL
