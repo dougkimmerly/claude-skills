@@ -59,6 +59,7 @@ entity=$(cd "$dir" 2>/dev/null && ROOT="$ROOT" zsh -c '
 
 conf="$ROOT/engine/config"
 [ -f "$conf" ] && . "$conf" 2>/dev/null
+[ -f "$conf.local" ] && . "$conf.local" 2>/dev/null  # per-host overrides, untracked
 : "${WORKER_HOST_NAME:=homecore}"; : "${WORKER_HOST_SSH:=doug@192.168.20.19}"
 
 if [ "$(hostname -s 2>/dev/null)" = "$WORKER_HOST_NAME" ]; then

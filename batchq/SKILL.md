@@ -61,15 +61,23 @@ path is unchanged; do NOT hand-apply homecore steps there):
   STATUS --sock ~/.batchq/admit.sock` (shows budget/used/admitted). A queue stuck with nothing
   admitted while the box is idle → check the daemon (`systemctl status batchq-admit`) + its
   starvation alarm (`~/.batchq/engine/admit.starved`).
-- **Deploying an ENGINE change** (worker.sh, batchq-admit, …): commit + push, then homecore's
-  `batchq-engine-sync.service` (5-min timer) `git pull --ff-only`s the clone; force it now with
-  `sudo systemctl start batchq-engine-sync`. **Then RESTART the affected long-running unit** —
+- **Deploying an ENGINE change** (worker.sh, batchq-admit, …): commit + push, then the batch
+  guest's (`192.168.20.13`) `batchq-engine-sync.service` (5-min **user** timer) `git pull
+  --ff-only`s the clone; force it now with `ssh doug@192.168.20.13 "systemctl --user start
+  batchq-engine-sync && systemctl --user status batchq-engine-sync --no-pager | head -5"`. **Then RESTART the affected long-running unit** —
   `batchq-admit.service` for daemon changes (workers pick up worker.sh fresh per job, no restart
   needed). **GOTCHA (2026-08-18): never `scp` a TRACKED engine file into the homecore clone** —
   a local mod makes `git pull --ff-only` abort and the auto-sync unit goes `failed` (silent
   until you look). To test unpushed changes on homecore, use an **untracked** name (worker.sh's
-  `.new` A/B seam) or a temp path — never overwrite the tracked file. Recover a wedged sync:
-  `git -C ~/.batchq/engine reset --hard origin/main && sudo systemctl reset-failed batchq-engine-sync`.
+  `.new` A/B seam) or a temp path — never overwrite the tracked file. **And never
+  `git update-index --skip-worktree` a tracked engine file** (fixer #1586, 2026-09-12): it hides
+  the local edit from `git status`, so the clone LOOKS clean while `git pull --ff-only` aborts on
+  the next commit touching that file — the guest sat 5 commits behind and the Mac 10, for 2.5
+  weeks, unnoticed. Per-host values (`WORKER_HOST_*`, `MAX_CONCURRENT`) go in the untracked
+  `~/.batchq/engine/config.local` overlay, sourced after `config` by every consumer. Diagnose:
+  `git -C ~/.batchq/engine ls-files -v config` (`S` = skip-worktree) and `git rev-list --count
+  HEAD..origin/main` after a fetch — on the guest AND on the Mac clone. Recover a wedged sync:
+  `git -C ~/.batchq/engine reset --hard origin/main && systemctl --user reset-failed batchq-engine-sync`.
 - **Per-queue tier/churn profile** — a queue's `$Q/config` may set **`TIER=bulk|normal|priority`**
   (budget cost) and **`CHURN_HEAVY=1`** (serialize via the churn mutex — e.g. dk-w5). Unset =
   `normal`, no churn.

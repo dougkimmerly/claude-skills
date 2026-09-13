@@ -7,16 +7,25 @@
 # messaging-plane M1-S4: also peek-summarizes the workspace entity's unread
 # msgq inbox (depth only) — PEEK, never advance (r3 R3-F06: a SessionStart
 # that both counts AND advances marks messages read while only ever showing
-# a count; UserPromptSubmit, M1-S5, is the only advancer). Entity discovery
-# for the peek does NOT reuse the REPO sed-match loop above (r3 R3-F05: a
-# REMOTE-STUB config has no `REPO=` line, so that match's `repo=""` degrades
-# to the glob `"/*"` — every absolute path on the host — silently resolving
-# every session's cwd to whichever remote stub is registered first, e.g.
-# `dk-w5-ci`). Instead it sources `whichq.sh` (messaging-plane M1-S1a, the
-# one cwd->entity implementation) and calls `default_entity discovery`,
-# which explicitly skips remote-stub queues and returns "" (not "unknown")
-# when nothing resolves — preserving "no queue -> exit 0/no note, silently"
-# for the peek exactly as the queue-status block above already does.
+# a count; UserPromptSubmit, M1-S5, is the only advancer).
+#
+# cwd->queue resolution (both the banner below and the peek) goes through
+# `whichq.sh`'s `default_entity discovery` (messaging-plane M1-S1a, the one
+# cwd->entity implementation) instead of a locally sed-parsed REPO= match.
+# This script used to carry its OWN REPO= parser for the banner, separate
+# from the peek's whichq.sh call, and the two diverged once already: an
+# empty REPO= on a REMOTE-STUB config degrades a naive glob match to "/*",
+# matching every absolute path on the host (r3 R3-F05) — the peek was built
+# stub-safe from the start, but the banner's own parser had to be
+# independently patched with a `[ -n "$repo" ] || continue` guard on
+# 2026-08-24, and even that guard alone still let a REPO-less stub's
+# alphabetic position in the loop clobber an EARLIER, correct real-REPO
+# match (fixer cross-domain report 2026-08-25: opening the fixer repo
+# announced "JOBQ SHARD" because "shard" sorted after "fixer" and its empty
+# REPO overwrote the loop's `q` on every later iteration). whichq.sh's
+# resolve() does proper longest-prefix matching across ALL queues at once
+# instead of last-match-wins, so retiring the banner's own parser in favour
+# of the one whichq.sh implementation removes this whole class of bug.
 #
 # The inbox itself lives only on the worker host (homecore, ADR 0049) — this
 # script runs `msgq peek <entity>` over ssh there (engine/config's
@@ -24,15 +33,16 @@
 set -u
 ROOT="${BATCHQ_ROOT:-$HOME/.batchq}"
 dir="${CLAUDE_PROJECT_DIR:-$PWD}"
+whichq="$ROOT/engine/whichq.sh"
 q=""
-for c in "$ROOT"/*/config; do
-  [ -f "$c" ] || continue
-  name=$(basename "$(dirname "$c")")
-  [ "$name" = "engine" ] && continue
-  repo=$(sed -n 's/^REPO=//p' "$c" | tr -d '"')
-  case "$dir/" in "$repo"/*|"$repo") q="$name"; Q="$ROOT/$name" ;; esac
-done
+if [ -f "$whichq" ]; then
+  q=$(cd "$dir" 2>/dev/null && ROOT="$ROOT" zsh -c '
+    source "$1"
+    default_entity discovery
+  ' _ "$whichq" 2>/dev/null)
+fi
 [ -n "$q" ] || exit 0
+Q="$ROOT/$q"
 count() { ls "$1"/*.job 2>/dev/null | wc -l | tr -d ' '; }
 run=$(count "$Q/running"); que=$(count "$Q/queue"); hld=$(count "$Q/held")
 msgw=""
@@ -42,29 +52,23 @@ state="idle"
 [ -n "$msgw" ] && state="HELD (MSGW)"
 
 # --- M1-S4: unread-inbox peek (depth only, no cursor advance) -------------
+# entity == $q: both come from the same default_entity discovery call above.
 inbox_note=""
-whichq="$ROOT/engine/whichq.sh"
-if [ -f "$whichq" ]; then
-  entity=$(cd "$dir" 2>/dev/null && ROOT="$ROOT" zsh -c '
-    source "$1"
-    default_entity discovery
-  ' _ "$whichq" 2>/dev/null)
-  if [ -n "$entity" ]; then
-    conf="$ROOT/engine/config"
-    [ -f "$conf" ] && . "$conf" 2>/dev/null
-    : "${WORKER_HOST_NAME:=homecore}"; : "${WORKER_HOST_SSH:=doug@192.168.20.19}"
-    if [ "$(hostname -s 2>/dev/null)" = "$WORKER_HOST_NAME" ]; then
-      peek_out=$("$ROOT/engine/msgq" peek "$entity" 2>/dev/null)
-    else
-      peek_out=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "$WORKER_HOST_SSH" \
-        "~/.batchq/engine/msgq peek '$entity'" 2>/dev/null)
-    fi
-    unread=$(printf '%s\n' "$peek_out" | awk '/unread$/{print $(NF-1); exit}')  # portable: BSD sed rejects the GNU form (this runs on the Mac)
-    if [ -n "${unread:-}" ] && [ "$unread" -gt 0 ] 2>/dev/null; then
-      plural=""; [ "$unread" = "1" ] || plural="s"
-      inbox_note="📬 $unread unread message${plural} for $entity — msgq read"
-    fi
-  fi
+entity="$q"
+conf="$ROOT/engine/config"
+[ -f "$conf" ] && . "$conf" 2>/dev/null
+[ -f "$conf.local" ] && . "$conf.local" 2>/dev/null  # per-host overrides, untracked
+: "${WORKER_HOST_NAME:=homecore}"; : "${WORKER_HOST_SSH:=doug@192.168.20.19}"
+if [ "$(hostname -s 2>/dev/null)" = "$WORKER_HOST_NAME" ]; then
+  peek_out=$("$ROOT/engine/msgq" peek "$entity" 2>/dev/null)
+else
+  peek_out=$(ssh -o ConnectTimeout=5 -o BatchMode=yes "$WORKER_HOST_SSH" \
+    "~/.batchq/engine/msgq peek '$entity'" 2>/dev/null)
+fi
+unread=$(printf '%s\n' "$peek_out" | awk '/unread$/{print $(NF-1); exit}')  # portable: BSD sed rejects the GNU form (this runs on the Mac)
+if [ -n "${unread:-}" ] && [ "$unread" -gt 0 ] 2>/dev/null; then
+  plural=""; [ "$unread" = "1" ] || plural="s"
+  inbox_note="📬 $unread unread message${plural} for $entity — msgq read"
 fi
 
 jq -n --arg q "$q" --arg state "$state" --arg run "$run" --arg que "$que" \
