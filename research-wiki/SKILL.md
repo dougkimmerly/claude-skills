@@ -93,8 +93,29 @@ docs/research/
    conventions left unrecorded become next batch's inconsistency.
 7. **Derive index.md mechanically from page frontmatter (`hook:` field).** Hand-written
    index hooks are copies; in the founding run they rotted within one afternoon.
-8. **Tier reasoning effort:** mechanical stages (splitting, index assembly, block
-   merges) at low effort; research/verify stages at default or higher.
+8. **Tier the MODEL per stage, explicitly — subagents inherit the parent model and
+   that is how a run gets expensive by accident.** If you pass no `model` to the
+   Agent tool, and no agent definition or `defaultSubagentModel` is configured,
+   every subagent runs whatever the *parent session* is running. An Opus session
+   therefore fans out Opus agents silently, and a wave of six parents that each
+   spawn helpers is the bulk of a run's cost. Observed 2026-09-13 (fixer network-
+   resiliency run): six estate-inventory lenses launched with no `model:` at all,
+   inherited Opus, and Doug's reaction to the burn — *"that's why we are burning
+   so many tokens"* — was the first anyone noticed. They happened to be the stage
+   that deserved Opus; that was luck, not design. **Choose per stage and say so in
+   the call:**
+
+   | Stage | Model | Why |
+   |---|---|---|
+   | Index assembly from `hook:` frontmatter, link-depth lint, file splitting, block merges | **haiku** | genuinely mechanical |
+   | External landscape/web survey lenses | **sonnet** | retrieval + summarisation against sources, and the citation lint catches fabrications whoever wrote them |
+   | Research against the LIVE system (rules 10/11), concept/synthesis pass | **opus** | the value is judgment — live-vs-latent, spotting a check that passes vacuously, noticing the mechanism is real but has never fired. A cheaper model gets these confidently wrong and they enter the wiki as facts |
+   | Citation-verification lint | **sonnet** minimum | a judgment task wearing a mechanical disguise |
+   | Adversarial review / verifiers | **opus** | the pass exists to kill plausible-but-wrong findings; a weak skeptic here produces confident garbage that reaches an ADR |
+
+   Corollary: **pause between waves.** If wave 1 (what we already have) shows the
+   answer, wave 2 (what the world offers) gets much narrower — deciding that
+   before spending is worth more than any model choice.
 9. **Scale expectation:** the founding run — 155 pages, ~640 sources, full adversarial
    review — cost ~15M subagent tokens / 214 agents / ~3h20m. Scale lenses and review
    depth to the ask; a landscape-only run without review is roughly half.
