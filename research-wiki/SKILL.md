@@ -31,6 +31,15 @@ docs/research/
 
 ## The pipeline (founding run)
 
+0. **Get the operator's ACCEPTANCE CRITERION before you write SCHEMA.** One
+   question — *"what would make this a success for you?"* — and write the answer
+   verbatim at the top of SCHEMA.md. Learned 2026-09-13 (fixer network-resiliency
+   run): the run was half-done, four of six lenses finished, before Doug said
+   *"I don't need a dashboard telling me what's not working, I need a systems
+   operator that keeps things working"*. That single sentence reorganised the
+   whole corpus around an autonomy ladder, invalidated the framing of every page
+   already written, and cost a three-agent backfill pass to retrofit onto 48
+   pages. "SCHEMA first" is right but incomplete: **requirement before schema.**
 1. **SCHEMA.md first, before any fan-out.** Highest-leverage step: N writers produce
    one-author pages only if every prompt starts "first read SCHEMA.md". Include: page
    types, frontmatter (incl. `hook:` for the index and `verified:` for citations),
@@ -43,7 +52,16 @@ docs/research/
 3. **Concept pass.** A planner names the convergence pages; writers fill them from the
    entity pages. This is where "three lenses found the same lesson" becomes one page
    instead of three duplicates.
-4. **Lint — non-optional, budget for it.** Contradiction pass, structural pass, and a
+4. **Lint — non-optional, budget for it.** Contradiction pass, structural pass,
+   a **verdict-consistency pass** (new 2026-09-13: for each concept page, diff
+   its verdict against the conclusion of every entity page it cites — synthesis
+   can *lose* a finer judgement its own source made. A systems page had
+   correctly concluded that abandoning Uptime Kuma was defensible because it is
+   a notify-only tool; the concept page flattened that into a generic
+   "we don't finish adoptions" pattern and the orchestrator repeated the
+   flattened version to the operator, who corrected it. Disagreement between a
+   concept verdict and its sources is either a finding or a flattening, and both
+   need a human's eye), and a
    **fetch-verified citation pass**: multi-agent web research produces confident
    fabricated quotes at a steady rate (~15 caught in the founding run, plus dead URLs
    and mis-scoped statistics — including citogenesis in the field's own most-cited
