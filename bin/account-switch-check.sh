@@ -82,19 +82,53 @@ fi
 
 echo
 echo "═══ This repo's memory (does NOT follow the switch) ═══"
-src="$CUR/projects/$SLUG/memory"
-if [ -d "$src" ]; then
-  echo "  $(ls "$src" 2>/dev/null | wc -l | tr -d ' ') file(s) in the current identity"
-  if [ -n "$TARGET" ]; then
-    if [ -d "$TARGET/projects/$SLUG/memory" ]; then
-      echo "  ✔ already present in the target"
-    else
-      echo "  ⚠️  DECISION: carry it across, or knowingly start cold? (skill, step 3)"
-    fi
-  fi
-else
-  echo "  none recorded for this repo"
-fi
+# Switching BACK is not the mirror image of switching away: both identities may
+# now hold memory for this repo, edited independently. A blind copy either way
+# silently drops the other side's edits — MEMORY.md always exists on both, so
+# it is the file most certain to be lost. Compare; never claim "already there".
+python3 - "$CUR/projects/$SLUG/memory" "${TARGET:+$TARGET/projects/$SLUG/memory}" <<'PY'
+import hashlib, os, sys
+
+def scan(d):
+    if not d or not os.path.isdir(d): return None
+    out = {}
+    for n in sorted(os.listdir(d)):
+        p = os.path.join(d, n)
+        if os.path.isfile(p):
+            out[n] = (hashlib.sha256(open(p,'rb').read()).hexdigest(), os.path.getmtime(p))
+    return out
+
+cur, tgt = scan(sys.argv[1]), scan(sys.argv[2] if len(sys.argv) > 2 else None)
+
+if cur is None:
+    print("  none recorded for this repo in the current identity")
+else:
+    print(f"  {len(cur)} file(s) in the current identity")
+
+if len(sys.argv) < 3 or not sys.argv[2]:
+    sys.exit()
+
+if tgt is None:
+    print("  ⚠️  DECISION: carry it across, or knowingly start cold? (skill, step 3)")
+    sys.exit()
+
+only_cur = sorted(set(cur or {}) - set(tgt))
+only_tgt = sorted(set(tgt) - set(cur or {}))
+differ   = sorted(n for n in set(cur or {}) & set(tgt) if cur[n][0] != tgt[n][0])
+
+if not (only_cur or only_tgt or differ):
+    print("  ✔ identical on both sides — nothing to carry")
+    sys.exit()
+
+print("  ⚠️  BOTH identities hold memory for this repo and they have DIVERGED.")
+print("      A blind copy in either direction loses the other side's edits.")
+for n in only_cur: print(f"      only here      {n}")
+for n in only_tgt: print(f"      only in target {n}")
+for n in differ:
+    newer = "here" if cur[n][1] > tgt[n][1] else "target"
+    print(f"      differs        {n}  (newer: {newer})")
+print("      → merge by hand, newest ruling wins; MEMORY.md is an index, merge its LINES")
+PY
 
 echo
 echo "═══ This repo's queue ═══"

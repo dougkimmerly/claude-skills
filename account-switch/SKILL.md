@@ -1,6 +1,6 @@
 ---
 name: account-switch
-description: Wrap up THIS repo's session cleanly before Doug switches Claude accounts (hit a usage limit, moved onto extra credits, or just changing identity), and verify the new identity afterwards. One repo at a time — Doug migrates them individually. Use when Doug says "I need to switch accounts", "we're on extra credits", "I'm nearly out of tokens", "wrap up so I can switch", "prepare to switch", or when a session opens under a different identity and something that was there yesterday is missing. Covers what does and does not survive a config-dir switch, landing this repo's work, and carrying this repo's memory across.
+description: Wrap up THIS repo's session cleanly before Doug switches Claude accounts (hit a usage limit, moved onto extra credits, or just changing identity), and verify the new identity afterwards. One repo at a time — Doug migrates them individually. Use when Doug says "I need to switch accounts", "we're on extra credits", "I'm nearly out of tokens", "wrap up so I can switch", "prepare to switch", "switch this repo back", or when a session opens under a different identity and something that was there yesterday is missing. Works in BOTH directions — moving a repo to another identity and bringing it back — and the return trip is not the mirror image, because memory diverges on both sides. Covers what does and does not survive a config-dir switch, landing this repo's work, and merging this repo's memory.
 ---
 
 # account-switch — finish this repo and change identity
@@ -76,12 +76,30 @@ be there:
 silent loss — without it the new identity starts this repo with no memory at
 all. Memory files are plain markdown, no credentials, safe to copy.
 
+**First move only — the target has no memory for this repo yet:**
+
 ```bash
 SLUG=$(pwd | sed 's|/|-|g')          # e.g. -Users-doug-Programming-dkSRC-bosun
 SRC="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$SLUG/memory"
 DST="$TARGET/projects/$SLUG"
-mkdir -p "$DST" && cp -Rn "$SRC" "$DST/"
+mkdir -p "$DST" && cp -R "$SRC" "$DST/"
 ```
+
+**Switching back is NOT the mirror image.** Once you have worked in both
+identities, each holds memory for this repo, edited independently — the repo
+was worked on under whichever one was live. A blind copy in either direction
+silently drops the other side's edits, and `MEMORY.md` exists on both sides
+always, so the index is the file most certain to be lost. `cp -n` does not save
+you: it skips existing files, so new facts come back but **changed** ones do not.
+
+The pre-flight detects this and prints exactly which files are only-here,
+only-there, or differ (with which side is newer). When it does:
+
+- **Merge by hand.** Newest ruling wins (`doug-newer-wins-archive-whole`).
+- **`MEMORY.md` is an index — merge its *lines*,** don't pick a side. Each line
+  points at a fact file; losing a line orphans a memory that still exists.
+- A fact file that changed in both places is a real conflict. Read both, keep
+  the ruling that is actually current, and say which you dropped.
 
 Starting cold is defensible when the new identity is for different work — but
 say so out loud; do not let it happen by accident.
