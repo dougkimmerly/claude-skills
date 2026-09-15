@@ -306,6 +306,18 @@ control surface, LAN-exposed, see engine `PARKING_LOT.md`); source
   job). The authoritative "still needs hands" signals are the queue's `held/`
   dir and an actual `MSGW` — check those, or `git log main | grep "Merge branch"`
   for the branch name, BEFORE treating any JOBLOG disposition as unfinished.
+- **`sbmjob -wrk` showing `running:` is NOT proof the job is ALIVE** (2026-09-15,
+  dk400-home: a job killed by a host reboot reported as running for 21.5h, and
+  Doug had to ask). A stranded job renders identically to a live one. Three
+  checks, all on the worker host, that settle it in seconds:
+  `ls -l done/<job>.log` (a live job's mtime is seconds old — hours-stale = dead),
+  `ps -p $(cat <q>/worker.lock/pid)` (dead PID = dead worker), and `worker.log`
+  (a `start` line with no matching `done`). Cross-check `who -b` — a boot after
+  the job's last log write is the whole story. `batchq-silent-hold-sweep` DOES
+  detect this within 15m, but it only posts to the SUBMITTER's `.msgq` inbox; it
+  writes no MSGW, no `held/` entry, and leaves the `.job` in `running/`, so the
+  queue looks healthy until someone drains that inbox. Recover per "Recovering a
+  queue after a host crash" below — procedure verified accurate 2026-09-15.
 - **Machine-readable completion signal (bit us 2026-08-08):** the `.log` fills
   LIVE while the job runs — a consumer that tests `done/<job>.log` existence
   declares completion ~16s after submission (this broke the Telegram
@@ -767,16 +779,25 @@ only)" with a zero-byte log (engine fix requested 2026-08-21).
 
 ## Registering a new repo
 
+All of this happens **on the batch VM `192.168.20.13`**, where the worker and
+every queue live since 2026-08-24 (fixer ADR 0076) — not on homecore, whose
+`~/.batchq/` is the stale copy.
+
 ```
-# on homecore: clone the repo under ~/batchq-repos/ first, then
+# on the batch VM: clone the repo under ~/batchq-repos/ first, then
 ~/.batchq/engine/register.sh <name> </home/doug/batchq-repos/<repo>>
 ```
-register.sh is OS-guarded: on homecore it links + `systemctl --user enable --now
-batchq@<name>.path`. Queue names max 10 chars (`*JOBQ` limit; register.sh's
-`set -eu` rejects longer — the grandfathered over-length queues `music-library`
-/`voice-announce` were enabled directly with `systemctl --user enable --now`).
+register.sh is OS-guarded: on the Linux worker host it links + `systemctl --user
+enable --now batchq@<name>.path`. Queue names max 10 chars (`*JOBQ` limit;
+register.sh's `set -eu` rejects longer — the grandfathered over-length queues
+`music-library`/`voice-announce` were enabled directly with `systemctl --user
+enable --now`; a longer repo name just gets an abbreviated queue name, e.g.
+`dk400-programs` → queue `dk400-prog`, 2026-09-15).
 Then EDIT `~/.batchq/<name>/tail.md` (the repo's own hard guardrails) and
-`next.md` (point at the repo's real backlog doc). Unregister on homecore:
+`next.md` (point at the repo's real backlog doc) — both are seeded from engine
+defaults and are the ONLY context a job in that repo gets if the repo has no
+CLAUDE.md. Verify with `sbmjob -wrk` (the new queue appears immediately).
+Unregister on the worker host:
 `systemctl --user disable --now batchq@<name>.path`, delete the queue dir.
 
 ## Multi-job overnight builds → the `build-loop` skill

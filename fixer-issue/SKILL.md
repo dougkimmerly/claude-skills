@@ -21,7 +21,7 @@ For issue *lifecycle and status semantics* (resolved/ignored/reopen behavior), s
 ## Quick Start
 
 ```python
-from dk400.programs import report_issue
+from programs import report_issue    # NOT dk400.programs — see "Filing one by hand"
 
 result = await report_issue.run(
     issue_type="disk_space",
@@ -33,6 +33,30 @@ result = await report_issue.run(
 # result["is_new"] → True/False
 # result["issue_id"] → int
 ```
+
+---
+
+## Filing one by hand (attended session, no program to schedule)
+
+Batch jobs can't do this — the batch sandbox has no LAN/DB path to
+`192.168.20.19`. From an attended session, run the call inside the `dk400`
+container on homecore:
+
+```bash
+# write the report_issue.run(...) call to a local .py, then:
+scp /tmp/file_issue.py doug@192.168.20.19:/tmp/
+ssh doug@192.168.20.19 "docker cp /tmp/file_issue.py dk400:/tmp/ && \
+  docker exec -e PYTHONPATH=/app dk400 python /tmp/file_issue.py"
+# → {'issue_id': 1595, 'is_new': True, ...}
+```
+
+Two traps, both hit live 2026-09-15:
+- **The import is `from programs import report_issue`.** `dk400.programs` is a
+  different, nearly-empty package (`/app/dk400/programs/`, platform built-ins
+  only — `time_check.py`). The deployment programs live at `/app/programs/`.
+- **`PYTHONPATH=/app` is required** when running a script from `/tmp`: Python
+  puts the *script's* directory on `sys.path`, not the working directory, so
+  `-w /app` does not help and the import fails.
 
 ---
 
