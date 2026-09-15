@@ -1,146 +1,121 @@
 ---
 name: account-switch
-description: Wrap up a session cleanly before Doug switches Claude accounts (hit a usage limit, moved onto extra credits, or just changing identity), and verify the new identity afterwards. Use when Doug says "I need to switch accounts", "we're on extra credits", "I'm nearly out of tokens", "wrap up so I can switch", "prepare to switch", or when a session opens under a different identity and something that was there yesterday is missing. Covers what does and does not survive a config-dir switch, the land-the-work checklist, moving per-project memory, and the batch worker's SEPARATE account (switching the Mac does not move unattended spend).
+description: Wrap up THIS repo's session cleanly before Doug switches Claude accounts (hit a usage limit, moved onto extra credits, or just changing identity), and verify the new identity afterwards. One repo at a time — Doug migrates them individually. Use when Doug says "I need to switch accounts", "we're on extra credits", "I'm nearly out of tokens", "wrap up so I can switch", "prepare to switch", or when a session opens under a different identity and something that was there yesterday is missing. Covers what does and does not survive a config-dir switch, landing this repo's work, and carrying this repo's memory across.
 ---
 
-# account-switch — finish up and change identity
+# account-switch — finish this repo and change identity
+
+**Scope: the repo this session is in. One at a time.** Doug migrates repos
+individually and decides each on its own evidence. Do not scan the estate, do
+not touch another repo's work, and do not batch several together.
 
 Each Claude identity on this Mac is a **separate `CLAUDE_CONFIG_DIR`**, selected
 by how the session was started. Discover them, never assume:
 
 ```bash
-alias | grep '^claude-'                  # the launchers
+alias | grep '^claude-'                      # the launchers
 echo "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"   # which one THIS session is using
-```
-
-Read the account behind any config dir:
-
-```bash
-python3 -c "
-import json,os,sys
-d=json.load(open(os.path.expanduser(sys.argv[1]+'/.claude.json')))
-a=d.get('oauthAccount',{})
-print(a.get('emailAddress'), '|', a.get('organizationName'))
-" ~/.claude-kbl
 ```
 
 ## Why this skill exists
 
 A switch is not a login — it is a **different directory**. Everything the
-session leans on silently splits in two. The failure mode is discovering that
+session leans on silently splits in two, and the failure mode is discovering it
 *after* switching, mid-task, with the old session's context gone.
 
-**Does NOT survive the switch** (per config dir, invisible from the new one):
+**Does NOT survive** (per config dir, invisible from the new one):
 
 | What | Where |
 |---|---|
-| **Per-project memory** | `<config>/projects/*/memory/` — the `MEMORY.md` index + fact files |
+| **This repo's memory** | `<config>/projects/<repo-slug>/memory/` — `MEMORY.md` + fact files |
 | Conversation history | `<config>/history.jsonl` |
 | `--resume` / `--continue` sessions | `<config>/sessions/` |
 | Saved plans, todos, file-history | `<config>/plans/`, `<config>/file-history/` |
 
-**Survives** — only if the new config dir was set up to share it. Symlinked or
-absolute-path content resolves from one home regardless of identity:
-`skills/`, `CLAUDE.md`, `commands/`, `settings.json` hooks + statusline,
-plugin cache.
+**Survives** — if the new config dir was set up to share it. Symlinked or
+absolute-path content resolves from one home regardless of identity: `skills/`,
+`CLAUDE.md`, `commands/`, `settings.json` hooks + statusline, plugin cache.
 
-**Neither** — account-level OAuth grants, held by the Claude account and not on
-disk at all: **connectors** (Gmail, Calendar, Drive, memory bridges). These must
-be re-authorised in the new account's own settings. Local MCP servers are config,
-and do carry; connectors do not.
+**Neither** — account-level OAuth grants, held by the account and not on disk:
+**connectors** (Gmail, Calendar, Drive, memory bridges). Re-authorise them in
+the new account if this repo's work needs them. Local MCP servers are config and
+do carry; connectors do not.
 
-## The trap: unattended spend does not follow you
+## Not this skill's job
 
-**The batch worker authenticates as its own account, independently of the Mac.**
-Switching an interactive session changes nothing about what batchq burns. Check
-before assuming the switch solved a limit problem:
-
-```bash
-ssh 192.168.20.13 'python3 -c "
-import json,os
-a=json.load(open(os.path.expanduser(\"~/.claude.json\"))).get(\"oauthAccount\",{})
-print(a.get(\"emailAddress\"))
-"'
-```
-
-If that prints the account you are trying to move *off*, the queue keeps
-spending it. Moving the worker is a separate, deliberate act — `claude
-setup-token` on `192.168.20.13` under the new account — and it is **Doug's
-call**, not a session's: the worker is unattended and shared by every repo's
-queue, and `worker.sh` holds queues for re-login on an auth lapse
-(`DECISIONS.md`, "batch worker plane self-manages auth").
+**Unattended spend does not follow an interactive switch.** The batchq worker
+authenticates as its own account on its own host, so switching a session here
+changes nothing about what the queue burns. Moving it is a **separate, deliberate
+decision with its own process** — out of scope here. Do not touch the worker's
+auth from a repo wrap-up.
 
 ## Wrap-up checklist
 
-Run the diagnostic first; it does steps 1–4 read-only and prints what needs a
-decision:
+Read-only pre-flight for steps 1–3, scoped to this repo:
 
 ```bash
 bash ~/.claude/skills/bin/account-switch-check.sh [target-config-dir]
 ```
 
-**1. Land the work — commit AND push.** Push is not optional: the batch worker
-pulls from origin, so unpushed commits mean queued jobs run against stale code.
-Unpushed work is also invisible to the next identity in every practical sense.
+**1. Land this repo's work — commit AND push.** Push is not optional: the batch
+worker pulls from origin, so unpushed commits mean this repo's queued jobs run
+against stale code. Unpushed work is also invisible to the next identity in
+every practical sense.
 
-**2. Move durable state out of the session and into a repo.** Anything the next
-session must know goes in a file that git tracks, because the conversation will
-not be there:
-- status → that repo's `docs/STATUS.md`
+**2. Move durable state out of the session and into the repo.** Anything the
+next session must know goes in a tracked file, because the conversation will not
+be there:
+- status → `docs/STATUS.md`
 - faults → `docs/PUNCHLIST.md`
 - decisions → an ADR (`adr` skill)
-- another repo's domain → a verify-first batchq job (`batchq` skill)
-- a note for the next session *here* → `HANDOFF.md` at the repo root
+- a note for the next session here → `HANDOFF.md` at the repo root
+- another repo's domain → a verify-first batchq job (`batchq` skill), **not** a
+  detour into that repo
 
-**3. Decide what happens to memory.** Per-project memory is the biggest silent
-loss — a new identity starts cold in every repo. Two honest options, and it is
-Doug's choice:
-- **Carry it** — copy the memory dirs into the target config dir. Safe: memory
-  files are plain markdown, no credentials.
-  ```bash
-  for m in ~/.claude/projects/*/memory; do
-    p=$(dirname "$m"); slug=$(basename "$p")
-    mkdir -p "$TARGET/projects/$slug"
-    cp -Rn "$m" "$TARGET/projects/$slug/"
-  done
-  ```
-- **Start clean** — defensible when the new identity is for different work.
-  Say so out loud; do not let it happen by accident.
-
-**4. Check what is in flight.** Jobs already queued keep running under the
-worker's account and will finish without you — but a job that ends in **MSGW**
-needs a human, and its message routes to the submitting entity's inbox.
+**3. Carry this repo's memory, or knowingly start cold.** The single biggest
+silent loss — without it the new identity starts this repo with no memory at
+all. Memory files are plain markdown, no credentials, safe to copy.
 
 ```bash
-sbmjob -wrk
+SLUG=$(pwd | sed 's|/|-|g')          # e.g. -Users-doug-Programming-dkSRC-bosun
+SRC="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects/$SLUG/memory"
+DST="$TARGET/projects/$SLUG"
+mkdir -p "$DST" && cp -Rn "$SRC" "$DST/"
 ```
 
-Do not queue new work you intend to supervise if you are about to lose the
-session that supervises it.
+Starting cold is defensible when the new identity is for different work — but
+say so out loud; do not let it happen by accident.
 
-**5. Leave the resume note.** Last thing written, first thing read: what you
-were doing, what is decided, what the next session should pick up. `HANDOFF.md`
-if it belongs to this repo; a Bosun todo if it is Doug's to do (`bosun-todo`).
+**4. Check this repo's queue.** Jobs already queued keep running under the
+worker's own account and finish without you — but one that ends in **MSGW**
+needs a human, and its message routes to this repo's inbox. Do not queue new
+work you intend to supervise if you are about to lose the session that
+supervises it.
+
+**5. Leave the resume note.** Last written, first read: what you were doing,
+what is decided, what to pick up. `HANDOFF.md` if it belongs to this repo; a
+Bosun todo if it is Doug's to do (`bosun-todo`).
 
 ## Switching
 
-Start the new session from the repo you want to work in — the config dir is
-chosen at launch and cannot be changed mid-session:
+The config dir is chosen at launch and cannot be changed mid-session. Start the
+new one **from this repo's directory**:
 
 ```bash
-claude-kbl          # or whichever launcher the alias list showed
+cd <this repo> && claude-kbl      # or whichever launcher the alias list showed
 ```
 
 ## Verify after switching
 
 ```bash
-claude mcp list           # local MCP servers connected?
-ls ~/.claude-kbl/skills   # skills resolving (symlink → one home)?
+claude mcp list                   # local MCP servers connected?
+ls "$TARGET/skills"               # skills resolving (symlink → one home)?
+ls "$TARGET/projects/$SLUG/memory" 2>/dev/null || echo "cold start (intended?)"
 ```
 
-Then confirm in-session: skills listed, `CLAUDE.md` loaded, memory present or
-knowingly absent. Connectors will be missing until re-authorised in the new
-account — that is expected, not a fault.
+Then confirm in-session: skills listed, `CLAUDE.md` loaded, this repo's memory
+present or knowingly absent. Connectors will be missing until re-authorised —
+expected, not a fault.
 
 ## Setting up a new identity from scratch
 
@@ -155,7 +130,7 @@ ln -sfn ~/.claude/skills    ~/.claude-NEW/skills
 ln -sfn ~/.claude/commands  ~/.claude-NEW/commands
 cp ~/.claude/settings.json  ~/.claude-NEW/settings.json
 cp ~/.claude/plugins/installed_plugins.json ~/.claude-NEW/plugins/
-# 4. merge global MCP servers (back up .claude.json first)
+# 4. merge global mcpServers into ~/.claude-NEW/.claude.json (back it up first)
 ```
 
 **Symlink, never copy**, for skills and `CLAUDE.md`. A second copy of the
