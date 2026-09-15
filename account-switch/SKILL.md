@@ -77,9 +77,12 @@ do carry; connectors do not.
 
 **Unattended spend does not follow an interactive switch.** The batchq worker
 authenticates as its own account on its own host, so switching a session here
-changes nothing about what the queue burns. Moving it is a **separate, deliberate
-decision with its own process** — out of scope here. Do not touch the worker's
-auth from a repo wrap-up.
+changes nothing about what the queue burns. Worse, it is **one account for every
+queue** — there is no per-repo unattended identity to switch.
+
+Moving it is a separate, deliberate decision on a different host with a
+different blast radius: the **`batchq-identity`** skill. Do not touch the
+worker's auth from a repo wrap-up.
 
 ## Wrap-up checklist
 
