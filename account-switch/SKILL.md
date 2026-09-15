@@ -13,9 +13,41 @@ Each Claude identity on this Mac is a **separate `CLAUDE_CONFIG_DIR`**, selected
 by how the session was started. Discover them, never assume:
 
 ```bash
-alias | grep '^claude-'                      # the launchers
-echo "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"   # which one THIS session is using
+alias | grep '^claude-'                          # the launchers
+~/.claude/skills/bin/claude-identity.sh whoami   # which one THIS session is
 ```
+
+## The live account registry
+
+A repo is worked under **one identity at a time** — the one holding its memory,
+history and resumable sessions. Nothing in Claude Code knows which; it is Doug's
+choice per repo, so `~/.claude-identity/registry.json` **is** the system of
+record. It sits beside the config dirs, owned by no identity, so all three read
+the same file. Machine-local state, deliberately not in git.
+
+```bash
+ID=~/.claude/skills/bin/claude-identity.sh
+$ID list                      # every repo and its live account
+$ID get                       # this repo's live config dir (exit 1 = unregistered)
+$ID set ~/.claude-kbl         # record it — the LAST step of a switch
+$ID describe ~/.claude-kbl    # "claude-kbl  (doug@kimmerlyblacksmith.com)"
+```
+
+**The wrong identity is a silent failure.** Skills and `CLAUDE.md` are symlinked,
+so they load either way and the session looks entirely normal — until memory is
+missing and it starts writing a *second, diverging* copy. So
+`bin/live-account-check.sh` runs as the **first** `SessionStart` hook in **every**
+identity, and announces the mismatch before any work. It is silent when the
+identity matches, when the repo is unregistered (never nag a repo Doug has not
+placed), and outside a git repo.
+
+The hook cannot switch — the config dir is fixed at launch. **When it fires,
+tell Doug first, before doing anything else:** this is not the live account,
+here is which one is, does he want to switch. If he chooses to stay, that is his
+call — say plainly that memory will diverge.
+
+An identity added later needs the hook wired into its `settings.json` too; the
+one without it is exactly the one that will not warn you.
 
 ## Why this skill exists
 
@@ -113,6 +145,14 @@ supervises it.
 **5. Leave the resume note.** Last written, first read: what you were doing,
 what is decided, what to pick up. `HANDOFF.md` if it belongs to this repo; a
 Bosun todo if it is Doug's to do (`bosun-todo`).
+
+**6. Record the new live account — do this LAST.** Until it is recorded the
+registry still names the old identity, and every session gets it backwards: the
+one Doug is moving *to* gets warned off, the one he is leaving stays silent.
+
+```bash
+~/.claude/skills/bin/claude-identity.sh set <target-config-dir>
+```
 
 ## Switching
 
