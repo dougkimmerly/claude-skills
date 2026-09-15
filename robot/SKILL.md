@@ -107,12 +107,31 @@ Found 2026-07-02: all 8 `HEALTH_*` jobs at BOTH sites were dead this way for wee
 **No "Nth weekday of month".** The vocabulary above is the whole set — there's
 no native way to express "3rd Monday of the month" or similar sparse cadences
 (`*MONTHLY` is always the 1st). Pattern: schedule **`*WEEKLY`** on the target
-weekday, then **self-gate the date test inside the program** (e.g. `15 <=
-now.day <= 21` for the 3rd week) — return `{"status":"skipped","reason":…}` on
-non-matching days (no-op, no error). Give the program a **`force=True`** kwarg
-to bypass the gate for on-demand runs / catching up a missed period. Reference
-implementation: `dk400-homelab/programs/consult_invoice.py` `_is_third_monday()`
-(job `CONSULT_INV`, `*WEEKLY MON 09:00`).
+weekday, then **self-gate the date test inside the program** — return
+`{"status":"skipped","reason":…}` on non-matching days (no-op, no error). Give
+the program a **`force=True`** kwarg to bypass the gate for on-demand runs /
+catching up a missed period.
+
+Write the gate as a **7-day day-of-month window**, because any 7-day window
+contains exactly one of each weekday — so the window can't match twice in a
+month and ties are impossible:
+
+| Cadence | Gate |
+|---------|------|
+| 1st Monday | `d.weekday() == 0 and 1 <= d.day <= 7` |
+| 3rd Monday | `d.weekday() == 0 and 15 <= d.day <= 21` |
+| Monday nearest the 15th | `d.weekday() == 0 and 12 <= d.day <= 18` |
+| Last Monday | `d.weekday() == 0 and d.day > days_in_month - 7` |
+
+"Nearest the Nth" is the one people get wrong — it is *not* the Nth week. The
+Monday nearest the 15th is the 3rd Monday only when the 1st falls favourably;
+in other months it's the 2nd. Centre the window on the target day (15 − 3 …
+15 + 3) rather than counting weeks.
+
+Reference implementation: `dk400-homelab/programs/consult_invoice.py`
+`_is_nearest_monday()` (job `CONSULT_INV`, `*WEEKLY MON 09:00`). It billed on
+the 3rd Monday until 2026-09-15, when it moved to nearest-the-15th — if you
+copy from it, copy the current window, not the old one.
 
 ## Adding/Removing Programs
 
