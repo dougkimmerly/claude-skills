@@ -13,9 +13,14 @@ Each Claude identity on this Mac is a **separate `CLAUDE_CONFIG_DIR`**, selected
 by how the session was started. Discover them, never assume:
 
 ```bash
-alias | grep '^claude-'                          # the launchers
+ls ~/.local/bin/claude-*                         # the launchers
 ~/.claude/skills/bin/claude-identity.sh whoami   # which one THIS session is
 ```
+
+Launchers are **real executables in `~/.local/bin`, not shell aliases**. An
+alias is absent from every non-interactive shell, from IDE terminals, and from
+any shell opened before `~/.zshrc` last changed — which reads as "command not
+found" for a launcher that plainly exists.
 
 ## The live account registry
 
@@ -181,10 +186,15 @@ expected, not a fault.
 ## Setting up a new identity from scratch
 
 ```bash
-# 1. alias in ~/.zshrc
-alias claude-NEW='CLAUDE_CONFIG_DIR="$HOME/.claude-NEW" claude'
+# 1. launcher — a real executable, NOT an alias (aliases miss non-interactive shells)
+cat > ~/.local/bin/claude-NEW <<'SH'
+#!/bin/sh
+export CLAUDE_CONFIG_DIR="$HOME/.claude-NEW"
+exec "$HOME/.local/bin/claude" "$@"
+SH
+chmod +x ~/.local/bin/claude-NEW
 # 2. first run logs in and populates the dir
-source ~/.zshrc && claude-NEW
+claude-NEW
 # 3. share the one-home content
 ln -sfn ~/.claude/CLAUDE.md ~/.claude-NEW/CLAUDE.md
 ln -sfn ~/.claude/skills    ~/.claude-NEW/skills
@@ -192,6 +202,8 @@ ln -sfn ~/.claude/commands  ~/.claude-NEW/commands
 cp ~/.claude/settings.json  ~/.claude-NEW/settings.json
 cp ~/.claude/plugins/installed_plugins.json ~/.claude-NEW/plugins/
 # 4. merge global mcpServers into ~/.claude-NEW/.claude.json (back it up first)
+# 5. wire live-account-check.sh as the FIRST SessionStart hook in its settings.json
+#    — the identity without it is the one that will not warn you
 ```
 
 **Symlink, never copy**, for skills and `CLAUDE.md`. A second copy of the

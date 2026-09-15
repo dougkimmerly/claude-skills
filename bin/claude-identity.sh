@@ -27,17 +27,24 @@ REG="$REG_DIR/registry.json"
 repo_root() { git -C "${1:-$PWD}" rev-parse --show-toplevel 2>/dev/null; }
 cur_cfg()   { python3 -c "import os,sys;print(os.path.realpath(os.path.expanduser(sys.argv[1])))" "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"; }
 
-# The launcher for a config dir: the ~/.zshrc alias that sets it, else the bare
-# `claude` for the default dir. Derived, never assumed — aliases are Doug's.
+# The launcher for a config dir: the ~/.local/bin wrapper that sets it, else the
+# bare `claude` for the default dir. Derived, never assumed — launchers are Doug's.
+#
+# Wrappers, not shell aliases: an alias is absent from every non-interactive
+# shell and from any shell opened before ~/.zshrc changed. .zshrc is still
+# scanned as a fallback so an identity defined the old way still resolves.
 #
 # The match MUST be anchored on the closing quote. `$HOME/.claude` is a prefix of
 # `$HOME/.claude-xtl`, so a loose pattern reports the default identity as whichever
-# suffixed alias happens to sit first in .zshrc.
+# suffixed launcher happens to be found first.
 launcher_for() {
-  local cfg="$1" name
+  local cfg="$1" name pat
   [ "$cfg" = "$(python3 -c "import os;print(os.path.realpath(os.path.expanduser('~/.claude')))")" ] \
     && { printf 'claude'; return; }
-  name=$(grep -hF "CLAUDE_CONFIG_DIR=\"\$HOME/$(basename "$cfg")\"" "$HOME/.zshrc" 2>/dev/null \
+  pat="CLAUDE_CONFIG_DIR=\"\$HOME/$(basename "$cfg")\""
+  name=$(grep -lF "$pat" "$HOME"/.local/bin/claude-* 2>/dev/null | head -1)
+  [ -n "$name" ] && { basename "$name" | tr -d '\n'; return; }
+  name=$(grep -hF "$pat" "$HOME/.zshrc" 2>/dev/null \
          | sed -n "s/^alias \([a-zA-Z0-9_-]*\)=.*/\1/p" | head -1)
   if [ -n "$name" ]; then printf '%s' "$name"
   else printf 'CLAUDE_CONFIG_DIR=%s claude' "$cfg"; fi
