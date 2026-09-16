@@ -128,6 +128,12 @@ Also, independent of release:
   graph is minutes, not hours.
 - Reading source members one at a time: ~1.7 s each via a JVM-per-member helper.
   Do not loop it over thousands.
+- **`HISTORY_LOG_INFO` over 4 days: ~12 minutes even filtered to six message IDs.**
+  The log runs ~1.4M messages/day, and the filter is applied after retrieval.
+  Always pass `START_TIME`/`END_TIME`, keep the window hours not days, and expect
+  it to be slow anyway.
+- `DISPLAY_JOURNAL` for one file over 6 hours: **under a second.** Cheap — but see
+  the attribution trap below.
 
 ## Blind spots that make confident answers wrong
 
@@ -148,6 +154,15 @@ Also, independent of release:
   source library — one sampled library used ten. And a renamed source file made
   441 members look lost that were not. **Resolve renames by following the
   failures**; a name-pattern sweep (`%OLD`, `%BAK`) finds almost nothing.
+- **Journal attribution is lost in replication.** Reading a journal on the
+  *target* returns MIMIX's apply program (`DMAPPLY`/`ICC_DBAPYA`/`MIMIXOWN`), not
+  the program that made the change. **Read journals on the `primary` for
+  attribution** — the opposite of where you send expensive scans. And the primary
+  keeps only ~2 days of receivers, so usable observed-use depth is days, not weeks.
+- **`OBJATTRIBUTE = 'DFU'` means there is no source and never was.** DFU generates
+  a program from an interactive definition. Alongside vendor products, the second
+  explainable-absence class — and it is exactly the set with no recorded source
+  library. Check the attribute before calling anything's source lost.
 - **`SYSPARTITIONSTAT` silently hides what you cannot read.** This is the worst
   one, because it looks like data rather than a permission error. Objects the
   profile lacks authority to are **omitted with no error and no flag** — so
