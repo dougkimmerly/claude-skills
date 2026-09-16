@@ -148,6 +148,20 @@ Also, independent of release:
   source library — one sampled library used ten. And a renamed source file made
   441 members look lost that were not. **Resolve renames by following the
   failures**; a name-pattern sweep (`%OLD`, `%BAK`) finds almost nothing.
+- **`SYSPARTITIONSTAT` silently hides what you cannot read.** This is the worst
+  one, because it looks like data rather than a permission error. Objects the
+  profile lacks authority to are **omitted with no error and no flag** — so
+  "member absent" quietly means "absent *or* invisible to me". It produced a
+  report that 1,435 production programs had lost their source when the source was
+  simply behind an authority wall.
+
+  **`OBJECT_STATISTICS` is the instrument that distinguishes them:** it returns
+  an unauthorised object **with blank `OBJOWNER`, `OBJSIZE` and `OBJTEXT`**,
+  while readable siblings show real values. Genuine absence is the object not
+  being returned at all.
+
+  So resolve existence through `OBJECT_STATISTICS`, and classify **four** states,
+  never three: readable · **present-but-unauthorised** · renamed · absent.
 
 ## Products on the estate
 
