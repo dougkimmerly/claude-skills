@@ -40,15 +40,33 @@ the repos, and duplicating them here would guarantee drift:
 
 ## Connecting
 
+**Credentials come from SOPS, never a plaintext file, and the profile is a
+per-project choice.** `x400 <profile> <command>` decrypts one profile out of
+`homelab-secrets` `secrets/home/xtl400.sops.yaml` and exports
+`XTL400_USER`/`XTL400_PASSWORD` for that command only. That file is scoped to
+the **admin age key alone** — no unattended host decrypts an XTL production
+credential. Use the `secrets` skill to add or rotate one.
+
 ```bash
-cd ~/Programming/proj-as400-codemap
-./tools/q400 primary whoami            # roles, not hostnames
-./tools/q400 target  <query-name|"SQL"> [params]
+x400 ccsec sql400 "SELECT ..."                    # proj-security, curlib DOUGSEC
+x400 ccimg ./tools/q400 primary whoami            # proj-as400-codemap
+XTL400_HOST=192.168.40.20 x400 ccsec sql400 "..."  # the target; default is primary
 ```
 
-Needs CCMAP enabled by Doug plus Zscaler — **access is interactive, not
-unattended**. Credentials come from `~/.xtl400creds` (plaintext; line 1 user,
-line 2 password — do not echo it).
+**Pick the profile that matches the work.** `CCSEC` is proj-security's;
+`CCIMG` is the mapping project's. They are separate so that `QAUDJRN`
+attributes a read to the project that made it — a shared profile destroys
+that, and on this estate the audit trail is itself under review.
+
+**Whoever you connect as, you are inside the finding.** `CCIMG` is `*USER`
+with no special authorities but `LMTCPB(*NO)`, and this box's `*PUBLIC`
+posture gives update or delete on 80,454 files — so a "read-only" session is
+read-only by *discipline*, not by constraint. Never rely on the profile to
+stop a write. (proj-security #20.)
+
+Needs the profile enabled by Doug plus Zscaler — **access is interactive, not
+unattended**. Never echo a credential; `x400` keeps it in the environment of
+one child process.
 
 ## Two partitions, and the roles swap
 
