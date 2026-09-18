@@ -155,6 +155,22 @@ Also, independent of release:
 
 ## Blind spots that make confident answers wrong
 
+- **An `*ALLUSR` sweep silently omits every library the profile cannot reach,
+  and reports it as absence.** `QSYS2.OBJECT_STATISTICS('*ALLUSR', ...)`
+  returns zero rows for an object that plainly exists, with **no error and no
+  warning** — the job log carries a `CPF2182 Not authorized to library X` that
+  the SQL result never mentions. Measured 2026-09-18: a sweep for `IMPSEID`
+  came back empty and was reported as "does not exist anywhere on the box";
+  it exists in `SEIOBJ` and `ZPETERP`, both `CPF2182` to `CCIMG`.
+  **"Not found" from a sweep means "not found *where I can see*".** Say which
+  libraries were excluded, or do not make a negative claim at all.
+  The libraries still appear in `QSYS2.SYSSCHEMAS` — the catalog lists them
+  while object access is refused, so schema visibility is not evidence of
+  object visibility (`proj-security` ADR 0003 is the same distinction).
+  Known refused to `CCIMG` so far: `SEIOBJ`, `ZPETERP`, `QRDARS`, `XTLBC`.
+  Check the job log for `CPF2182` after any sweep that returns less than
+  expected.
+
 - **`*QRYDFN` — thousands of them, with no source at all.** Query/400 definitions
   are invisible to every source-driven approach, and they are scheduled in
   production (`RUNQRY` appears in the job schedule). Count them before claiming
