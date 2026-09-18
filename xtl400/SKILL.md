@@ -136,6 +136,38 @@ Also, independent of release:
 - **Key everything library + file + member.** Member names repeat across source
   files in one library.
 
+## Running SQL from a source member (`RUNSQLSTM`)
+
+Three defaults conspire to make a working member fail with an error that points
+at the wrong line. All three cost an afternoon on 2026-09-18.
+
+- **`MARGINS` defaults to columns 1–80** and the rest of each record is dropped
+  silently. Source files here are `SRCDTA CHAR(100)`, so an 84-character
+  `INSERT INTO t (a, b, c)` loses `, c)` — and the parse error lands on the
+  **next** record (`SQL0104 … token X was not valid`, naming a token that is
+  fine). **Always pass `MARGINS(100)`**, or match the file's `SRCDTA` length.
+- **`OUTPUT` defaults to `*NONE`.** Per-statement messages go **only to the
+  listing**, never to the job log — the job log gets a bare `SQL9010 … command
+  failed` and, via `QCMDEXC`, a useless `SQL0443`. **Always `OUTPUT(*PRINT)`.**
+- **The listing spool is printed and deleted** by the writer (and is destroyed
+  outright if the job ends abnormally). To read it, override first, in the same
+  job: `OVRPRTF FILE(QSYSPRT) HOLD(*YES) OUTQ(QUSRSYS/QEZJOBLOG) OVRSCOPE(*JOB)`
+  — **`OVRSCOPE(*JOB)` is required**, because each `QSYS2.QCMDEXC` call runs at
+  its own call level and a default-scoped override is gone by the next one.
+  The listing lands in `<profile>/QPRTJOB` named after the member, not the
+  running job; find it with `QSYS2.SPOOLED_FILE_INFO` and read it with
+  `SYSTOOLS.SPOOLED_FILE_DATA`. Errors are the last few records, under a
+  `MSG ID  SEV  RECORD  TEXT` header.
+
+**Do not "fix" this by raising `ERRLVL`.** `ERRLVL(30)` makes the command
+succeed by tolerating genuine SQL errors, so statements are skipped and the run
+looks complete. Keep `ERRLVL(20)` and read the listing.
+
+`sql400` runs every `;`-separated statement on **one connection**, so a
+`CALL QSYS2.QCMDEXC(...)` and a follow-up `QSYS2.JOBLOG_INFO('*')` or
+`SPOOLED_FILE_INFO` in the same invocation see the same job. It keeps going
+after a failed statement (printing `!! [SQLnnnn] …` to stderr) and exits 1.
+
 ## Costs, measured
 
 - Estate-wide `*PGM` scan: ~25 s (target), ~90 s (primary).

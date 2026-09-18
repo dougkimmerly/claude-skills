@@ -51,6 +51,26 @@ tell Doug first, before doing anything else:** this is not the live account,
 here is which one is, does he want to switch. If he chooses to stay, that is his
 call — say plainly that memory will diverge.
 
+**The status line now names the account continuously** (2026-09-18), so the
+silent failure has a visible tell between hook firings:
+
+    fixer | Opus 5 | kbl | ctx 546.8k · 55% | 5h 4% · 7d 29%
+
+`~/.claude/statusline.py` derives it from the payload's `transcript_path` —
+which contains the config dir the session is ACTUALLY running under — not from
+the registry, so it reports the live fact rather than the intended one. It
+prints no account rather than guessing when that path is absent. The same line
+carries plan usage from the payload's `rate_limits.five_hour` /
+`.seven_day` (`used_percentage`, `resets_at`); the reset time appears once a
+window passes 80%. **Usage is per-account**, so those figures belong to whatever
+identity the tag names — reading one without the other misleads.
+
+Two wiring facts, both learned the hard way: the identities share that one
+script by absolute path but have **three separate `settings.json` files**, so a
+new identity needs `statusLine` wired in explicitly (xtl had none until
+2026-09-18); and a `settings.json` change is picked up by **already-running
+sessions**, not only new ones.
+
 An identity added later needs the hook wired into its `settings.json` too; the
 one without it is exactly the one that will not warn you.
 
