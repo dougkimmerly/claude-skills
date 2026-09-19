@@ -295,6 +295,45 @@ the only disk lever the feature has — once rows are held elsewhere,
 
 `PATH_NAME` is `DBCLOB(16M)`; cast it down before copying it anywhere.
 
+## Anything permanent you create must be in MIMIX **and** in the backup
+
+**Standing rule (Doug, 2026-09-19).** The moment a project creates something on
+this estate that is meant to outlive the session — a library, a table, a
+program, a source member, a scheduled job, an output queue — it has **two**
+homes it must be entered into, and they protect against different losses:
+
+| | Protects against | Loses what if missing |
+|---|---|---|
+| **MIMIX** | the partitions swapping roles, or the primary being lost | the object simply is not there after a swap, and nothing says so — the job stops running and the data stops arriving |
+| **Backup** | deletion, corruption, and time | no way back to yesterday, and on this estate no way back at all |
+
+**Neither is a substitute for the other, and assuming either one covers you is
+the mistake.** Replication copies the current state, including a deletion; a
+backup does not follow a role swap. A monitoring table that exists only on the
+primary is gone the day the roles change, and one that is replicated but never
+saved is gone the day someone drops it.
+
+**Every project keeps a register of what it has created**, and each entry
+carries the *verified* status of both — not the intended status. Worked
+example: `proj-security/docs/permanent-objects.md`. The register is checked at
+housekeeping (the `housekeeping` skill) and the two columns start as **"not
+verified"**, because an object nobody has confirmed is covered is an object
+that is not covered.
+
+**Two things that are easy to forget are on the list:**
+
+- **Scheduled jobs are objects too.** A Robot job definition lives in the
+  scheduler's own library. If that library is not replicated, the programs
+  survive a role swap and nothing runs them.
+- **The user profile the work runs as.** A replicated program owned by a
+  profile that did not come across authenticates as nobody.
+
+**Verify, do not assume.** Ask what the replication actually carries
+(`proj-as400-codemap` has measured parts of this) and what the backup control
+groups actually include — on this estate a library holding a year of security
+evidence was discovered to be in neither, and the audit journal receivers had
+**never** been saved in the machine's entire history.
+
 ## Costs, measured
 
 - Estate-wide `*PGM` scan: ~25 s (target), ~90 s (primary).
