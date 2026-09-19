@@ -584,6 +584,15 @@ Worked implementation: `proj-security/secaudit/src/qsqlsrc/EV*.sql` plus
   *activity* over one that reports *existence* — the journal named `LVSRV03` in
   four seconds after the catalog failed for nineteen minutes.
 
+  **You do not have to live with the filtered answer.** `proj-security` runs a
+  `SECAUDIT` profile holding `*ALLOBJ` and has offered (2026-09-19) to re-run
+  any authority-sensitive query on request — it costs them one query. Measured
+  gap on a single `BOUND_SRVPGM_INFO` call for `QSYS/QJOURNAL`: **58 objects as
+  `SECAUDIT` against 30 as `CCIMG`**, and the missing 28 were MIMIX and its
+  vendor library `LAKEVIEW` — nearly half, all of it the machinery that
+  mattered. **Ask rather than record a filtered result**, and when a coverage
+  claim rests on what one profile could enumerate, say which profile.
+
 ## `DSPPGMREF` cannot see service programs — `BOUND_SRVPGM_INFO` can
 
 **A reference graph built with `DSPPGMREF ... OBJTYPE(*PGM)` has no `*SRVPGM`
@@ -612,6 +621,57 @@ SELECT PROGRAM_LIBRARY, PROGRAM_NAME, OBJECT_TYPE
   *exports*, which often names its purpose well enough to be useful, but you
   cannot see which procedure a caller imports.
 - **It is authority-filtered** like everything else here. See above.
+
+## Db2 for i 7.3 SQL traps that cost a session each
+
+All hit while installing real code on 2026-09-19. None is exotic; each looks
+like valid SQL and fails only at CREATE time.
+
+| Trap | Error | What to do instead |
+|---|---|---|
+| **`EXISTS` inside a `CASE WHEN`** | `SQL0104` | `LEFT JOIN` and test the joined column for `NULL`, or `SELECT COUNT(*) FROM (… FETCH FIRST 1 ROW ONLY)` |
+| **A `GROUP BY` expression must match its `SELECT` expression textually** | `SQL0122` | Compute the expression in a CTE layer and group on the resulting column |
+| **`ORDER BY` in a `CREATE VIEW`** | `SQL0199` | Leave it out; order in the query that reads the view |
+| **`DROP … IF EXISTS`** | `SQL0199` | Not available. Run the drops tolerantly and ignore `SQL0204` |
+| **`LABEL ON COLUMN` caps at 60 characters**, `LABEL ON TABLE` at 50 | `SQL0107` | `COMMENT ON` allows 2000, and is what column documentation *is* |
+| **`STARTING_SEQUENCE => 0` or `1`** on `DISPLAY_JOURNAL` | `SQL0443` | Seed from `JOURNAL_RECEIVER_INFO`'s `MIN(FIRST_SEQUENCE_NUMBER)`; the chain's first sequence is not 1 |
+
+**And the one that is not a dialect trap but bit hardest:** widening a column
+does **not** widen the expression that fills it. A `CAST(… AS CHAR(10))` left
+in a procedure kept truncating after the column became `VARCHAR(40)`, and the
+data looked plausible — `030673/MIM` — rather than wrong.
+
+## Reading the system history log: group on the bare job name
+
+`QSYS2.HISTORY_LOG_INFO`'s `FROM_JOB` is **fully qualified** —
+`030673/MIMIXOWN/WMS_OBJRTV` — and the leading number is unique per job
+instance. Grouping on it does not aggregate: measured 2026-09-19, **77 message
+identifiers became 77,560 distinct "jobs" and 178,761 rows.** Grouping on the
+bare name gave **3,595**, a 50× reduction.
+
+```sql
+SUBSTR(H.FROM_JOB, LOCATE_IN_STRING(H.FROM_JOB, '/', -1) + 1)
+```
+
+Cost, measured: **26 hours of history ≈ 145 s.** It is the expensive read on
+this estate and has no sequence number to position on, so read a short window
+often rather than a wide one rarely.
+
+## Robot's tables are not shaped the way their names suggest
+
+- **`RBTMSG` is a MESSAGE table, not a run table.** Up to **26 rows** share one
+  `(CMRNAM, CMRJOB, CMSDAT, CMSTIM)`. Treating a row as a run violates any
+  primary key built on that tuple — `SQL0803`. Aggregate to the run.
+- **`CMRJOB` is blank for some jobs**, so that tuple does not always identify a
+  run. Run counts for those jobs are unreliable and this is unresolved.
+- **Dates are `CYYMMDD` as a 7-digit number** (`1260914` = 2026-09-14, leading
+  digit is the century) and times are `HHMMSS` with no leading zero (`60500` =
+  06:05:00). **`DATE(CMSDAT)` does not parse this** and does not fail usefully.
+- **`CMMSEV` is `A(1)`** and holds letters (`C`, `W`, `T`), not a number.
+  **`CMRJOB` is `A(12)`**, zero-padded, not an integer.
+- **`RBTROB.HIST_RETENTION` is per job.** Verified against stored data: for
+  retentions 3, 7, 12, 14 and 30 the stored runs match exactly; for 6 and 40 —
+  the two big populations — they do not, and why is unresolved.
 
 ## Products on the estate
 
