@@ -75,7 +75,7 @@ interactive account), so expect to lose access to a collector profile the
 moment it is finished. Build and debug while the credential exists; once it is
 revoked, changes go through Doug or through the scheduled job's own source.
 
-### Getting source onto the box
+### Getting source on and off the box
 
 `put400` is the working route and it is the one to use. It writes a stream
 file to the IFS and `CPYFRMSTMF`s it into a source member — record-level
@@ -98,6 +98,45 @@ from:
 `sql400`, which has no command-line length limit — the 5250 command line does,
 and a long `CHGUSRAUD` will not fit on it. `QCMDEXC` is also how to hand Doug
 a command that is too long to paste.
+
+**Reading a member back is plain SQL — a source member is a table.** Point an
+alias at it and select:
+
+```sql
+CREATE OR REPLACE ALIAS MYLIB.VFYMBR FOR MYLIB.QCLSRC(SOMEPGM);
+SELECT SRCSEQ, SRCDTA FROM MYLIB.VFYMBR ORDER BY SRCSEQ;
+```
+
+**The alias target needs a dot, not a slash** — `MYLIB/QCLSRC(X)` is rejected
+as `SQL5016` and the message does not explain itself.
+
+**`sql400` trims every value it prints**, which silently strips the leading
+indentation from each line and makes an identical file look completely
+different. Guard column 1:
+
+```sql
+SELECT '|' CONCAT RTRIM(SRCDTA) FROM MYLIB.VFYMBR ORDER BY SRCSEQ
+```
+
+…then strip the `|`. This matters for any indentation-sensitive comparison,
+not just source.
+
+**Verify deployed source against the repo after every deployment.** Nothing on
+the box does it for you, and git and the box drift silently. Two checks, and
+you want both:
+
+- **Strong** — pull each member and `diff`. Worked example:
+  `proj-security/secaudit/verify-deployed.sh`.
+- **Weak but automatic** — `QSYS2.SYSPARTITIONSTAT` gives `NUMBER_ROWS` and
+  `LAST_SOURCE_UPDATE_TIMESTAMP` per member without reading it, so a scheduled
+  job can record a line count as a fingerprint. **An edit that preserves the
+  line count is invisible to it** — six changed comment lines across four
+  members went undetected this way on 2026-09-19.
+
+Compare the member's source timestamp against the compiled object's
+`OBJCREATED` (`QSYS2.OBJECT_STATISTICS`) to catch *"edited on the box and never
+recompiled"*, which is a different failure from repo drift and is detectable
+outright.
 
 ## Two partitions, and the roles swap
 
@@ -153,6 +192,27 @@ release":
 | `SYSMEMBERSTAT` absent (7.5 TR4 / 7.4 TR10) | `SYSPARTITIONSTAT`, or `DSPFD TYPE(*MBRLIST)` to `QTEMP` |
 | `SYSFILES` absent (7.4+) | `OBJECT_STATISTICS`, `DSPFD` |
 | `SOURCE_STREAM_FILE_PATH` absent | n/a on this estate |
+
+**The column names in current IBM documentation are frequently not the column
+names on 7.3, and the error never says so.** `SQL0206 … not found` is what a
+renamed or not-yet-existing column looks like. Six of them cost a query each in
+one afternoon — `USER_INFO` has no `OUTPUT_QUEUE_LIBRARY`, `JOB_DESCRIPTION_INFO`
+has `JOB_QUEUE` not `JOB_QUEUE_NAME` and `LIBRARY_LIST` not
+`INITIAL_LIBRARY_LIST`, `EXIT_PROGRAM_INFO` has `EXIT_PROGRAM` not
+`EXIT_PROGRAM_NAME`, `SPOOLED_FILE_INFO` has `SPOOLED_FILE_NUMBER` not
+`FILE_NUMBER`, `AUTHORITY_COLLECTION` has `AUTHORIZATION_NAME`/`CHECK_TIMESTAMP`
+not `USER_NAME`/`AUTHORIZATION_CHECK_TIMESTAMP`, and `SYSTABLESTAT` has no
+`TABLE_TEXT`. **Do not memorise that list — ask first**, it is one query:
+
+```sql
+SELECT COLUMN_NAME FROM QSYS2.SYSCOLUMNS
+ WHERE TABLE_SCHEMA = 'QSYS2' AND TABLE_NAME = '<the view>'
+ ORDER BY ORDINAL_POSITION;
+```
+
+Same for table functions that simply do not exist yet: `QSYS2.ACTIVE_JOB_INFO`
+with `SUBSYSTEM_LIST_FILTER` fails as `SQL0204 … not found` on 7.3, which reads
+like the function is missing rather than the parameter.
 
 Also, independent of release:
 
@@ -254,6 +314,23 @@ the only disk lever the feature has — once rows are held elsewhere,
 
 ## Blind spots that make confident answers wrong
 
+- **Anything you create may be owned by a group, not by you — and that quietly
+  undoes the authority you just set.** If the creating profile has
+  `OWNER(*GRPPRF)`, new objects are owned by its **primary group**, and an owner
+  entry carries `*ALL` to every member of it. A library created
+  `AUT(*EXCLUDE) CRTAUT(*EXCLUDE)` on purpose was found owned by an 86-member
+  group, handing all of them full authority to its contents. Check after
+  creating anything:
+
+  ```sql
+  SELECT OBJNAME, OBJTYPE, OBJOWNER
+    FROM TABLE(QSYS2.OBJECT_STATISTICS('<lib>','*ALL'))
+   WHERE OBJOWNER <> '<the profile you expected>';
+  ```
+
+  Fix with `CHGOBJOWN … CUROWNAUT(*REVOKE)` — without `*REVOKE` the group keeps
+  the authority as a private entry and nothing visibly changes.
+
 - **An `*ALLUSR` sweep silently omits every library the profile cannot reach,
   and reports it as absence.** `QSYS2.OBJECT_STATISTICS('*ALLUSR', ...)`
   returns zero rows for an object that plainly exists, with **no error and no
@@ -315,11 +392,42 @@ the only disk lever the feature has — once rows are held elsewhere,
 
 Check the box for versions rather than assuming; all three are behind current.
 
-- **Robot/SCHEDULE** — the real job scheduler (IBM's is near-empty). Its files are
-  externally described *with field text*, so `SYSCOLUMNS` on the live library is a
-  working data dictionary — better than the vendor's manuals, which describe a
-  much newer release. Version is in data area `ROBOTLIB/RBTIVER`; find the live
-  library from the running monitor job, not from the library name.
+- **Robot/SCHEDULE** (Fortra) — the real job scheduler; IBM's own is near-empty,
+  so `WRKJOBSCDE` tells you almost nothing. Its files are externally described
+  *with field text*, so `SYSCOLUMNS` on the live library is a working data
+  dictionary — better than the vendor's manuals, which describe a much newer
+  release. Version is in data area `ROBOTLIB/RBTIVER`; find the live library
+  from the running monitor job, not from the library name. (The `robot` skill
+  is a *different* product — dk400's Celery scheduler. It does not apply here.)
+
+  **Read the schedule from its own tables rather than trusting a note:**
+
+  | Table | Holds |
+  |---|---|
+  | `ROBOTLIB.RBTROB` | the job master — name, `OS_JOB_USER`, job queue, job description, `SCHED_RUN_TIME_n`, `RUN_FLAG_MON`…`SUN`, `JOB_HAS_MONITOR` |
+  | `ROBOTLIB.RBTCMD` | the commands, `CMD_STRING` + `CMD_ERROR_HANDLING` (2 = cancel, 1 = ignore) |
+  | `ROBOTLIB.RBTJM` | per-job monitors — overrun, underrun, late-start, and the action for each |
+
+  **`CMD_SET_OID` on `RBTROB` is 0 for almost every job** (746 of 747 measured),
+  so it is *not* the join to `RBTCMD`. Do not join on it and conclude a job has
+  no command.
+
+  **Three defaults that are each one step from wrong**, and all three are worth
+  checking on any job you add: Robot **submits as its own high-authority
+  profile unless told otherwise** — on this estate that account holds every
+  special authority and is unaudited, so always set the job's user explicitly;
+  the default batch queue may be `MAXACT(1)`, so a long job blocks everything
+  behind it — check `QSYS2.JOB_QUEUE_INFO` before choosing one; and a job with
+  no monitor fails silently.
+
+  **Spooled files are aged by a Robot job, not by the system** — a command set
+  of `AGEOUTQ OUTQ(x) LIBR(y) AGELMT(<days>)` lines, one per queue. A new output
+  queue accumulates forever until it is added to that list. Find it with:
+
+  ```sql
+  SELECT CMD_SET_OID, CMD_LINE_NUMBER, CMD_STRING FROM ROBOTLIB.RBTCMD
+   WHERE UPPER(CMD_STRING) LIKE '%AGEOUTQ%' ORDER BY 1, 2;
+  ```
 - **MIMIX** — replication. Replicates object content, **not** usage statistics.
   Role swaps are why counters restart.
 - **BRMS** — backup, and a possible route to *old versions of source*, which the
