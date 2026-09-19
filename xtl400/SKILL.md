@@ -65,6 +65,15 @@ wrong**, and a session read production under the imaging project's identity
 for three days because of it. Attribution is the whole point of separate
 profiles; getting the mapping wrong in the shared skill defeated it silently.
 
+**And the tools hand you the wrong profile if you let them.** Run `sql400`
+without credentials and it says *"Run this through the credential wrapper,
+e.g. `x400 ccsec sql400 ...`"* — `ccsec` regardless of which project you are
+in. A proj-imaging session copied that example on 2026-09-19 and put four
+production reads under proj-security's identity, the mirror of the mistake
+above, on the same day and for a different reason. **The example in an error
+message is an example, not a recommendation.** Decide the profile from the
+repo you are in, then type it.
+
 **Whoever you connect as, you are inside the finding.** These profiles hold no
 special authorities, but this box's `*PUBLIC` posture gives update or delete on
 80,454 files — so a "read-only" session is read-only by *discipline*, not by
