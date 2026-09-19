@@ -68,6 +68,37 @@ Needs the profile enabled by Doug plus Zscaler — **access is interactive, not
 unattended**. Never echo a credential; `x400` keeps it in the environment of
 one child process.
 
+**A profile with `PASSWORD(*NONE)` cannot be connected to at all** — `x400`
+fails with `AS400SecurityException: Password is *NONE`. That is the correct
+end state for a *batch* identity (it runs under the scheduler and is not an
+interactive account), so expect to lose access to a collector profile the
+moment it is finished. Build and debug while the credential exists; once it is
+revoked, changes go through Doug or through the scheduled job's own source.
+
+### Getting source onto the box
+
+`put400` is the working route and it is the one to use. It writes a stream
+file to the IFS and `CPYFRMSTMF`s it into a source member — record-level
+access (DDM, port 446) is blocked on this box, so the obvious path does not
+exist.
+
+```bash
+x400 <profile> put400 --write local.sql LIB SRCFILE MEMBER SQL
+```
+
+Dry run by default; `--write` is required. Two things it does not save you
+from:
+
+- **`SRCDTA` is `CHAR(100)`.** Anything past column 100 is lost on upload, and
+  past column 80 is lost again by `RUNSQLSTM` unless you pass `MARGINS(100)`.
+- **Non-ASCII characters survive the trip and then misparse.** A `§` in a
+  comment reached the member intact and still broke things. Keep source ASCII.
+
+`CRTBNDCL` / `RUNSQLSTM` then run through `CALL QSYS2.QCMDEXC('...')` from
+`sql400`, which has no command-line length limit — the 5250 command line does,
+and a long `CHGUSRAUD` will not fit on it. `QCMDEXC` is also how to hand Doug
+a command that is too long to paste.
+
 ## Two partitions, and the roles swap
 
 There is no "the box". There is a **primary** and a **target**, and which
@@ -167,6 +198,42 @@ looks complete. Keep `ERRLVL(20)` and read the listing.
 `CALL QSYS2.QCMDEXC(...)` and a follow-up `QSYS2.JOBLOG_INFO('*')` or
 `SPOOLED_FILE_INFO` in the same invocation see the same job. It keeps going
 after a failed statement (printing `!! [SQLnnnn] …` to stderr) and exits 1.
+
+## Authority collection (`STRAUTCOL`) on 7.3
+
+The instrument behind any `*ALLOBJ` reduction. Four things that are not
+obvious and each of which changes an answer:
+
+- **`DETAIL` is the cost model, not a preference.** `*OBJJOB` puts the *job*
+  in what counts as a unique instance, so the same person doing the same work
+  in tomorrow's session is new rows — it grows with sessions and never
+  plateaus. `*OBJINF` collects *"regardless of the job that accesses the
+  object and regardless of the unique code paths within the job"*, so it
+  converges on the user's working set and stops. **They only diverge after
+  several sessions**, so a week of `*OBJJOB` data extrapolated to an estate
+  is wrong in the expensive direction. Use `*OBJJOB` for a small sample where
+  you need to know *which program* drove an access; `*OBJINF` for breadth.
+- **Read `DETAILED_REQUIRED_AUTHORITY`, not `REQUIRED_AUTHORITY`.** The latter
+  was blank on 302 of the first 349 rows measured — it only carries the coarse
+  `*USE`/`*ALL` cases. The former is populated on every row.
+- **`AUTHORITY_SOURCE` is useless while `*ALLOBJ` is in play** — it read
+  `GROUP *ALLOBJ` on 343 of 349 rows. `*ALLOBJ` satisfies the check before
+  object authority is consulted, which is also why you cannot test a proposed
+  group by running it alongside an `*ALLOBJ` one.
+- **`STRAUTCOL` has a `DLTCOL` parameter that deletes the repository.** Any
+  program that re-runs `STRAUTCOL` must pass `DLTCOL(*NO)` explicitly.
+
+**The repository is volatile and this is the part people miss.** IBM (7.3
+Security Reference Ch.10): collection data *"is not immediately written out to
+disk"* for performance, so damage *"can frequently occur in the case of an
+abnormal IPL"* — and recovery is `DLTAUTCOL` and start over. A collection
+spanning a month-end is a month of evidence in a store nothing saves. IBM's
+own remedy, from *Delete authority collection repository*: *"write data to a
+DB2 table using view support."* Copy it forward on a schedule. That also buys
+the only disk lever the feature has — once rows are held elsewhere,
+`DLTAUTCOL` frees the live repository per profile.
+
+`PATH_NAME` is `DBCLOB(16M)`; cast it down before copying it anywhere.
 
 ## Costs, measured
 
