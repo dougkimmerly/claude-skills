@@ -351,6 +351,27 @@ the same day.**
 by re-running it with `*CURCHAIN` and comparing. If the two differ, the chain
 is the truth.
 
+### Who manages, deletes and reads the audit journal
+
+**MIMIX deletes `QSYS/QAUDJRN`'s receivers.** `MIMIXOWN`, job `JRNMGR`,
+program `MIMIX/LVSRV03` — found in the audit journal's own `DO` entries. So
+audit retention on this estate is a **MIMIX journal-manager setting** with an
+administrator (Midrange), not a mystery program. Note the oddity: MIMIX manages
+those receivers but does **not** replicate the journal, so it is deleting a
+trail it does not copy anywhere.
+
+**To find out whether anything CONSUMES an audit journal, look for `QASY*`
+outfiles.** `CPYAUDJRNE` and `DSPJRN OUTFILE` write into model outfiles named
+`QASYxxJ5`; their presence anywhere outside `QSYS` is the fingerprint of
+somebody extracting audit data. An estate-wide scan of user libraries found
+**zero** (2026-09-19), which alongside "no scheduled job reads it" and "no
+remote journal" is strong evidence nothing does.
+
+**What that evidence cannot cover**, and should be said whenever it is cited: a
+program can read entries through the journal API (`RCVJRNE`,
+`QjoRetrieveJournalEntries`) without ever creating an outfile. Ruling that out
+needs the program reference graph, which `proj-as400-codemap` holds.
+
 ### What the reads actually cost
 
 Measured on `QSYS/QAUDJRN`, whole chain, 2026-09-19:
