@@ -49,20 +49,35 @@ credential. Use the `secrets` skill to add or rotate one.
 
 ```bash
 x400 ccsec sql400 "SELECT ..."                    # proj-security, curlib DOUGSEC
-x400 ccimg ./tools/q400 primary whoami            # proj-as400-codemap
+x400 ccmap ./tools/q400 primary whoami            # proj-as400-codemap
+x400 ccimg <cmd>                                  # proj-imaging
 XTL400_HOST=192.168.40.20 x400 ccsec sql400 "..."  # the target; default is primary
 ```
 
-**Pick the profile that matches the work.** `CCSEC` is proj-security's;
-`CCIMG` is the mapping project's. They are separate so that `QAUDJRN`
-attributes a read to the project that made it — a shared profile destroys
-that, and on this estate the audit trail is itself under review.
+**Pick the profile that matches the work.** `CCSEC` is proj-security's,
+**`CCMAP` is the mapping project's**, `CCIMG` is proj-imaging's. They are
+separate so that `QAUDJRN` attributes a read to the project that made it — a
+shared profile destroys that, and on this estate the audit trail is itself
+under review.
 
-**Whoever you connect as, you are inside the finding.** `CCIMG` is `*USER`
-with no special authorities but `LMTCPB(*NO)`, and this box's `*PUBLIC`
-posture gives update or delete on 80,454 files — so a "read-only" session is
-read-only by *discipline*, not by constraint. Never rely on the profile to
-stop a write. (proj-security #20.)
+**This file said `CCIMG` was the mapping project's until 2026-09-19. It was
+wrong**, and a session read production under the imaging project's identity
+for three days because of it. Attribution is the whole point of separate
+profiles; getting the mapping wrong in the shared skill defeated it silently.
+
+**Whoever you connect as, you are inside the finding.** These profiles hold no
+special authorities, but this box's `*PUBLIC` posture gives update or delete on
+80,454 files — so a "read-only" session is read-only by *discipline*, not by
+constraint. Never rely on the profile to stop a write. (proj-security #20.)
+
+**And `LMTCPB(*YES)` is not the constraint its name implies.** Limited
+capability governs an interactive **command line**; it does **not** stop
+`CALL QSYS2.QCMDEXC('…')` over an SQL connection. Verified on this box
+2026-09-19: `DSPPGMREF … OUTFILE(QTEMP/…)` runs fine as a profile with
+`LMTCPB(*YES)`. **So for any ODBC/JDBC/SQL identity — which is what an
+integration or an outside developer gets — limited capability is not a
+containment boundary at all**, and it must not be cited as a mitigating
+control for one.
 
 Needs the profile enabled by Doug plus Zscaler — **access is interactive, not
 unattended**. Never echo a credential; `x400` keeps it in the environment of
