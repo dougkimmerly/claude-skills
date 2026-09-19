@@ -637,11 +637,58 @@ like valid SQL and fails only at CREATE time.
 | **`DROP … IF EXISTS`** | `SQL0199` | Not available. Run the drops tolerantly and ignore `SQL0204` |
 | **`LABEL ON COLUMN` caps at 60 characters**, `LABEL ON TABLE` at 50 | `SQL0107` | `COMMENT ON` allows 2000, and is what column documentation *is* |
 | **`STARTING_SEQUENCE => 0` or `1`** on `DISPLAY_JOURNAL` | `SQL0443` | Seed from `JOURNAL_RECEIVER_INFO`'s `MIN(FIRST_SEQUENCE_NUMBER)`; the chain's first sequence is not 1 |
+| **A routine calling `DISPLAY_JOURNAL` without `MODIFIES SQL DATA`** | `SQL0577` | `DISPLAY_JOURNAL` is itself `MODIFIES SQL DATA`; the default `READS SQL DATA` may not call it. The message says *"Modifying SQL data not permitted"*, which reads like an authority or read-only violation and is neither |
+| **Statements separated by `;` in a file fed to `install400`** | `SQL0104` | It splits on a line containing `@@` and does not strip trailing semicolons — routine bodies have their own |
 
 **And the one that is not a dialect trap but bit hardest:** widening a column
 does **not** widen the expression that fills it. A `CAST(… AS CHAR(10))` left
 in a procedure kept truncating after the column became `VARCHAR(40)`, and the
 data looked plausible — `030673/MIM` — rather than wrong.
+
+## Adopted authority: how to reach an object your profile may not touch
+
+**Verified on the box 2026-09-19**, not taken from a manual. When a profile
+needs authority it should not hold standing — the canonical case being
+`*OBJEXIST` on a journal, which also permits `DLTJRN` — the route is a routine
+owned by a profile that *does* hold it, created `USRPRF(*OWNER)`:
+
+```sql
+CREATE OR REPLACE FUNCTION MYLIB.READIT () RETURNS VARCHAR(80)
+  LANGUAGE SQL MODIFIES SQL DATA
+  SET OPTION USRPRF = *OWNER, DYNUSRPRF = *OWNER
+BEGIN … END
+```
+
+**`SESSION_USER` vs `CURRENT_USER` is the on-box tell for whether adoption
+engaged**, and it is the thing most likely to be misread. Outside a routine
+both are the connected profile. Inside an adopting one, **`SESSION_USER` stays
+the caller and `CURRENT_USER` becomes the owner** — so `CURRENT_USER` showing
+someone else is success, not a wrong connection. Return both when testing.
+
+- **It works for a REMOTE caller.** A JDBC session calling an on-box routine
+  adopts correctly, because it is the *routine's program object* that must be in
+  the call stack, not the caller. Only a remote session issuing the privileged
+  statement **directly** adopts nothing.
+- **`DYNUSRPRF(*OWNER)` is NOT required for a table-function reference.**
+  Measured: `USRPRF` alone read an otherwise-refused journal. A host variable
+  for the journal name does **not** make the statement dynamic — `DYNUSRPRF`
+  matters only for `PREPARE`/`EXECUTE IMMEDIATE`. Set it anyway so a later
+  maintainer adding a dynamic statement does not silently lose adoption.
+- **Prove it with an object whose two outcomes cannot be confused.** The test
+  above used an *empty* journal on purpose: **0 rows is the authorised answer
+  and `SQL0443` the unauthorised one.** A populated one confounds *authorised*
+  with *found something*. Establish the direct refusal immediately before, as
+  the control — authority on this box changes under you.
+
+**Why prefer adoption to a standing grant here, given `*PUBLIC` already gives
+update or delete on 80,454 files?** Not because it is safer today — it isn't.
+Because it is **measurable**: Authority Collection records
+`ADOPT_AUTHORITY_USED`, `ADOPTING_PROGRAM_NAME` and `ADOPTING_PROGRAM_OWNER`, so
+an adopting program is visible evidence, while a standing grant on a profile
+looks like every other grant on a box where everything is granted. And a profile
+that must be **submittable** carries its authority into any job run under it;
+an owner profile that is never a job identity does not. (proj-security's ruling,
+2026-09-19.)
 
 ## Reading the system history log: group on the bare job name
 
