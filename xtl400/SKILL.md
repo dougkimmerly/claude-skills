@@ -629,7 +629,31 @@ Check the box for versions rather than assuming; all three are behind current.
   SELECT CMD_SET_OID, CMD_LINE_NUMBER, CMD_STRING FROM ROBOTLIB.RBTCMD
    WHERE UPPER(CMD_STRING) LIKE '%AGEOUTQ%' ORDER BY 1, 2;
   ```
-- **MIMIX** — replication. Replicates object content, **not** usage statistics.
+- **MIMIX** — replication, and **you can read its configuration directly rather
+  than asking the MSP.** Version: `QSYS2.SOFTWARE_PRODUCT_INFO` where
+  `PRODUCT_ID = '7VSI001'` (Precisely Assure MIMIX; it was Lakeview, then
+  Vision, then Syncsort, so search accordingly). Replicates object content,
+  **not** usage statistics.
+
+  **Where the answer to "does X replicate?" lives:**
+
+  | File | Holds | Trust |
+  |---|---|---|
+  | `MIMIX.OMOBJXEP` | **Live** expanded object entries — `DG`, `LIB1SND`, `OBJ1SND`, `TYPE` | The current state |
+  | `MIMIX.MXLIBREPP` | A generated **library report** — per-library included/excluded/partial | **Check its `CHANGE_TIMESTAMP` first.** One found in the wild was two months stale |
+
+  **Two traps, both of which cost a query:**
+
+  - **The name columns are CCSID 65535**, so a client prints them as
+    EBCDIC hex (`ROBOTLIB` arrives as `D9D6C2D6E3D3C9C24040`). Comparisons
+    against a literal still work; only the display is wrong. Read them with
+    `CAST(LIB1SND AS CHAR(10) CCSID 37)`.
+  - **The two sources can disagree**, and one real case did: the report marked
+    a library's content all-included while the live object entries listed only
+    its data areas and data queues. Whether an object entry can cover a whole
+    library implicitly is a MIMIX semantics question — **do not conclude
+    "not replicated" from an object-entry absence alone**, and say which file
+    you read.
   Role swaps are why counters restart.
 - **BRMS** — backup, and a possible route to *old versions of source*, which the
   box itself does not keep.

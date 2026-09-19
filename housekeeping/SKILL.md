@@ -32,10 +32,19 @@ becomes a thing only the last session understood.
 cd ~/Programming/proj-01-standards && git pull -q
 ls docs/adr/ && cat CONVENTIONS.md
 git log --oneline -15 -- docs/adr/ CONVENTIONS.md     # what landed recently
+cat HANDOFF.md                                        # PROPOSED standards live here
 ```
 
 The list grows, and the ones added since this repo last tidied up are exactly
 the ones it is failing. A standard nobody re-reads is a standard nobody applies.
+
+**Read the standards repo's `HANDOFF.md` too, not only its ADRs.** A standard
+proposed by one repo and adopted by Doug in conversation can be in force before
+anyone writes the ADR — that is how `QUESTIONS.md` became binding on
+2026-09-19 while the only written trace was a handoff entry. An audit that reads
+only `docs/adr/` reports compliant and is wrong. If an entry there reads like a
+standard, either apply it or ask whether it was adopted; do not assume the
+absence of an ADR means the absence of a rule.
 
 For each standard, answer one question: **does this repo comply, and how do I
 know?** Then do one of three things, never nothing:
