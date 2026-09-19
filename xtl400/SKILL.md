@@ -334,6 +334,69 @@ groups actually include — on this estate a library holding a year of security
 evidence was discovered to be in neither, and the audit journal receivers had
 **never** been saved in the machine's entire history.
 
+## Reading a journal, and the defect that has now bitten twice
+
+**`DISPLAY_JOURNAL` reads only the ATTACHED receiver unless you tell it
+otherwise.** Pass `STARTING_RECEIVER_NAME => '*CURCHAIN'` to walk the chain.
+
+**Why it is so dangerous: the wrong answer is a clean, instant zero.** A
+`STARTING_TIMESTAMP` older than the attached receiver returns no rows, no
+warning and no error, in about a second. It does not look like a failed query —
+it looks like a confident negative, and it will be believed. It produced a
+"75 spooled-file events in a week" finding that was really ~46,000 a day, and a
+"2-day journal window" that was really 50 days. **Two projects, the same bug,
+the same day.**
+
+**Sanity-check any journal result that comes back empty or surprisingly small**
+by re-running it with `*CURCHAIN` and comparing. If the two differ, the chain
+is the truth.
+
+### What the reads actually cost
+
+Measured on `QSYS/QAUDJRN`, whole chain, 2026-09-19:
+
+| Query | Rows | Time |
+|---|---|---|
+| No entry-type filter, 1-hour window | 915,202 | 38 s |
+| `JOURNAL_ENTRY_TYPES => 'SF'`, 1-hour window | 1,009 | 1 s |
+| `JOURNAL_ENTRY_TYPES => 'SF'`, **2-day** window | 87,974 | **178 s** |
+
+Two conclusions, and the second is the one that sizes a job:
+
+- **The entry-type filter is pushed down and is nearly free** — same window,
+  38× faster. Filter in the table function's parameter, **never** in a `WHERE`
+  clause over an unfiltered read.
+- **Cost is driven by the WINDOW, not by rows returned.** Same filter, 48× the
+  window, 178× the time — superlinear, because each extra receiver is another
+  walk. So a harvester should keep its window as short as it can get away with,
+  which is an argument for running often rather than catching up in bulk.
+
+### Harvesting a journal forward — the pattern, not a library
+
+Both `proj-security` and `proj-as400-codemap` harvest journals into tables.
+Different journals, different entry types, different authority — **same five
+mechanics**, and copying them is correct here; there are two callers, which is
+where you copy rather than abstract:
+
+1. **Deduplicate on the journal sequence number**, not on content. That single
+   choice makes everything below safe.
+2. **Derive the lookback from the newest row already held**, minus a small
+   overlap — never a fixed interval. A missed run then heals itself on the next
+   run with nobody involved. Floor it at the receiver retention window; asking
+   for more scans for nothing.
+3. **One entry type (or object) per member/statement.** `RUNSQLSTM` stops at
+   the first failure, so a mixed member means one broken type costs the rest —
+   and journal evidence is destroyed on a clock, so it cannot be collected
+   later.
+4. **Record the gap before each run** — how far behind you were. Roughly one
+   interval means the last run worked; more means the system healed something,
+   which is the only way to see a recurring problem that keeps self-correcting.
+5. **Never read silence as health.** *Reached it and found nothing* and *could
+   not reach it* must be different outcomes in whatever you record.
+
+Worked implementation: `proj-security/secaudit/src/qsqlsrc/EV*.sql` plus
+`SECEVTS.clle`.
+
 ## Costs, measured
 
 - Estate-wide `*PGM` scan: ~25 s (target), ~90 s (primary).
@@ -406,8 +469,16 @@ evidence was discovered to be in neither, and the audit journal receivers had
 - **Journal attribution is lost in replication.** Reading a journal on the
   *target* returns MIMIX's apply program (`DMAPPLY`/`ICC_DBAPYA`/`MIMIXOWN`), not
   the program that made the change. **Read journals on the `primary` for
-  attribution** — the opposite of where you send expensive scans. And the primary
-  keeps only ~2 days of receivers, so usable observed-use depth is days, not weeks.
+  attribution** — the opposite of where you send expensive scans.
+
+  **~~And the primary keeps only ~2 days of receivers.~~ THAT WAS WRONG AND IT
+  WAS WRONG HERE, IN THIS FILE, FOR WEEKS.** The 2-day figure was the
+  attached-receiver defect below, recorded as a fact. Measured properly:
+  application journals (`#MXJRN`) hold **~50 days**; `QSYS/QAUDJRN` holds
+  **~6.8 days**. **Two separate projects reached the same false conclusion
+  independently on 2026-09-18, and both had read this line.** A wrong number in
+  a shared skill does not mislead one session — it mislead everyone who trusts
+  it, and it is the most expensive kind of error this file can contain.
 - **`OBJATTRIBUTE = 'DFU'` means there is no source and never was.** DFU generates
   a program from an interactive definition. Alongside vendor products, the second
   explainable-absence class — and it is exactly the set with no recorded source
