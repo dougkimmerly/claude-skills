@@ -65,14 +65,16 @@ wrong**, and a session read production under the imaging project's identity
 for three days because of it. Attribution is the whole point of separate
 profiles; getting the mapping wrong in the shared skill defeated it silently.
 
-**And the tools hand you the wrong profile if you let them.** Run `sql400`
-without credentials and it says *"Run this through the credential wrapper,
-e.g. `x400 ccsec sql400 ...`"* — `ccsec` regardless of which project you are
-in. A proj-imaging session copied that example on 2026-09-19 and put four
+**The tools used to hand you the wrong profile — fixed 2026-09-19, and the
+lesson outlives the fix.** `sql400` with no credentials printed *"…e.g. `x400
+ccsec sql400 ...`"* — `ccsec` regardless of which project you were in. A
+proj-imaging session copied that example on 2026-09-19 and put **six**
 production reads under proj-security's identity, the mirror of the mistake
-above, on the same day and for a different reason. **The example in an error
-message is an example, not a recommendation.** Decide the profile from the
-repo you are in, then type it.
+above, on the same day and for a different reason. The message now names no
+profile and points here instead (`X400Creds.java`; `x400 nosuch <cmd>` lists
+the profiles that exist). **The example in an error message is an example, not
+a recommendation** — and neither `x400` nor this skill should be the only copy
+of the mapping. Decide the profile from the repo you are in, then type it.
 
 **Whoever you connect as, you are inside the finding.** These profiles hold no
 special authorities, but this box's `*PUBLIC` posture gives update or delete on
