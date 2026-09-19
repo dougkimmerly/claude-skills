@@ -639,8 +639,39 @@ Check the box for versions rather than assuming; all three are behind current.
 
   | File | Holds | Trust |
   |---|---|---|
-  | `MIMIX.OMOBJXEP` | **Live** expanded object entries — `DG`, `LIB1SND`, `OBJ1SND`, `TYPE` | The current state |
-  | `MIMIX.MXLIBREPP` | A generated **library report** — per-library included/excluded/partial | **Check its `CHANGE_TIMESTAMP` first.** One found in the wild was two months stale |
+  | `MIMIX.OMOBJXEP` | **Object TRACKING state — not the configuration.** Its `TYPE` can only ever be `*DTAARA` or `*DTAQ` | **Do NOT read replication scope from this.** See the correction below |
+  | `MIMIX.MXLIBREPP` | A generated **library report** — per-library included/excluded/partial | Check its `CHANGE_TIMESTAMP`; one found in the wild was two months stale |
+  | `WRKDGOBJE … OUTPUT(*OUTFILE) EXPAND(*NO)` | **The actual rules.** `EXPAND(*YES)` gives a point-in-time list of matching objects instead | The only authoritative source — **but see the authority note** |
+
+  **A correction, recorded because getting this wrong is easy and I did.**
+  `OMOBJXEP` is the *expanded entry state* file and **contains only data areas
+  and data queues by definition** — those are the object types routed through
+  the user journal under advanced journaling. Reading it and concluding "only
+  data areas replicate for this library" is wrong twice over: everything else
+  in the library is still replicated **via the system journal**, and
+  system-journal objects never get tracking entries at all. Equally, a library
+  having **zero** rows there means nothing about whether it replicates.
+
+  **A single object entry can cover a whole library** — `LIB1(X) OBJ1(*ALL)` is
+  the documented normal case — so objects replicate **without appearing
+  individually anywhere**. And precedence is *most-specific-match, not
+  accumulation*, so one narrow `PRCTYPE(*EXCLD)` entry can silently carve
+  objects out of a broad include. *(MIMIX Reference v6.0, "Identifying
+  library-based objects for replication" and "How MIMIX uses object entries to
+  evaluate journal entries for replication".)*
+
+  **`*ALLOBJ` does not get you MIMIX commands.** MIMIX enforces its own
+  product-level authority: `WRKDGOBJE` fails with
+  `LVE100C — Product-level security error 1 … in product H1` even for a profile
+  holding `*ALLOBJ *SECADM *AUDIT`. So the authoritative answer to "does X
+  replicate?" has to come from someone enrolled in MIMIX security — on this
+  estate, the MSP. Ask for `WRKDGOBJE EXPAND(*NO)` output **and every
+  `PRCTYPE(*EXCLD)` row**, not for a yes/no.
+
+  **For database files, an object entry is necessary but not sufficient** —
+  matching *file* entries must exist too, and the product's own `#DGFE` audit
+  (`WRKAUD RULE(#DGFE)`) is what proves it. A disaster-recovery assurance claim
+  should rest on that audit, not on reading either file above.
 
   **Two traps, both of which cost a query:**
 
