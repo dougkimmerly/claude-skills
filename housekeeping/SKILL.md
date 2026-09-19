@@ -1,6 +1,6 @@
 ---
 name: housekeeping
-description: "Tidy up a repo at the end of a working session — verify the README is a current status page (proj- repos, ADR-0007), clear the HANDOFF inbox, land the knowledge into skills/memory/ADRs, and leave the tree clean. Use when Doug says housekeeping, tidy up, wrap up, clean up, or before handing a repo over."
+description: "Tidy up a repo at the end of a working session — audit it against the governing standards repo (re-read, never remembered), verify the README is a current status page (proj- repos, ADR-0007), clear the HANDOFF inbox, land the knowledge into skills/memory/ADRs, and leave the tree clean. Use when Doug says housekeeping, tidy up, wrap up, clean up, or before handing a repo over."
 triggers:
   - housekeeping
   - tidy up
@@ -20,7 +20,50 @@ becomes a thing only the last session understood.
 
 ---
 
-## 1. The README (`proj-` repos: this is the big one)
+## 1. Audit against the standards
+
+**Only if this repo is governed by a standards repo.** Its `CLAUDE.md` says so
+— XTL's `proj-` and `kb-` repos are governed by
+`~/Programming/proj-01-standards`. If nothing governs this repo, skip to step 2.
+
+**Do not work from a remembered list of standards. Read them now.**
+
+```bash
+cd ~/Programming/proj-01-standards && git pull -q
+ls docs/adr/ && cat CONVENTIONS.md
+git log --oneline -15 -- docs/adr/ CONVENTIONS.md     # what landed recently
+```
+
+The list grows, and the ones added since this repo last tidied up are exactly
+the ones it is failing. A standard nobody re-reads is a standard nobody applies.
+
+For each standard, answer one question: **does this repo comply, and how do I
+know?** Then do one of three things, never nothing:
+
+- [ ] **Complies** — move on. No note needed.
+- [ ] **Does not comply** — fix it here if it is small (most are), or record it
+      in `docs/log.md` as open work with what it needs. **Do not leave it
+      unstated.**
+- [ ] **Should not apply to this repo** — say so, in this repo, with the reason.
+      A standard that genuinely does not fit is useful information about the
+      standard.
+
+**If you disagree with a standard, say so in `proj-01-standards`' `HANDOFF.md`
+rather than quietly not applying it.** It is one ADR and it can be amended.
+**A standard half-applied across five repos is worse than either outcome** —
+nobody can tell whether a repo is non-compliant or deliberately excepted.
+
+Things worth checking explicitly, because they are the ones that drift:
+
+- **Where artifacts live.** Anything extracted from a system, any source, any
+  dated capture — is it in the knowledge-base repo rather than this one?
+- **Superseded documents.** Is the archive rule followed — moved, not
+  banner-topped in place?
+- **Repo naming and org.** Is it in the right GitHub organisation, named by
+  type?
+- **The README** — the most-failed one, and it gets its own step below.
+
+## 2. The README (`proj-` repos: this is the big one)
 
 **ADR-0007 in `proj-01-standards`: the README is a status page, not a log.**
 Check all five, against the repo's actual current state, not against how the
@@ -45,7 +88,7 @@ file reads:
 Anything historical moves to **`docs/log.md`**, linked from the README. Move
 it, do not summarise it away — the reasoning is why the log is worth having.
 
-## 2. The HANDOFF inbox
+## 3. The HANDOFF inbox
 
 `HANDOFF.md` at the repo root is an **inbox, not a log**. Read every entry.
 For each: act on it, or consciously defer it and say where that is recorded.
@@ -60,7 +103,7 @@ a batchq job to that repo's queue, or an entry appended to its `HANDOFF.md`.
 Check queues with `sbmjob -wrk`. An undelivered cross-domain finding is an
 unfinished one.
 
-## 3. Land the knowledge
+## 4. Land the knowledge
 
 Ask the three questions, and act on the answers rather than noting them:
 
@@ -76,7 +119,7 @@ Rule of thumb from the global conventions: **every non-trivial fix updates
 exactly one artifact.** If today produced fixes and no artifact changed,
 something was not captured.
 
-## 4. Check the docs against reality
+## 5. Check the docs against reality
 
 Not a full audit — spot-check the claims this session touched:
 
@@ -86,7 +129,7 @@ Not a full audit — spot-check the claims this session touched:
 - Anything a session asserted without measuring. Say so explicitly in the doc
   rather than leaving it indistinguishable from a measured fact.
 
-## 5. Leave the tree clean
+## 6. Leave the tree clean
 
 - [ ] `git status` clean. Everything committed with a message explaining **why**,
       not just what.
@@ -98,7 +141,7 @@ Not a full audit — spot-check the claims this session touched:
       done, it is revoked and removed from the secret store.
 - [ ] Push if the repo has a remote.
 
-## 6. Say what is still open
+## 7. Say what is still open
 
 End with the short list of what the next session or Doug needs to pick up,
 and be specific — a named command or file beats "finish the monitoring". If
@@ -114,6 +157,11 @@ something is blocked, say on what.
 - **Do not fabricate a percentage.** If the denominator is unknown, write that
   in the README. An invented number is worse than an admitted gap, because it
   stops anyone asking.
-- **`kb-` repos are out of scope for step 1.** They are operated knowledge
-  bases; their READMEs describe what the thing is and how to use it, and a
-  milestone status page does not fit (ADR-0002 Part C).
+- **`kb-` repos are out of scope for the README step.** They are operated
+  knowledge bases; their READMEs describe what the thing is and how to use it,
+  and a milestone status page does not fit (ADR-0002 Part C). **They are still
+  in scope for the standards audit** — the artifact-location and archive rules
+  apply to them most of all.
+- **The standards audit is a check, not a migration.** If compliance needs real
+  work, record it as open rather than doing it inside housekeeping. The point
+  is that nobody can later say the gap was unknown.

@@ -210,9 +210,30 @@ SELECT COLUMN_NAME FROM QSYS2.SYSCOLUMNS
  ORDER BY ORDINAL_POSITION;
 ```
 
-Same for table functions that simply do not exist yet: `QSYS2.ACTIVE_JOB_INFO`
-with `SUBSYSTEM_LIST_FILTER` fails as `SQL0204 … not found` on 7.3, which reads
-like the function is missing rather than the parameter.
+Same for table functions that simply are not there. **`QSYS2.ACTIVE_JOB_INFO`
+does not exist on XTL's 7.3 at all** — verified 2026-09-19 against
+`QSYS2.SYSROUTINES`, which returns no row for it. `SQL0204 … not found` is the
+literal truth here, not a disguised parameter error; an earlier version of this
+note read it as the latter and was wrong. Dropping `SUBSYSTEM_LIST_FILTER`, or
+calling it with no arguments at all, fails identically.
+
+**Use `QSYS2.JOB_INFO` instead**, which is present and takes its own filters:
+
+```sql
+SELECT JOB_NAME, JOB_STATUS, JOB_SUBSYSTEM
+  FROM TABLE(QSYS2.JOB_INFO(JOB_STATUS_FILTER => '*ACTIVE',
+                            JOB_USER_FILTER   => 'SOMEUSER'));
+```
+
+Note the inversion before assuming a release ordering: `JOB_INFO` is the
+*newer* function and it works, while the older `ACTIVE_JOB_INFO` is missing.
+PTF-group level, not release, decides what is on this box — so settle it with
+one query rather than by reasoning about what 7.3 shipped:
+
+```sql
+SELECT ROUTINE_NAME FROM QSYS2.SYSROUTINES
+ WHERE ROUTINE_NAME IN ('ACTIVE_JOB_INFO','JOB_INFO');
+```
 
 Also, independent of release:
 
@@ -518,6 +539,55 @@ Worked implementation: `proj-security/secaudit/src/qsqlsrc/EV*.sql` plus
 
   So resolve existence through `OBJECT_STATISTICS`, and classify **four** states,
   never three: readable · **present-but-unauthorised** · renamed · absent.
+
+  **Refined 2026-09-19, because the sentence above over-promises.**
+  `OBJECT_STATISTICS` distinguishes those four states **only for objects inside a
+  library the profile can already enumerate.** If the whole *library* is out of
+  reach, its objects do not come back blank — **they do not come back at all**,
+  and the result is indistinguishable from absence.
+
+  Worked case: `LVSRV03` writes a production file, and
+  `OBJECT_STATISTICS('*ALLUSR','*ALL')` filtered to that name returned **zero
+  rows on both boxes** — 226 s on one, 938 s on the other, ~19 minutes spent
+  proving something false. It exists: it is `MIMIX/LVSRV03`, and the MIMIX
+  libraries are invisible to that profile.
+
+  **So `*ALLUSR` enumeration is itself authority-filtered**, and the rule
+  generalises to every catalog view here — `SYSPARTITIONSTAT`, `USER_INFO`,
+  `OBJECT_STATISTICS` and `BOUND_SRVPGM_INFO` are four for four.
+  **Never report "does not exist" from a catalog view.** Report "not visible to
+  this profile", name the profile, and prefer an instrument that reports
+  *activity* over one that reports *existence* — the journal named `LVSRV03` in
+  four seconds after the catalog failed for nineteen minutes.
+
+## `DSPPGMREF` cannot see service programs — `BOUND_SRVPGM_INFO` can
+
+**A reference graph built with `DSPPGMREF ... OBJTYPE(*PGM)` has no `*SRVPGM`
+edges in it at all.** That is not a small tail on this estate: the single
+heaviest observed writer of the busiest business file is `SQ_LIST`, a `*SRVPGM`,
+and it is absent from a 282,816-edge graph entirely.
+
+**`QSYS2.BOUND_SRVPGM_INFO`** carries the ILE binding edges — which programs and
+service programs are bound to which service program. 125,148 rows on this
+estate. Use it whenever the question is *what calls X* and X might be a service
+program, or when a clean negative from `DSPPGMREF` is about to be reported.
+
+```sql
+SELECT PROGRAM_LIBRARY, PROGRAM_NAME, OBJECT_TYPE
+  FROM QSYS2.BOUND_SRVPGM_INFO
+ WHERE BOUND_SERVICE_PROGRAM = 'QJOURNAL'
+```
+
+**Three limits, and they must travel with any answer from it:**
+
+- **Binding is not calling.** A service program bundles many procedures; binding
+  to it proves only that *something* in it is used.
+- **Procedure-level imports are not available.**
+  `QSYS2.PROGRAM_EXPORT_IMPORT_INFO` returns `*PROCEXP` for these objects and
+  **never `*PROCIMP`** — tested 2026-09-19. You can see what a service program
+  *exports*, which often names its purpose well enough to be useful, but you
+  cannot see which procedure a caller imports.
+- **It is authority-filtered** like everything else here. See above.
 
 ## Products on the estate
 
