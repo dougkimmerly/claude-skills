@@ -1,6 +1,6 @@
 ---
 name: xtl400
-description: "Work against XTL's real IBM i / AS/400 estate — the two-partition pair behind xtl400.xtl.com. Use for ANY query, extraction or diagnosis on XTL's 400: which box to talk to and why the answer changes, the read-only boundary and what QTEMP buys you, the release-7.3 SQL traps that reject valid-looking statements, and the blind spots that make a confident answer wrong. NOT dk400 (that is the `homelab-dk400` skill) and NOT Fortra Robot in the abstract (see `robot`). Consulted by proj-as400-codemap, proj-security, proj-imaging and kb-xtl400."
+description: "Work against XTL's real IBM i / AS/400 estate — the two-partition pair behind xtl400.xtl.com. Use for ANY query, extraction or diagnosis on XTL's 400: which box to talk to and why the answer changes, the read-only boundary and what QTEMP buys you, the release-7.3 SQL traps that reject valid-looking statements, and the blind spots that make a confident answer wrong. NOT dk400 (that is the `homelab-dk400` skill). Fortra Robot/SCHEDULE as it runs on this estate IS covered here -- the `robot` skill is a different product entirely (dk400's Celery scheduler) and does not apply. Consulted by proj-as400-codemap, proj-security, proj-imaging and kb-xtl400."
 triggers:
   - xtl400
   - xtl 400
