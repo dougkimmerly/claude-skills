@@ -125,6 +125,29 @@ escape-severity ones. Three codes — **read them before resubmitting:**
   **FIX** text saying which cause + what to do. Two-strikes: same STOP twice → re-decompose, don't
   resubmit identical.
 
+### Reading your messages — the MSGQ read side (ADR 0073)
+
+A completed job posts `{ts,job,queue,submitted_by,disposition,summary_ref,sha}` to the SUBMITTER's
+inbox (`~/.batchq/.msgq/<entity>/inbox.jsonl` **on the worker host**, `.13`). The
+`UserPromptSubmit` hook (`~/.claude/skills/bin/msgq-prompt-submit.sh`) is the **only**
+cursor-advancer — SessionStart merely peeks — and it sshes to `$WORKER_HOST_SSH` to do it.
+
+Two traps when Doug asks "what's in my messages" (both hit 2026-09-19):
+
+- **`summary_ref` in the hook block is TRUNCATED** (~250 chars, mid-sentence). Do not answer from
+  it. The full job summary is `~/.batchq/<queue>/done/<job>.summary.md` on `.13` — the `job` and
+  `queue` fields in the message tell you exactly where:
+  `ssh 192.168.20.13 'cat ~/.batchq/<queue>/done/<job>.summary.md'`.
+- **The "+K more — `msgq read`" escape hatch does not work from the Mac.** `msgq` is not on the
+  Mac's `PATH` (there is a `sbmjob` forwarder in `~/.local/bin`, but no `msgq` one), and
+  `~/.batchq/engine/msgq` run locally reads the Mac's own empty `~/.batchq/.msgq/<entity>/` and
+  reports **`0 unread` — a false negative, not an empty inbox.** Always run it on the worker:
+  `ssh 192.168.20.13 "~/.batchq/engine/msgq peek <entity>"` (peek = non-advancing; `read`
+  advances the cursor and can consume messages the hook has not shown). To re-read what the hook
+  already consumed, print the inbox tail directly:
+  `ssh 192.168.20.13 'tail -5 ~/.batchq/.msgq/<entity>/inbox.jsonl' | jq .`
+  Tracked as fixer #1608 "escape_hatch_unreachable on msgq-read-from-mac".
+
 ## Where it runs (homecore, since 2026-08-05 — fixer ADR 0049)
 
 The worker, all queue state (`~/.batchq/<queue>/`), the engine, and the dashboard
