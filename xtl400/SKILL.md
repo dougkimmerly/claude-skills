@@ -1,6 +1,6 @@
 ---
 name: xtl400
-description: "Work against XTL's real IBM i / AS/400 estate — the two-partition pair behind xtl400.xtl.com. Use for ANY query, extraction or diagnosis on XTL's 400: which box to talk to and why the answer changes, the read-only boundary and what QTEMP buys you, the release-7.3 SQL traps that reject valid-looking statements, and the blind spots that make a confident answer wrong. NOT dk400 (that is the `homelab-dk400` skill). Fortra Robot/SCHEDULE as it runs on this estate IS covered here -- the `robot` skill is a different product entirely (dk400's Celery scheduler) and does not apply. Consulted by proj-as400-codemap, proj-security, proj-imaging and kb-xtl400."
+description: "Work against XTL's real IBM i / AS/400 estate — the two-partition pair behind xtl400.xtl.com. Use for ANY query, extraction or diagnosis on XTL's 400: which box to talk to and why the answer changes, the read-only boundary and what QTEMP buys you, the release-7.3 SQL traps that reject valid-looking statements, and the blind spots that make a confident answer wrong. NOT dk400 (that is the `homelab-dk400` skill). Fortra Robot/SCHEDULE has its own skill, `robot-schedule` -- note that the `robot` skill is a third thing entirely (dk400's Celery scheduler) and never applies here. Consulted by proj-as400-codemap, proj-security, proj-imaging and kb-xtl400."
 triggers:
   - xtl400
   - xtl 400
@@ -881,6 +881,10 @@ often rather than a wide one rarely.
 
 ## Robot's tables are not shaped the way their names suggest
 
+**→ Fortra Robot/SCHEDULE now has its own skill: `robot-schedule`.** Load it for
+anything about the schedule itself. What stays here is only what bites a general
+SQL session against this box.
+
 - **`RBTMSG` is a MESSAGE table, not a run table.** Up to **26 rows** share one
   `(CMRNAM, CMRJOB, CMSDAT, CMSTIM)`. Treating a row as a run violates any
   primary key built on that tuple — `SQL0803`. Aggregate to the run.
@@ -891,6 +895,8 @@ often rather than a wide one rarely.
   06:05:00). **`DATE(CMSDAT)` does not parse this** and does not fail usefully.
 - **`CMMSEV` is `A(1)`** and holds letters (`C`, `W`, `T`), not a number.
   **`CMRJOB` is `A(12)`**, zero-padded, not an integer.
+- **`QSYS2.ACTIVE_JOB_INFO` does not exist on this 7.3** (`SQL0204`). Use
+  `QSYS2.JOB_INFO`.
 - **`RBTROB.HIST_RETENTION` is per job.** Verified against stored data: for
   retentions 3, 7, 12, 14 and 30 the stored runs match exactly; for 6 and 40 —
   the two big populations — they do not, and why is unresolved.

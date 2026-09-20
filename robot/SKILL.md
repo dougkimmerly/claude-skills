@@ -1,6 +1,6 @@
 ---
 name: robot
-description: "Understand and troubleshoot dk400's Robot scheduler — the Celery/Beat scheduler inside dk400, named in homage to Fortra Robot/SCHEDULE. It is NOT that product: for Robot/SCHEDULE on an IBM i / AS/400 (ROBOTLIB, RBTROB, OPAL, Fortra/HelpSystems) this skill does not apply — see proj-as400-codemap/docs/research/robot-sources.md."
+description: "Understand and troubleshoot dk400's Robot scheduler — the Celery/Beat scheduler inside dk400, named in homage to Fortra Robot/SCHEDULE. It is NOT that product: for Robot/SCHEDULE on an IBM i / AS/400 (ROBOTLIB, RBTROB, OPAL, Fortra/HelpSystems) this skill does not apply — use the `robot-schedule` skill."
 triggers:
   - robot
   - scheduler
