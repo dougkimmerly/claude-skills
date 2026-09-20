@@ -205,6 +205,14 @@ outright.
 
 ## Two partitions, and the roles swap
 
+**Backups run from the HA box, not the primary** (Doug, 2026-09-20). Saves are
+taken off the MIMIX replica so production is never quiesced for them — which is
+why a search for backup jobs in the primary's Robot schedule finds none, and why
+an overnight job scheduled on the primary has no save window to work around.
+(Beware `SAV*` job names there: they are **Savoie**, a division, not saves.)
+
+
+
 There is no "the box". There is a **primary** and a **target**, and which
 machine holds which role changes. They have already swapped once (workload moved
 end of May 2026) and the target is scheduled for replacement.

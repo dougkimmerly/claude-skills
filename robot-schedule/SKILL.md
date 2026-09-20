@@ -68,7 +68,7 @@ concluded from exactly that "the schedule was last touched in 2020". It was not.
 | `ROBOT_JOB_DESC` | `PROGDS` | description text |
 | `ROBOT_JOB_TYPE` | `JOBTYP` | job type |
 | `OS_JOB_USER` | `PROFIL` | **the profile it runs as** |
-| `START_TIME` | `TIMEST` | start time, `HHMMSS`, no leading zero |
+| `START_TIME` | `TIMEST` | start time, **`HHMM`** — see below |
 | `CALENDAR_NAME` | `CALNAM` | calendar |
 
 **Always list the columns before writing a query against any Robot file:**
@@ -96,15 +96,25 @@ SELECT ROBOT_JOB_NAME, OS_JOB_USER, START_TIME, ROBOT_JOB_DESC
 Worked example — verifying a job added the same day:
 `MAPCOLL · PGMAPPER · 300 · code map collection`, i.e. **03:00 as `PGMAPPER`**.
 
-**`START_TIME` is `HHMMSS` with no leading zero**, so `300` is 03:00:00 and
-`60500` is 06:05:00. Read it as a number and you will be six hours out.
+## ⚠ TWO DIFFERENT TIME ENCODINGS IN THE SAME PRODUCT
 
-## Dates and times are not dates and times
+Do not carry one file's encoding to another. Verified by range, not assumed:
+
+| Field | Encoding | Example |
+|---|---|---|
+| `RBTROB.START_TIME` | **`HHMM`** (max observed 2359, plus 9999 sentinels) | `300` = **03:00** |
+| `RBTMSG.CMSTIM` | **`HHMMSS`**, no leading zero | `60500` = **06:05:00** |
+
+Read `START_TIME` as `HHMMSS` and `300` becomes 00:03 — six hours wrong, in the
+direction that looks plausible. **Check the range before trusting either:**
+`SELECT MIN(...), MAX(...)` — a max of 2359 means `HHMM`, a max in the 235959
+range means `HHMMSS`.
+
+## Dates
 
 - **Dates are `CYYMMDD` as a 7-digit number** — `1260914` = 2026-09-14, leading
   digit is the century. **`DATE(...)` does not parse this and does not fail
   usefully.**
-- **Times are `HHMMSS` with no leading zero** (above).
 - `proj-as400-codemap` carries an `RBTSTAMP` SQL function that converts Robot's
   date format; borrow it rather than rewriting the arithmetic.
 
@@ -164,10 +174,28 @@ What `MAPCOLL` needed, as a template:
 through `QSYS2.QCMDEXC` as the intended profile. Dot-qualified SQL names work
 under `RUNSQL`'s default naming — measured, not assumed.
 
+**⚠ `SAV*` job names are `Savoie`, a division — NOT saves.** A search for
+backup jobs on name or description returns 41 of them and every one is a false
+positive. **There are no backup jobs in Robot at all:** on this estate the
+**backups run from the HA box**, off the MIMIX replica, so production is never
+quiesced for them (Doug, 2026-09-20). This matters twice — a scheduled overnight
+job on the primary has no save window to avoid, and "I found the backup job" is
+a claim to check hard.
+
 **Choosing a time from evidence.** `proj-as400-codemap`'s collector keeps an
 observed run ledger (`XTLPGMMAP.MAPRUN`) — job starts by hour, from what
-actually ran. On this estate: **06:00 is the morning batch (2,006 starts)**,
-01:00 and 00:00 are busy, and **03:00–05:00 and 19:00–22:00 are quiet.**
+actually ran. On this estate, observed starts: **06:00 is the morning batch (2,006)**, 01:00
+and 00:00 are busy, and **03:00–05:00 and 19:00–22:00 are quiet.**
+
+Cross-check against what is *scheduled*, which is a different question — jobs
+per hour from `RBTROB`: `00`=73, `01`=7, `02`=11, `03`=10, `04`=19, `05`=61,
+`06`=105, `07`=83. The 01:00–04:00 trough sits between the midnight batch and
+the morning surge.
+
+**Then look at the actual neighbours, not just the hour count.** `RGZPFM` jobs
+take exclusive locks and one runs at 03:30; a five-minute job at 03:00 clears
+it, a twenty-minute one would not. Journal receivers also roll about 01:05, so
+anything reading journals wants to be after that.
 
 ## ⚠ Robot reporting success is not evidence the work happened
 
