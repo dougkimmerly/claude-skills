@@ -676,6 +676,54 @@ does **not** widen the expression that fills it. A `CAST(… AS CHAR(10))` left
 in a procedure kept truncating after the column became `VARCHAR(40)`, and the
 data looked plausible — `030673/MIM` — rather than wrong.
 
+## Killing a JDBC client does NOT stop the work on the box
+
+Proven twice on 2026-09-19. A long `DISPLAY_JOURNAL` kept reading server-side
+after the client process was killed — no client, no connection, still burning
+CPU. The first time it was only discovered because an unrelated `ALTER TABLE`
+came back `SQL0913` *"object in use"*.
+
+**Finding the survivor is harder than it should be, and the obvious check
+lies.** JDBC server jobs are `QZDASOINIT` running under **`QUSER`**; only the
+*current* user swaps to your profile. So:
+
+- `WRKUSRJOB USER(<yourprofile>) STATUS(*ACTIVE)` shows **nothing** — a clean,
+  confident, wrong answer.
+- `QSYS2.JOB_INFO(JOB_STATUS_FILTER => '*ACTIVE')` returned **zero rows total**
+  for an ordinary profile — it could not see the job asking the question.
+- What actually works: **`WRKOBJLCK OBJ(<lib>/<file>) OBJTYPE(*FILE)`** naming a
+  file the job touches (check member locks too), or `WRKACTJOB JOB(QZDASOINIT)`
+  and look for one burning CPU. Both need a profile that can see other jobs.
+
+**Before starting anything long, know how you will stop it.** Ending it needs
+`ENDJOB` from someone with the authority — not the profile that started it.
+
+## Sizing a journal read BEFORE you run it
+
+`JOURNAL_RECEIVER_INFO` answers "how much is there" for free, without touching
+a single entry. Do this first; it is the difference between a 15-minute runaway
+and a decision:
+
+```sql
+SELECT JOURNAL_NAME, COUNT(*) AS RCVS,
+       MIN(FIRST_SEQUENCE_NUMBER) AS CHAIN_START,
+       MAX(LAST_SEQUENCE_NUMBER)  AS NEWEST,
+       MAX(CASE WHEN ATTACH_TIMESTAMP <= CURRENT TIMESTAMP - 24 HOURS
+                THEN FIRST_SEQUENCE_NUMBER END) AS SEED_24H
+  FROM QSYS2.JOURNAL_RECEIVER_INFO
+ WHERE JOURNAL_LIBRARY = '#MXJRN' AND STATUS IN ('ONLINE','ATTACHED')
+ GROUP BY JOURNAL_NAME
+```
+
+Measured 2026-09-19 on `#MXJRN`, and the numbers are why this matters:
+**`APP` holds ~216 million entries in its chain and `ICC` ~348 million.** A
+read from the chain start is not a query, it is a bulk job. Bounding to the
+newest receiver attached before a cutoff gives roughly a 22–50× reduction and
+costs one catalog query.
+
+Sequence numbers are a magnitude, not an exact count (gaps exist), which is
+plenty for deciding whether to run something.
+
 ## Adopted authority: how to reach an object your profile may not touch
 
 **Verified on the box 2026-09-19**, not taken from a manual. When a profile
