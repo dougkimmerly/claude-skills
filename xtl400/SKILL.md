@@ -35,6 +35,7 @@ the repos, and duplicating them here would guarantee drift:
 | Measurements, with their caveats | `proj-as400-codemap/docs/research/index.md` |
 | Decisions (read-only boundary, storage, scope) | `proj-as400-codemap/docs/adr/` |
 | Extracted source, captures | `kb-xtl400/` |
+| **The `x400` tools themselves** | **`kb-xtl400/tools/x400/`** — canonical since 2026-09-20; `~/.local/bin` entries are symlinks to it |
 | IBM i / RPG / CL platform reference | `kb-ibm400` (MCP-exposed) |
 | Security posture, findings, the access wall | `proj-security` — **counts and pointers only** |
 
@@ -70,6 +71,13 @@ mid-session). Consequences, each of which cost time:
   `100.64.0.0/10` — the same space ZPA mints synthetic IPs in — so bringing
   Tailscale up kills XTL sessions (it is what drops the 5250 connection and
   leaves ACS beeping every 20 s).
+
+**The tools are version-controlled in `kb-xtl400/tools/x400/`** as of
+2026-09-20, and `~/.local/bin/{x400,sql400,cl400,put400,src400,pgm400,ifsput}`
+are **symlinks** into it — so editing either path edits the repo and nothing can
+drift. Run `tools/x400/install.sh` on a new machine, `build.sh` after changing a
+`.java`. Before that date they lived only in `~/.local` under no version control
+and `Src400.java` was lost outright.
 
 **Credentials come from SOPS, never a plaintext file, and the profile is a
 per-project choice.** `x400 <profile> <command>` decrypts one profile out of
