@@ -40,6 +40,37 @@ the repos, and duplicating them here would guarantee drift:
 
 ## Connecting
 
+### ⚠ Everything to XTL rides Zscaler ZPA — and a port test LIES (2026-09-19)
+
+XTL private hosts are published by **hostname**, not private IP, and resolve to
+**ephemeral synthetic IPs in `100.64.0.0/16`** (`xtl400.xtl.com` → `100.64.1.1`,
+`xtlto9.xtl.com` → `panda.xtl.com` → `100.64.1.3`, which moved from `.4`
+mid-session). Consequences, each of which cost time:
+
+- **A raw private IP never works.** `192.168.10.16` has no route; only the six
+  hosts in the app segment resolve. Always use the `.xtl.com` name.
+- **`nc -z host port` SUCCEEDS EVEN WHEN NOTHING IS THERE.** The local Zscaler
+  tunnel accepts the connection itself, then the broker fails. **The tell is
+  timing plus behaviour:** a real backend answers in ~0.18 s and *holds the
+  connection or replies*; an unbrokered one "connects" in ~0.02 s and closes
+  immediately with no data — and does so on *every* port you try, including ones
+  the host could not possibly serve. Probe properly:
+  ```python
+  s = socket.create_connection((host, port), timeout=8); s.settimeout(4)
+  s.sendall(b"\x00"); s.recv(64)     # replied / timeout(held) / closed-immediately
+  ```
+  Control case: `xtl400.xtl.com:23` returns telnet negotiation bytes; the Domino
+  servers closed instantly on all seven ports tested — which is "no ZPA policy",
+  not "server down". The servers were running the whole time.
+- **Split DNS bites.** Both Zscaler (`100.64.0.1`) and the house Pi-hole
+  (`192.168.20.16`) are configured resolvers with **no domain-scoped rule for
+  `xtl.com`**, so the Pi-hole answers NXDOMAIN and whichever resolver a given app
+  asks decides whether it works. Shell tools may succeed while an app fails.
+- **Tailscale collides with all of this.** Tailscale's own CGNAT range is
+  `100.64.0.0/10` — the same space ZPA mints synthetic IPs in — so bringing
+  Tailscale up kills XTL sessions (it is what drops the 5250 connection and
+  leaves ACS beeping every 20 s).
+
 **Credentials come from SOPS, never a plaintext file, and the profile is a
 per-project choice.** `x400 <profile> <command>` decrypts one profile out of
 `homelab-secrets` `secrets/home/xtl400.sops.yaml` and exports
