@@ -68,7 +68,7 @@ fi
 unread=$(printf '%s\n' "$peek_out" | awk '/unread$/{print $(NF-1); exit}')  # portable: BSD sed rejects the GNU form (this runs on the Mac)
 if [ -n "${unread:-}" ] && [ "$unread" -gt 0 ] 2>/dev/null; then
   plural=""; [ "$unread" = "1" ] || plural="s"
-  inbox_note="📬 $unread unread message${plural} for $entity — msgq read"
+  inbox_note="📬 $unread unread message${plural} for $entity — ~/.batchq/engine/msgq read"
 fi
 
 jq -n --arg q "$q" --arg state "$state" --arg run "$run" --arg que "$que" \
