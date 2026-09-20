@@ -300,6 +300,23 @@ SELECT ROUTINE_NAME FROM QSYS2.SYSROUTINES
  WHERE ROUTINE_NAME IN ('ACTIVE_JOB_INFO','JOB_INFO');
 ```
 
+**Finding which programs call a service program: use `BOUND_SRVPGM_INFO`, not
+`PROGRAM_EXPORT_IMPORT_INFO`.** Asking the latter which programs import a
+symbol returns **zero rows for `*PGM` objects on this box** — verified
+2026-09-20 against a program known to call the symbol. It looks exactly like
+"nothing calls this API", which on an estate where an uninstall depends on
+that answer is a dangerous way to be wrong.
+
+```sql
+-- who depends on a vendor service program (the real question before an uninstall)
+SELECT PROGRAM_LIBRARY, PROGRAM_NAME, OBJECT_TYPE, BOUND_SERVICE_PROGRAM
+  FROM QSYS2.BOUND_SRVPGM_INFO
+ WHERE BOUND_SERVICE_PROGRAM_LIBRARY = 'QVI';
+```
+
+Filter with `=` on the library, not `<>`: the negated form scans every program
+object on the box and runs for minutes.
+
 Also, independent of release:
 
 - The column is **`SOURCE_FILE_MEMBER`**, not `SOURCE_MEMBER`.
@@ -437,6 +454,29 @@ the same day.**
 by re-running it with `*CURCHAIN` and comparing. If the two differ, the chain
 is the truth.
 
+### ⚠ `SQL0443` from `DISPLAY_JOURNAL` means TWO OPPOSITE THINGS (2026-09-20)
+
+The same code covers both, and only `MESSAGE_TEXT` separates them:
+
+| Message text | What it is | Recovery |
+|---|---|---|
+| *"Not authorized to object X in LIB"* | an authority problem | a grant |
+| *"STARTING_SEQUENCE OR ENDING_SEQUENCE NOT FOUND"* | your start position **aged out of the chain** | none — that evidence is gone at any price |
+
+**Never read `-443` as an authority failure without reading the text.** Measured:
+a collector reported `UNREACHABLE` on journal `DSN` **on the very day a `DSN`
+authority grant had been revoked** — the predicted failure, in the predicted
+shape, with an unrelated cause. The watermark was 155868 and the chain's oldest
+surviving sequence had rolled to 155874; five entries aged out unread.
+
+Two consequences for anything that reads journals incrementally:
+
+- **Treat the aged-out case as its own outcome**, not as "unreachable". It
+  means data loss and should be counted, because a rising count says the reader
+  runs too seldom for that journal's retention.
+- **Reseed to the oldest surviving sequence and carry on.** A reader that
+  stalls on this loses the whole journal from then on, not just the gap.
+
 ### Who manages, deletes and reads the audit journal
 
 **MIMIX deletes `QSYS/QAUDJRN`'s receivers.** `MIMIXOWN`, job `JRNMGR`,
@@ -555,6 +595,28 @@ Worked implementation: `proj-security/secaudit/src/qsqlsrc/EV*.sql` plus
   Known refused to `CCIMG` so far: `SEIOBJ`, `ZPETERP`, `QRDARS`, `XTLBC`.
   Check the job log for `CPF2182` after any sweep that returns less than
   expected.
+
+  **⚠ CORRECTION, 2026-09-20: authority is only ONE of the reasons, and
+  checking `CPF2182` will not catch the other.** An `*ALLUSR` sweep also omits
+  libraries the profile CAN read, with no message anywhere. Measured on the
+  primary as `CCMAP`: the sweep returned **20,084 objects across 54
+  libraries**; the box holds **518** libraries and **221,349** objects. Queried
+  directly, same profile, same minute, `I93CSTMNEW` returned 6,206 objects and
+  `DOUGMAP` returned 2 — neither appeared in the sweep, and both are readable.
+  The sweep reported a clean row count and no error.
+
+  **So never use `*ALLUSR` for anything that must be complete. Enumerate
+  libraries and loop, one query each:**
+
+  ```sql
+  SELECT OBJNAME FROM TABLE(QSYS2.OBJECT_STATISTICS('QSYS','*LIB','*ALL')) X
+  ```
+  (the third argument is required — omit it and you get one row, not 518)
+
+  Then per library, and **record a coverage row per library as you go** —
+  a capture that silently covers 10% of the estate is worse than none, because
+  it gets quoted. Worked instance:
+  `kb-xtl400/tools/capture_usage_counters.sh`.
 
 - **`*QRYDFN` — thousands of them, with no source at all.** Query/400 definitions
   are invisible to every source-driven approach, and they are scheduled in
@@ -777,6 +839,30 @@ that must be **submittable** carries its authority into any job run under it;
 an owner profile that is never a job identity does not. (proj-security's ruling,
 2026-09-19.)
 
+### Maintaining an adopting object: the part that surprises people
+
+- **`CREATE OR REPLACE` resets the owner to whoever runs it**, and the object
+  then silently stops adopting — every call comes back `SQL0443`, which reads
+  as an authority problem rather than a deployment one. **After any redeploy,
+  check the owner**, don't assume it.
+- **⚠ You cannot delegate the hand-back by adoption. It is not policy, it is
+  the machine:** *"You must be signed on as a user with `*ALLOBJ` and
+  `*SECADM` special authorities to transfer ownership of an object that adopts
+  authority"* — SC41-5302 7.3 Security Reference, printed p.153; `CHGOBJOWN`'s
+  own Appendix D footnote agrees. So a "promote my program" tool that others
+  call **cannot exist as an adopting program**. A promotion service has to be
+  *request and execute*: the requester stages, a privileged identity performs.
+- **There is a window in every redeploy where the object adopts the
+  PROMOTER.** Between the compile and the hand-back it is owned by whoever ran
+  it — typically an `*ALLOBJ` holder. If the runtime profile can call it in
+  that window, that is arbitrary code at `*ALLOBJ`, **and nothing looks wrong**.
+  Revoke *before* transferring, grant *after*, and fail closed on every error
+  path. Worked instance: `proj-as400-codemap` `mapcoll/src/qclsrc/MAPPROM.clle`
+  + ADR 0014.
+- **Owning the library confers nothing over the objects in it** (7.3 Security
+  Reference, printed p.137) — which is what lets a control program live in a
+  library owned by a less-privileged profile while staying out of its reach.
+
 ## Reading the system history log: group on the bare job name
 
 `QSYS2.HISTORY_LOG_INFO`'s `FROM_JOB` is **fully qualified** —
@@ -970,6 +1056,68 @@ unexplained. **The adoption surface does not transfer between partitions.**
 **A multi-row `INSERT` here is not atomic in practice.** A four-row insert that
 hit a duplicate key on the third row left the first one committed. Check what
 landed before retrying, or you will chase a phantom.
+
+## Compiling on the box, and reading your own errors (2026-09-20)
+
+**You can only read your OWN spooled files, and the failure is silent.**
+`SYSTOOLS.SPOOLED_FILE_DATA` against another user's compile listing returns
+**zero rows** — not an error, not a refusal. So "the compile failed, send me
+the errors" cannot be answered by reading their listing.
+
+**The fix is not more authority — compile a test copy as yourself:**
+
+```sql
+CALL QSYS2.QCMDEXC('CRTCLPGM PGM(<yourlib>/<name>T) SRCFILE(<lib>/QCLSRC)
+                    SRCMBR(<name>) AUT(*EXCLUDE) TEXT(''TEST COMPILE'')')
+```
+
+then find and read your listing:
+
+```sql
+SELECT SPOOLED_FILE_NAME, JOB_NAME, FILE_NUMBER, CREATE_TIMESTAMP
+  FROM QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC
+ WHERE USER_NAME = '<you>' ORDER BY CREATE_TIMESTAMP DESC FETCH FIRST 5 ROWS ONLY;
+
+SELECT ORDINAL_POSITION, CAST(SPOOLED_DATA AS VARCHAR(110))
+  FROM TABLE(SYSTOOLS.SPOOLED_FILE_DATA(JOB_NAME => '<job>',
+             SPOOLED_FILE_NAME => '<name>', SPOOLED_FILE_NUMBER => <n>))
+ WHERE SPOOLED_DATA LIKE '%CPD%' OR SPOOLED_DATA LIKE '%Message Summary%';
+```
+
+Iterate until clean, then hand the real command to whoever owns the target
+library. **The session proves the source; the person performs the privileged
+act** — and a privileged compile is then never the thing being debugged.
+
+### CL traps this cost a compile each
+
+- **`SNDPGMMSG … MSGTYPE(*ESCAPE)` with free text does not compile** —
+  `CPD2489 "MSGID parameter is needed"`. Immediate messages cannot be escape
+  messages. Use `MSGID(CPF9898) MSGF(QCPFMSG) MSGDTA(&MSG)`, and **keep `&MSG`
+  at 132** — `CPF9898`'s data is cut silently past that. `*COMP`, `*DIAG` and
+  `*INFO` take free text fine.
+- **`GRTOBJAUT` will not mix a system-defined authority with specific ones.**
+  `AUT(*CHANGE *OBJMGT)` fails; it takes two commands.
+- **`ADDPFM` needs `*OBJMGT` on the source file** — `*CHANGE` is not enough,
+  and the failure is a bare `CPF7306 "not added … because of errors"`.
+
+### Getting source onto the box without SEU
+
+- **`QSYS2.IFS_WRITE` exists on 7.3** — `(PATH_NAME, LINE, FILE_CCSID,
+  OVERWRITE => 'REPLACE'|'APPEND'|'NONE', END_OF_LINE => 'LF')`. Needs `*WX` on
+  the parent directory and `*W` on the file. One call per line is slow but
+  fails on a line number you can look at.
+- **`CRTBNDCL` accepts `SRCSTMF`**, so CL can be compiled straight from the
+  IFS with no source physical file at all.
+- **A source member is SQL-addressable** through an alias:
+  `CREATE ALIAS lib.X FOR lib.QCLSRC(MBR)`, then `INSERT`. Watch the source
+  width (`RCDLEN 112` → 100 chars of data) and treat an over-long line as an
+  error, never a truncation.
+- **UTF-8 narrows to EBCDIC on the way in.** Byte counts will differ; compare
+  **character** counts per line instead. Check for non-ASCII inside string
+  literals before staging — in comments it is harmless, in a literal it is not.
+- **Strip your own statement separators.** `@@` is a convention for feeding
+  several statements over JDBC; `RUNSQLSTM` separates on semicolons and reads a
+  bare `@@` as a syntax error.
 
 ## Before you report a number
 
