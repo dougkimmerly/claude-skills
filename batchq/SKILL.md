@@ -690,6 +690,19 @@ entry (HANDOFF.md survives only for repos with no registered queue — `ls
 CLAUDE.md/skills/memory make the judgment call the sender can't. Every such
 spec begins with this preamble, verbatim (after the `INTENT:` line):
 
+> **⚠ If you DO fall back to HANDOFF.md: APPEND, and confirm it landed.** That
+> file is a shared inbox with no locking, and cross-domain entries cluster —
+> several repos do housekeeping in the same hour. A session that reads it,
+> composes the new whole, and writes it back **silently destroys anything
+> another session appended in between.** On 2026-09-19 a `proj-imaging` session
+> clobbered a `proj-as400-codemap` correction three minutes after it was
+> committed; both reported success, git recorded two clean commits, and it was
+> found only because Doug noticed the entry was missing. So: `cat >>`, never
+> `cat >` and never a full-file Write — then **re-read the receiving repo's
+> file after committing and confirm your `## ` heading is there.** A delivery
+> is confirmed at the receiver, not by your own commit. This is the failure the
+> queue does not have, and it is a reason to prefer the queue.
+
 ```
 CROSS-DOMAIN REQUEST from <sender CC> — VERIFY FIRST.
 Before executing, check this against your domain's context (CLAUDE.md, skills,
