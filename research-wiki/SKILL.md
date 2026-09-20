@@ -49,6 +49,11 @@ docs/research/
    gap-fill, writing pages directly (raw notes → pages at most; NO monolithic
    intermediate report — the founding run's 5,800-line landscape.md was half-wasted).
    Critique-of-coverage is cheaper and more objective than critique-of-quality.
+   **Set a thin-page prohibition, not a page-count target.** A count is a proxy
+   for "no padding" and agents optimise the proxy: 2026-09-19 a lens correctly
+   refused to merge 21 well-cited, non-padded, mutually-scoped pages down to a
+   5–9 target, judging it would destroy evidence to satisfy a number. It was
+   right. Say the thing the number stands for.
 3. **Concept pass.** A planner names the convergence pages; writers fill them from the
    entity pages. This is where "three lenses found the same lesson" becomes one page
    instead of three duplicates.
@@ -95,6 +100,14 @@ docs/research/
    Both parents caught it and merged rather than leaving duplicates — but that was
    their diligence, not the design. Say in every prompt: *you may spawn helpers, but
    YOU are the only writer; helpers return text to you.*
+   **AND SAY WHAT TO DO WHEN HAND-BACK IS UNAVAILABLE — the instruction alone is
+   not enough** (proj-security `*ALLOBJ` run, 2026-09-19): a lens dispatched six
+   forks which found `SubagentHandback` missing in their sub-sessions and wrote
+   wiki pages directly, because writing was the only way not to lose the work.
+   The instruction was in the prompt verbatim and the *mechanism* defeated it.
+   Give helpers a scratch path the parent owns — `/tmp/<lens>/NN.md` — and have
+   the parent merge. A rule with no fallback breaks under the one condition it
+   was written for.
 3. **Check the web-search budget BEFORE a fan-out.** It is a shared per-session
    resource (default 200 calls, `CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION`) spent by
    the parent and every subagent, and it runs out **silently** — the first sign is a
@@ -134,6 +147,13 @@ docs/research/
    Corollary: **pause between waves.** If wave 1 (what we already have) shows the
    answer, wave 2 (what the world offers) gets much narrower — deciding that
    before spending is worth more than any model choice.
+
+   **WAVE 1 IS ALWAYS THE LOCAL CORPUS, and the check costs one `ls`.** Promoted
+   from corollary to rule 2026-09-19: a full landscape run for proj-security
+   produced 32 pages and its decisive finding while spending **zero web
+   searches**, because a 513-file Usenet archive and the IBM manual set were
+   already on disk in a sibling repo. The estate accumulates corpora faster than
+   anyone remembers — look before you search.
 9. **Scale expectation:** the founding run — 155 pages, ~640 sources, full adversarial
    review — cost ~15M subagent tokens / 214 agents / ~3h20m. Scale lenses and review
    depth to the ask; a landscape-only run without review is roughly half.
@@ -161,6 +181,11 @@ docs/research/
     miscount in the founding-run era, and on 2026-09-09 it converted seven agent
     reports into findings safe to write into a design document. Verify the claims that
     would change a decision; ignore the rest.
+    **When a spot-check PASSES, read the surrounding primary text anyway** —
+    twice now that has yielded more than the check did. 2026-09-19: verifying
+    "authority collection ignores special authorities" against the manual turned
+    up two further exclusions in the same section that neither of two lenses had
+    reported, one of which mattered more than the claim being checked.
 14. **Make every agent separate the mechanism from the present tense.** The
     characteristic multi-agent error when researching a live system is being *right
     about the code and wrong about what is currently happening*: it happened twice in
