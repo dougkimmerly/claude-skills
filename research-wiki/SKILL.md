@@ -237,6 +237,36 @@ real content came back.) The same script runs on homecore inside the weekly
 imported invented mechanism detail once — the Cerebras security section —
 and had to be rewritten.
 
+**When `browser_fetch.py` ALSO fails, the answer may be "ask the operator", and
+that is a legitimate move** (2026-09-20, `archive.midrange.com`). A
+Cloudflare-style interstitial returns HTTP 403 whose *body* says "Performing
+security verification". On that host **every automated route failed** —
+WebFetch, curl, `browser_fetch.py`, and a Playwright browser driven
+programmatically. Waiting did not help. **Doug cleared the bot check by hand in
+the browser**, after which the session was trusted and the whole thread read
+normally — and it produced the single most concrete artifact in a 50-page
+corpus. A source worth thirty seconds of a human's time is cheaper than a page
+built from secondaries: **surface it and ask, rather than recording
+"unreachable" and moving on.**
+
+Two things to carry:
+
+- **Record the ACCESS ROUTE on the page, not just `verified:`.** Content got
+  this way is properly verified, but the retrieval is not repeatable by an
+  unattended agent — a later refresh pass needs to know to ask for a human
+  rather than conclude the source rotted. "Human-in-the-loop only" is a
+  distinct state from both "fetched" and "unreachable".
+- **Do not infer the mechanism from the outcome — especially about your own
+  tooling.** The first version of this note claimed the challenge "clears in
+  ~30 seconds in an interactive session", inferred from a later navigation
+  succeeding rather than observed, and the real cause was the human. Wrong
+  access claims propagate into other people's ingest tooling; that one had
+  already been delivered to a sibling repo before the operator corrected it.
+
+And **do not assume the Internet Archive covers you** — for that list it held
+the month and thread indexes but none of the individual messages, and was
+itself returning "Temporarily Offline" at the time.
+
 ## Ingest-spec traps (paid for 2026-08-10, Cole Medin rounds 1–2)
 
 - **Test the operator's ACTUAL hypothesis, not a proxy the convenient sources can
@@ -271,6 +301,52 @@ corpora always rot (the wiki's own declared-metadata-rot lesson applies to itsel
   research wiki is not a news scrapbook.
 - Known-weak page classes to re-check first on refresh: empty-failure-cupboard pages
   (current-gen products with no track record yet) and vendor-sourced claims.
+
+## Lint mechanics, paid for 2026-09-20 (proj-security wave 2 + four lint passes)
+
+- **Run the verdict-consistency pass LAST, after fixes are applied — not alongside
+  the other lints.** Its highest-value catch that day was an *incomplete fix by the
+  orchestrator*: an authority-checking correction had landed on a page's `hook:` and
+  not its body, and a concept page had inherited the stale half as its headline
+  claim. That defect did not exist until fixes began, so a concurrent run would have
+  missed it — and no other pass can find it, since the contradiction lint has already
+  run, the citation lint checks sources rather than internal consistency, and the
+  orchestrator is the one who introduced it. **A pass that audits the fixer is the
+  point.**
+- **Lints are REPORT-ONLY; the orchestrator is the sole applier.** Three passes read
+  the same 32 files concurrently; had any been allowed to edit, the others would have
+  been reporting against shifting text. It also puts every correction through one
+  reader who can refuse one — and should. **A lint finding is a diagnosis, not a
+  prescription:** one recommendation that day would have deleted a page's *evidence*
+  along with the bad inference drawn from it. Keep the evidence, drop the inference.
+- **For report-only agents, give NO output path — say "return your entire report as
+  text".** The harness blocks subagent report-file writes; three of five agents were
+  told to write `/tmp/lint-*/findings.md`, were blocked, and improvised. Same root
+  cause as rule 2's hand-back fallback: *the prompt specified a mechanism the
+  sub-session did not have.*
+- **Lint scope = an explicit file list captured at dispatch, not a directory glob.**
+  With waves running concurrently a glob silently under-covers: 17 pages written
+  mid-run fell outside a citation lint whose mandate was drafted when the corpus was
+  32 pages.
+- **After correcting any number, grep the WHOLE corpus for the old value.** A
+  fabricated figure propagates into synthesis faster than a lint cycle completes —
+  one invented statistic had already reached two concept pages written from it hours
+  earlier, whose author could not have known.
+- **Lint the per-page verdict frontmatter separately, and expect the defects there.**
+  Nearly every estate-level contradiction that day was in frontmatter, not body:
+  corrections that reached the prose and never the verdict, a verdict explaining a
+  599-population with a mechanism that explains 78, a vendor implied as deployed.
+  **The verdict is written last, when the body already feels done, and it is the
+  field most likely to be quoted.** Consider requiring it written FIRST.
+- **Two independent passes converging is the strongest signal available.** A
+  contradiction lint and a concept pass that never saw each other's output flagged
+  the same four defects. Agreement across lenses beats confidence within one — and it
+  is nearly free when both passes were going to run anyway.
+- **Exhaustive citation checking is affordable, and the coverage number is itself a
+  finding.** ~286 citations across 32 pages, every quoted string rather than a
+  sample, cost one sonnet agent with five helpers. It found exactly one fabricated
+  statistic and zero fabricated quotes — which tells you how far to trust the rest of
+  the corpus. Sampling cannot tell you that.
 
 ## Skill maintenance
 

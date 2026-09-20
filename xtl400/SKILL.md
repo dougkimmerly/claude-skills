@@ -833,13 +833,50 @@ Check the box for versions rather than assuming; all three are behind current.
   so it is *not* the join to `RBTCMD`. Do not join on it and conclude a job has
   no command.
 
-  **Three defaults that are each one step from wrong**, and all three are worth
-  checking on any job you add: Robot **submits as its own high-authority
-  profile unless told otherwise** — on this estate that account holds every
-  special authority and is unaudited, so always set the job's user explicitly;
-  the default batch queue may be `MAXACT(1)`, so a long job blocks everything
-  behind it — check `QSYS2.JOB_QUEUE_INFO` before choosing one; and a job with
-  no monitor fails silently.
+  **`OS_JOB_USER` is `*RBTDFT` on 667 of 747 jobs, and `*RBTDFT` IS NOT A
+  PROFILE — do not look it up, resolve it.** Measured 2026-09-20. The
+  `RBTDFT` file in `ROBOTLIB` is empty, so the default is not readable there.
+  **Resolve it empirically through the submitter chain**, which is the only
+  route that worked:
+
+  ```sql
+  SELECT SUBSTR(SUBMITTER_JOB_NAME, LOCATE_IN_STRING(SUBMITTER_JOB_NAME,'/',-1)+1) AS SUBMITTER,
+         JOB_USER AS RUNS_AS, COUNT(*) AS JOBS
+    FROM TABLE(QSYS2.JOB_INFO(JOB_STATUS_FILTER=>'*ALL', JOB_USER_FILTER=>'*ALL'))
+   WHERE SUBMITTER_JOB_NAME LIKE '%RBTUSER%' OR SUBMITTER_JOB_NAME LIKE '%SCHEDULE%'
+   GROUP BY 1, 2 ORDER BY 3 DESC
+  ```
+
+  **Do NOT match Robot job names against active job names** — job names collide
+  with ordinary interactive jobs and the answer looks plausible and is wrong.
+  That was tried first and produced a completely different set of users.
+
+  **CORRECTION 2026-09-20 — this skill said Robot "submits as its own
+  high-authority profile… that account holds every special authority".
+  Measured on XTL, that is wrong in both halves.** `RBTUSER` runs the Robot
+  *monitors* (`RBCMANAGER`, `RBCREPLY`, …) and holds `*JOBCTL *SAVSYS
+  *IOSYSCFG` — **not** all eight, and not `*ALLOBJ`. The *scheduled work*
+  resolves to **`QPGMR`** (2,337 jobs) and **`SCHEDULE`** (~1,550), and it is
+  `SCHEDULE` that holds all eight. So there are **two** Robot identities doing
+  different things, and naming the wrong one gets the authority story
+  backwards. Check before asserting — and note `SCHEDULE` is `*DISABLED` and
+  running jobs right now, which is its own finding.
+
+  **Two remaining defaults worth checking on any job you add:** the default
+  batch queue may be `MAXACT(1)`, so a long job blocks everything behind it —
+  check `QSYS2.JOB_QUEUE_INFO` before choosing one; and a job with no monitor
+  fails silently.
+
+  **Six `ROBOT*` libraries exist and only one is live.** `ROBOTLIB` (747 jobs,
+  updated continuously) is current; `ROBOTLIBV8`, `ROBOTLIBV9`, `ROBOTMRGV8`,
+  `ROBOTMRGV9` and `ROBOTMSTV3` all froze on **2024-12-10** and are migration
+  snapshots. Settle it with row counts and timestamps rather than the name:
+
+  ```sql
+  SELECT TABLE_SCHEMA, TABLE_NAME, NUMBER_ROWS, LAST_CHANGE_TIMESTAMP
+    FROM QSYS2.SYSTABLESTAT
+   WHERE TABLE_NAME IN ('RBTROB','RBTCMD') AND TABLE_SCHEMA LIKE 'ROBOT%'
+  ```
 
   **Spooled files are aged by a Robot job, not by the system** — a command set
   of `AGEOUTQ OUTQ(x) LIBR(y) AGELMT(<days>)` lines, one per queue. A new output
@@ -908,6 +945,31 @@ Check the box for versions rather than assuming; all three are behind current.
   Role swaps are why counters restart.
 - **BRMS** — backup, and a possible route to *old versions of source*, which the
   box itself does not keep.
+
+## More 7.3 column and view traps, measured 2026-09-20
+
+Adding to the list above rather than replacing it — each cost a query.
+
+| Thing | Reality on XTL 7.3 |
+|---|---|
+| `QSYS2.AUTHORITY_COLLECTION_INFO` | **Does not exist.** Check what is collecting by joining `AUTHORITY_COLLECTION_ACTIVE` on `QSYS2.USER_INFO` instead |
+| `JOB_INFO`'s user column | **`JOB_USER`**, not `AUTHORIZATION_NAME` (`SQL0206`) |
+| `JOB_DESCRIPTION_INFO`'s `USER` parameter | exposed as **`AUTHORIZATION_NAME`** — the JOBD's run-as identity, and a second identity route behind any scheduler |
+| `USER_INFO.PASSWORD_EXPIRATION_INTERVAL` | **`0` means inherit `QPWDEXPITV`** (45 on this box), **`-1` means never expires.** `0` reads like "never" and is the opposite. The `-1` reading is inferred, not manual-verified |
+| `QSYS2.SYSPARMS` for a table function's result columns | returns nothing useful — get the column list with `SELECT * FROM TABLE(...) FETCH FIRST 1 ROW ONLY` and read the header |
+
+**`PROGRAM_INFO` estate-wide is a job, not a query — and the two partitions
+disagree.** `WHERE USER_PROFILE = '*OWNER'` over the whole estate took **>9
+minutes on the primary** and **~1 minute on the target**. Tempting to just use
+the target; **do not, for anything you will quote about production.** Measured
+the same day: `MIMIXOWN` 472 on the primary against 897 on the target,
+`LAKEVIEW` 77 vs 132, `QBRMS` 677 vs 477 — a ~35% difference in the total. Some
+is MIMIX apply-side machinery that only exists on the target; the rest is
+unexplained. **The adoption surface does not transfer between partitions.**
+
+**A multi-row `INSERT` here is not atomic in practice.** A four-row insert that
+hit a duplicate key on the third row left the first one committed. Check what
+landed before retrying, or you will chase a phantom.
 
 ## Before you report a number
 
