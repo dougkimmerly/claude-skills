@@ -189,11 +189,44 @@ fine in the measured case:
 3. The `OS_JOB_USER` profile is `*ENABLED` and not `PASSWORD(*NONE)` —
    `QSYS2.USER_INFO`, and note a profile can always read its **own** row when
    an ordinary profile cannot read anyone else's.
-4. **Then: can Robot's own profile submit a job AS that user?** Submitting
-   under another profile needs `*USE` on that `*USRPRF`. This is the leading
-   candidate when 1–3 are clean, and **an ordinary profile cannot check it** —
-   `QSYS2.OBJECT_PRIVILEGES` returns zero rows for a profile object it cannot
-   see, after a slow scan that looks like a real answer.
+4. ~~**Then: can Robot's own profile submit a job AS that user?**~~
+   **⚠ RESOLVED 2026-09-21, AND THIS WAS THE WRONG ANSWER.** It was carried
+   here as "the leading candidate" for a day and sent a session chasing an
+   authority that was never the problem.
+
+**STOP RULING THINGS OUT AND READ THE JOB LOG. The answer is in it.**
+
+The `JLOG<hhmmss>` spooled file named in `MSG_TEXT` *is* the diagnosis, and
+the real cause was three ordinary messages sitting in it:
+
+```
+CPF1266  User <profile> not authorized to library QRDARS
+CPF1266  User <profile> not authorized to library XTLBC
+CPF1338  Errors occurred on SBMJOB command
+```
+
+**The job inherited a library list it had no authority to.** With
+`JOBD(*RBTDFT)` the submitted job takes the standard application library
+list — twenty-odd libraries — and a least-privileged batch profile is
+excluded from some of them. `SBMJOB` then fails before the program exists.
+
+**The tell that should redirect you immediately: the same error under two
+different submitters.** In the measured case it failed at 03:00 under
+`RBTUSER` and again at 11:08 under a named human. Nothing about the
+*submitter* can explain that — it is the **submitted job's own definition**.
+Check that first and you save a day.
+
+**The fix is a job description of the application's own**, with a minimal
+`INLLIBL`, rather than granting the batch profile access to libraries it
+never reads. Worked instance: `proj-as400-codemap` ADR 0016 and
+`mapcoll/install/runtime.sql`.
+
+**Reading the log is the hard part, not the diagnosis.**
+`SYSTOOLS.SPOOLED_FILE_DATA` returns **zero rows, no error**, for a spooled
+file you do not own, and `QUSRSYS/QEZJOBLOG` is `DSPDTA(*NO)`. Either own the
+file or set `DSPDTA(*YES)` on a queue you can reach — see the `xtl400` skill.
+**Give any job you schedule its own output queue with `DSPDTA(*YES)`**, or its
+failures are undiagnosable by you.
 
 ## `JOB_HAS_MONITOR = 0` means the job cannot report its own failure
 

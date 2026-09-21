@@ -378,6 +378,7 @@ release":
 | `SYSMEMBERSTAT` absent (7.5 TR4 / 7.4 TR10) | `SYSPARTITIONSTAT`, or `DSPFD TYPE(*MBRLIST)` to `QTEMP` |
 | `SYSFILES` absent (7.4+) | `OBJECT_STATISTICS`, `DSPFD` |
 | `SOURCE_STREAM_FILE_PATH` absent | n/a on this estate |
+| `VARCHAR(<timestamp>)` → `SQL0171 argument not valid` | `CHAR(<timestamp>)`, then `SUBSTR` if you want it short |
 
 **The column names in current IBM documentation are frequently not the column
 names on 7.3, and the error never says so.** `SQL0206 … not found` is what a
@@ -388,7 +389,12 @@ has `JOB_QUEUE` not `JOB_QUEUE_NAME` and `LIBRARY_LIST` not
 `EXIT_PROGRAM_NAME`, `SPOOLED_FILE_INFO` has `SPOOLED_FILE_NUMBER` not
 `FILE_NUMBER`, `AUTHORITY_COLLECTION` has `AUTHORIZATION_NAME`/`CHECK_TIMESTAMP`
 not `USER_NAME`/`AUTHORIZATION_CHECK_TIMESTAMP`, and `SYSTABLESTAT` has no
-`TABLE_TEXT`. **Do not memorise that list — ask first**, it is one query:
+`TABLE_TEXT`. Two more, 2026-09-21: **`JOB_INFO` has `JOB_USER`, not
+`AUTHORIZATION_NAME`** (that one is `NETSTAT_JOB_INFO`'s), and
+**`NETSTAT_JOB_INFO` has no `TCP_STATE`** — connection state lives in
+`NETSTAT_INFO`, and the two views are easy to reach for interchangeably
+because both key on `LOCAL_PORT`. **Do not memorise that list — ask first**,
+it is one query:
 
 ```sql
 SELECT COLUMN_NAME FROM QSYS2.SYSCOLUMNS
@@ -1500,3 +1506,132 @@ who is changing what.
 
 `docs/research/index.md` keeps an explicit list of figures that are **not**
 measured. Add to it rather than quietly promoting an estimate.
+
+## Getting source OUT of members in bulk: `CPYTOSTMF`, not row reads (2026-09-21)
+
+**If you are reading more than a handful of members, stop reading rows.**
+Measured on the primary, same members three ways:
+
+| Mechanism | Per member |
+|---|---|
+| A JVM-per-member helper (`src400`) from a laptop | ~1,700 ms |
+| `CPYTOSTMF` through `QCMDEXC` over JDBC | ~82 ms |
+| **`CPYTOSTMF` inside an SQL procedure on the box** | **21.7 ms** |
+
+A sustained batch run held ~38 members/second across mixed libraries. That is
+the difference between "the estate is a twelve-hour job" and "the estate is
+forty minutes", and it is why any bulk source work belongs in a procedure on
+the box rather than in a loop on your machine.
+
+```
+CPYTOSTMF FROMMBR('/QSYS.LIB/<LIB>.LIB/<FILE>.FILE/<MBR>.MBR')
+          TOSTMF('/path/<MBR>.rpgle')
+          STMFOPT(*REPLACE) STMFCCSID(1208) DBFCCSID(<page>) ENDLINFMT(*LF)
+```
+
+It also **renders the text form for you**: UTF-8, one line per record, LF
+endings, **trailing blanks stripped**. Verified byte for byte against
+record-faithful captures — six members, 3,244 lines, zero differences. So you do
+not need code in the middle, and the conversion is the machine's, not yours.
+
+**⚠ `DBFCCSID(*FILE)` FAILS OUTRIGHT on a CCSID 65535 source file** —
+`CPFA097 Object not copied`. That is the *good* failure and the opposite of the
+JDBC path, where 65535 silently returns EBCDIC as hex and looks like a width
+bug. **Read each source file's declared CCSID and pass it explicitly**; for
+65535 you are choosing 37, and that is a choice to record, not a default.
+
+**A source file is not identified by its name.** Test `SOURCE_TYPE IS NOT NULL`
+in `SYSPARTITIONSTAT`. On XTL, `TRUBASE2` (7,777 members), `COMPILES` (6,411),
+`KARLADDS`, `SAVESRC`, `PROTOTYPES`, `LASTSRC` and `QRPGLEBCK` all hold source —
+a `Q%SRC` filter misses over 20,000 members.
+
+**Member names repeat inside a library.** 9,654 names appear in two or more
+source files of the same library on XTL. Key anything you build on
+library + file + member, and never flatten a tree to library/member.
+
+## Git runs on the box — but it cannot use threads (2026-09-21)
+
+`/QOpenSys/pkgs/bin/git` is **2.26.2** and `init` / `add` / `commit` /
+`rev-parse` all work from a `QSH` called inside an SQL server job, writing to
+the IFS, as an ordinary profile with no special authorities. No install, no PTF.
+
+Two things it needs:
+
+- **`HOME` must be set** in the QSH environment. A profile with no home
+  directory (a batch identity typically has none) otherwise fails.
+- **Threading must be off.** At 1,434 files, `git add` failed with:
+
+  ```
+  fatal: unable to create threaded lstat: Resource temporarily unavailable
+  ```
+
+  `-c core.preloadIndex=false -c index.threads=1` fixes it. **The failure scales
+  with file count and does NOT reproduce on a small test** — it appears the
+  first time the job does something worth doing. `pack.threads` and
+  `checkout.workers` are the next two if a bigger job needs them.
+
+Note `git init` is idempotent, and git 2.26 predates the `safe.directory`
+ownership check, so a repository written by one profile and read by another
+needs no exception.
+
+## `SBMJOB` inherits YOUR library list, not the job description's (2026-09-21)
+
+`INLLIBL` defaults to **`*CURRENT`**. Hand-submitting an application job from a
+5250 session therefore drags your interactive library list into it, and on this
+estate that fails as:
+
+```
+User <batch profile> not authorized to library XTLBC
+```
+
+— naming a library that has nothing to do with the job, which is the second time
+XTL's library lists have produced a message pointing away from the cause.
+
+```
+SBMJOB CMD(...) JOB(X) JOBD(<lib>/<jobd>) USER(*JOBD) INLLIBL(*JOBD)
+```
+
+**`USER(*JOBD)` matters just as much**: `USER` defaults to `*CURRENT`, so
+without it the job runs as *you* and fails on anything the batch profile owns.
+**Robot is unaffected** — it submits using the job description — so this is a
+fact about hand-submitting, not about the scheduled entry. Prove a scheduled job
+by submitting it with its own JOBD, never by calling the procedure over JDBC:
+a JDBC call exercises none of the library list, output queue or identity that
+actually break.
+
+## SQL PL on 7.3: a zero-row `UPDATE` raises `NOT FOUND` (2026-09-21)
+
+The trap that makes a cursor loop run **exactly once** and report success.
+
+`DECLARE CONTINUE HANDLER FOR NOT FOUND SET V_DONE = 1` is the standard
+fetch-loop idiom. But `NOT FOUND` (SQLSTATE `02000`) is *also* raised by an
+`UPDATE` or `DELETE` inside the loop body that matches no rows — and an
+upsert's `UPDATE` matches nothing for every row being inserted for the first
+time, i.e. every row of a first run.
+
+Measured: 10 members screened, **1 copied**, outcome `READ`, no error anywhere.
+
+```sql
+mbrloop: LOOP
+  FETCH C INTO ...;
+  IF V_DONE = 1 THEN LEAVE mbrloop; END IF;
+  ...body, which may raise NOT FOUND...
+  SET V_DONE = 0;        -- ⚠ AT THE END OF THE BODY
+END LOOP mbrloop;
+```
+
+**Resetting immediately after the `FETCH` check does not work** — the body then
+sets the flag again before the next `FETCH` — and that is the obvious first fix.
+The tell was a run log recording *members screened* and *members copied*
+separately and the two disagreeing, which is an argument for always recording
+both.
+
+## Two more facts about this estate (2026-09-21)
+
+- **The IFS root `/` is `*PUBLIC *RWX`** on the primary. Any profile can create
+  a top-level directory; no grant needed. Consistent with the estate's broader
+  `*PUBLIC` posture and reported to `proj-security`.
+- **Ports 22 (SSH) and 445 (NetServer) are LISTENING**, alongside the host
+  servers documented above. Whether ZPA publishes either is **untested** — and
+  remember the reachability probe lies on this path, so settle it with the
+  listener table plus a ZPA question, not with `nc` or `openssl`.
