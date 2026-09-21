@@ -1196,6 +1196,28 @@ Check the box for versions rather than assuming; all three are behind current.
     "not replicated" from an object-entry absence alone**, and say which file
     you read.
   Role swaps are why counters restart.
+
+  **MIMIX SETS `OBJAUD(*CHANGE)` ON EVERYTHING IT REPLICATES, and a large
+  share of `QAUDJRN`'s volume is MIMIX's by design (2026-09-21).** Objects
+  that are not journaled to a user journal (user spaces, data areas without
+  advanced journaling, programs …) are replicated by reading the system audit
+  journal, so MIMIX needs the `ZC`/`CO`/`DO`/`OW` entries and sets the
+  auditing itself — measured: `MIMIXOWN`/`OMSRV01` writing `AD` (auditing
+  changed) entries on new `WMSXTLT` user spaces every hour. Consequences:
+  - **`CHGOBJAUD … OBJAUD(*NONE)` on a replicated object is reverted by
+    MIMIX and shows up in its `#OBJATR` audit.** It is not a change you can
+    make on the box; it is a data group object entry setting (Midrange).
+  - **"Nothing on the box consumes the audit journal" is false as a blanket
+    claim** — MIMIX does, through the API, exactly the blind spot noted above.
+    What is true: nothing reads it for *security*.
+  - **Before touching auditing on any object, check `MIMIX.MXLIBREPP`** for
+    its library (`CAST(CONTAINER_NAME AS CHAR(10) CCSID 37)`,
+    `CONTENT_INCLUDED`); the report refreshes nightly (~03:00). It also
+    answers "is my library replicated?" without the MSP — `SECAUDIT` is not.
+  - Journaled database files still carry `OBJAUD(*CHANGE)` and emit a `ZC`
+    on every open for update — 133k an hour from two config files rewritten
+    continuously. Their *data* goes by the user journal; whether the object
+    entry can carry `OBJAUD(*NONE)` for such files is a Midrange question.
 - **BRMS** — backup, and a possible route to *old versions of source*, which the
   box itself does not keep.
 
@@ -1303,6 +1325,72 @@ landed before retrying, or you will chase a phantom.
 `SYSTOOLS.SPOOLED_FILE_DATA` against another user's compile listing returns
 **zero rows** — not an error, not a refusal. So "the compile failed, send me
 the errors" cannot be answered by reading their listing.
+
+**⚠ THERE IS A SWITCH FOR THIS, AND NOT KNOWING IT COST A DAY (2026-09-21).**
+It is a property of the **output queue**, not of the file:
+
+```sql
+SELECT OUTPUT_QUEUE_LIBRARY_NAME, OUTPUT_QUEUE_NAME, DISPLAY_ANY_FILE,
+       OPERATOR_CONTROLLED, AUTHORITY_TO_CHECK
+  FROM QSYS2.OUTPUT_QUEUE_INFO WHERE OUTPUT_QUEUE_NAME = '<outq>';
+```
+
+`DISPLAY_ANY_FILE` (`DSPDTA`) defaults to **`*NO`**, and then only the owner
+reads the data. `CHGOUTQ OUTQ(lib/q) DSPDTA(*YES)` lets **anyone with `*USE`
+on the queue** read any file on it. `QUSRSYS/QEZJOBLOG` — where job logs land
+— is `*NO` on this estate, which is why a failed job's log is unreadable to
+everyone but its owner.
+
+**MOVING A SPOOLED FILE TO A QUEUE YOU CONTROL DOES NOT HELP.** Tested: the
+file kept its owner and still returned zero rows. Only `DSPDTA(*YES)` on the
+queue, or owning the file, works.
+
+**So give any application you schedule its own output queue with
+`DSPDTA(*YES)`**, and have the job run under a profile you can connect as.
+Otherwise the first-hand account of every failure is behind a wall — a
+`MAPCOLL` failure took a day to diagnose purely because its job log could not
+be read, and was solved in seconds once it could.
+
+### Diagnosing a CL command that fails through QCMDEXC
+
+`CPF0006 Errors occurred in command` **names no parameter and reads exactly
+like a syntax error.** It is a summary; the real message is in the job log.
+Do not start rewriting the command string — it cost an hour on 2026-09-21,
+where the truth was `CPD0032 Not authorized to command CRTJOBD`.
+
+**Reproduce into `QTEMP` and read the job log on the same connection.**
+`QTEMP` is job-scoped (ADR 0007 permits it), so this creates nothing:
+
+```sql
+CALL QSYS2.QCMDEXC('CRTJOBD JOBD(QTEMP/TESTJOBD) ...');
+SELECT MESSAGE_ID, SEVERITY, CAST(MESSAGE_TEXT AS VARCHAR(150))
+  FROM TABLE(QSYS2.JOBLOG_INFO('*'))
+ WHERE MESSAGE_ID IS NOT NULL
+ ORDER BY ORDINAL_POSITION DESC FETCH FIRST 8 ROWS ONLY;
+```
+
+`sql400` runs both on one connection, so `JOBLOG_INFO('*')` sees the job that
+just failed. The `CPD`/`CPF` pair above the `CPF0006` is the answer.
+
+**And commands are objects with authority of their own.** Measured on this
+box: `QSYS/CRTOUTQ` is `*PUBLIC *USE` but **`QSYS/CRTJOBD` is `*PUBLIC
+*EXCLUDE`** — while `QSYS/CHGJOBD` is `*USE`. You may not create a job
+description here, but you may change any existing one. Check before assuming a
+command is available:
+
+```sql
+SELECT SYSTEM_OBJECT_NAME, AUTHORIZATION_NAME, OBJECT_AUTHORITY
+  FROM QSYS2.OBJECT_PRIVILEGES
+ WHERE SYSTEM_OBJECT_SCHEMA = 'QSYS' AND OBJECT_TYPE = '*CMD'
+   AND SYSTEM_OBJECT_NAME IN ('CRTJOBD','CRTOUTQ','CHGJOBD');
+```
+
+**`+` is CL SOURCE continuation and must never appear inside a `QCMDEXC`
+string** — the analyser parses it when reading a source line; `QCMDEXC` gets a
+finished string, so `+` and the newline land inside the command. One unbroken
+literal, always. (In ACS *Run SQL Scripts* a CL command needs the `CL:`
+prefix and a trailing `;` — without it you get `SQL0104 Token CRTJOBD was not
+valid`.)
 
 **The fix is not more authority — compile a test copy as yourself:**
 
