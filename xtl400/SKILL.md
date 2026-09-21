@@ -1507,6 +1507,45 @@ who is changing what.
 `docs/research/index.md` keeps an explicit list of figures that are **not**
 measured. Add to it rather than quietly promoting an estimate.
 
+## Is this authority IBM's or did someone here set it? (2026-09-21)
+
+Recurring question the moment you find an object with surprising authority —
+a `*PUBLIC *EXCLUDE` command, a closed library, a restricted source file. The
+answer changes the finding completely: shipped state is not evidence that
+anyone at XTL made a decision.
+
+**The only reliable answer is the manual, not the box.** IBM ships a defined
+set: *Appendix C, Commands shipped with public authority `*EXCLUDE`* in the
+Security Reference for the matching release. Ask the RAG for it —
+`mcp__kb-ibm400-docs__ask_about_as400`, naming the specific objects. It is a
+long table and the chunks come back partial, so ask about **the objects you
+care about by name** rather than trying to retrieve the whole list.
+
+**Two things on the box that look like they would answer it and do not:**
+
+- **Object change timestamps.** `CHANGE_TIMESTAMP` from
+  `QSYS2.OBJECT_STATISTICS` does not record authority changes distinguishably,
+  and on XTL every `QSYS` command carries the same value — 2024-12-05, three
+  seconds wide, a PTF apply. Uniform timestamps mean the OS was serviced, not
+  that authority is untouched.
+- **A private-authority query under a restricted profile.** IBM ships private
+  grants to `QPGMR`/`QSYSOPR`/`QSRV`/`QSRVBAS` alongside the `*EXCLUDE`, so
+  their presence would be the tell — but `OBJECT_PRIVILEGES` returns **zero
+  rows** for them under `CCSEC`. That is authority filtering, not absence. Run
+  it under `SECAUDIT` or do not run it.
+
+**The tell that you are being filtered rather than reading truth:**
+`OBJECT_STATISTICS` returns **blank rows** — object name present, owner and
+timestamps empty — for objects the profile lacks `*OBJOPR` on. If the objects
+you are asking about come back blank while their neighbours come back full,
+you are measuring your own authority, not theirs.
+
+**Worked case:** `CRTJOBD` is `*PUBLIC *EXCLUDE` while `CHGJOBD` and
+`DLTJOBD` are `*USE`, which reads like someone hardened one and forgot the
+others. Nobody did — all of `CRTAUTHLR`, `CRTCLS`, `CRTJOBD`, `CRTPFRDTA`,
+`CRTSBSD` are in Appendix C and none of the `CHG*`/`DLT*` ones are. That is
+every IBM i in the world. `proj-security` `#40`.
+
 ## Getting source OUT of members in bulk: `CPYTOSTMF`, not row reads (2026-09-21)
 
 **If you are reading more than a handful of members, stop reading rows.**
