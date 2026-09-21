@@ -709,7 +709,11 @@ first time ambient churn stacks on top.
 When any session touches, fixes, or discovers something in **another repo's
 domain**, the delivery is a job on the OWNING repo's queue, not a HANDOFF.md
 entry (HANDOFF.md survives only for repos with no registered queue — `ls
-~/.batchq/` to check). The job runs inside the owning repo, so its own
+~/.batchq/` to check). **Match the queue to the repo path, not the name:
+`sbmjob -wrk` shows `IMAGING (/home/doug/batchq-repos/imaging-service)` —
+that is the homelab imaging service, not XTL's `proj-imaging`, which has no
+queue and takes HANDOFF.md (near miss 2026-09-21). The XTL `proj-` repos
+registered so far: none but `xtl` (the vault).** The job runs inside the owning repo, so its own
 CLAUDE.md/skills/memory make the judgment call the sender can't. Every such
 spec begins with this preamble, verbatim (after the `INTENT:` line):
 
