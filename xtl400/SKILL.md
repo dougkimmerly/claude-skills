@@ -626,6 +626,33 @@ Worked implementation: `proj-security/secaudit/src/qsqlsrc/EV*.sql` plus
   it gets quoted. Worked instance:
   `kb-xtl400/tools/capture_usage_counters.sh`.
 
+  **⚠ And the coverage row needs THREE states, not two — 2026-09-20.** That
+  worked instance recorded `ok` / `FAILED`, and put **a library that succeeded
+  and returned zero rows** into `ok`. On this box zero rows means *empty* **or**
+  *unauthorised*, and the capture cannot tell which from where it stands.
+  **137 of 519 libraries on the primary** were carrying `0  ok`.
+
+  It shipped a wrong claim: six libraries readable as `CCMAP` on the target and
+  refused on the primary were quoted as *"1,495 programs the primary does not
+  have… not part of what runs"*. The defensible figure was **87**. The guard
+  rail built to stop a partial capture being quoted was itself reading silence
+  as health.
+
+  So: `ok` / `EMPTY-OR-BLOCKED` / `FAILED`, and resolve the middle state
+  deliberately — an **unauthorised** library comes back from
+  `OBJECT_STATISTICS('*ALLUSRAVL','*LIB')` with **blank `OBJOWNER`, `OBJTEXT`
+  and `OBJSIZE`** while readable siblings show real values; a genuinely empty
+  one shows real values. This is the same blank-attribute signature documented
+  below for *objects* — **it applies to the library object itself too.**
+
+  **A profile's reach differs BETWEEN the two partitions.** Those six libraries
+  are readable as `CCMAP` on the target and refused on the primary, so the
+  partition that *describes what runs* showed **less** of the estate than the
+  replica did. Authority is per-partition, like the system values, and the diff
+  is the finding. **Never carry a coverage claim from one partition to the
+  other**, and when a capture is taken on the target for offload, say so — it
+  may see more, not less.
+
 - **`*QRYDFN` — thousands of them, with no source at all.** Query/400 definitions
   are invisible to every source-driven approach, and they are scheduled in
   production (`RUNQRY` appears in the job schedule). Count them before claiming

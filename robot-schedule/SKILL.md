@@ -144,6 +144,78 @@ Command sets join to jobs by `CMD_SET_OID`.
 - **`RBTROB.HIST_RETENTION` is per job.** For retentions 3, 7, 12, 14 and 30 the
   stored runs match exactly; for 6 and 40 — the two big populations — they do
   not, and why is unresolved. **Do not quote a run count per job.**
+- **Every column has a long name as well as the six-character one**, and the
+  long names are self-documenting: `JOB_NAME`, `ROBOT_JOB_NUMBER`,
+  `JOB_STATUS`, **`MSG_TEXT`** (`CHAR(60)`), `OS_JOB_NAME`, `OS_JOB_USER`,
+  `OS_JOB_NUMBER`, `OS_JOB_START_TIME`, `OS_JOB_END_TIME`, `TIME_STAMP`. Prefer
+  them. There is **no `CMTEXT`** — guessing it by pattern from `CMRNAM`/`CMMSEV`
+  gets `SQL0206`. Get the list from `QSYS2.SYSCOLUMNS`; `COLUMN_TEXT` carries
+  Fortra's own field text for each one.
+
+## ⚠ "Error On Submit Job Setup" — Robot fired, the machine refused
+
+Measured on XTL 2026-09-21. **This is the failure mode where the scheduler
+works perfectly and your job never exists**, and it is invisible to any
+monitoring your job does itself:
+
+```
+JOB_NAME  JOB_STATUS  MSG_TEXT                                          OS_JOB_START_TIME  OS_JOB_END_TIME
+MAPCOLL   E           Error On Submit Job Setup for Robot Job MAPCOLL    30000              30001
+```
+
+**One second, severity `E`, and nothing else anywhere.** The job's own tables
+are empty — not a failure row, *no row* — because the program never ran. So a
+collector that carefully distinguishes *reached it and found nothing* from
+*could not reach it* still reports the last successful run and no error.
+
+**Check the schedule fired before you debug the program.** `RBTMSG` is the only
+place that knows:
+
+```sql
+SELECT JOB_NAME, JOB_STATUS, MSG_TEXT, OS_JOB_NAME, OS_JOB_USER,
+       OS_JOB_START_TIME, OS_JOB_END_TIME
+  FROM ROBOTLIB.RBTMSG WHERE JOB_NAME = '<job>'
+ ORDER BY TIME_STAMP DESC FETCH FIRST 5 ROWS ONLY
+```
+
+**What to rule out, in this order** — the first three are cheap and were all
+fine in the measured case:
+
+1. The schedule entry itself — `SCHED_RUN_TIME_1`, the `RUN_FLAG_*` day flags,
+   `CALENDAR_NAME`.
+2. **The job queue exists and is released** — `QSYS2.JOB_QUEUE_INFO`, and check
+   `MAXIMUM_ACTIVE_JOBS`, since `MAXACT(1)` on a shared queue is a different
+   failure that looks like a slow one.
+3. The `OS_JOB_USER` profile is `*ENABLED` and not `PASSWORD(*NONE)` —
+   `QSYS2.USER_INFO`, and note a profile can always read its **own** row when
+   an ordinary profile cannot read anyone else's.
+4. **Then: can Robot's own profile submit a job AS that user?** Submitting
+   under another profile needs `*USE` on that `*USRPRF`. This is the leading
+   candidate when 1–3 are clean, and **an ordinary profile cannot check it** —
+   `QSYS2.OBJECT_PRIVILEGES` returns zero rows for a profile object it cannot
+   see, after a slow scan that looks like a real answer.
+
+## `JOB_HAS_MONITOR = 0` means the job cannot report its own failure
+
+`RBTROB.JOB_HAS_MONITOR` is `0` by default, and a job without a monitor fails
+**silently** — no message, no alert, nothing. In the measured case a total
+failure of a project's only unattended component went unnoticed for seven
+hours and was found only because someone had written down to check that
+morning.
+
+**So for any job that matters, two separate things are needed and neither
+implies the other:** the job must run, *and* something must notice when it does
+not. Check it explicitly when adding a job:
+
+```sql
+SELECT ROBOT_JOB_NAME, JOB_HAS_MONITOR FROM ROBOTLIB.RBTROB
+ WHERE ROBOT_JOB_NAME = '<job>'
+```
+
+Per-job monitors live in `ROBOTLIB.RBTJM` (overrun, underrun, late-start, and
+the action for each). **A monitor is a commitment, not a setting** — somebody
+starts receiving its alerts, so adding one is a conversation with whoever
+operates the estate, not a config change.
 
 ## What the schedule is, and what it is not
 
