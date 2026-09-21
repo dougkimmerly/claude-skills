@@ -63,6 +63,65 @@ mid-session). Consequences, each of which cost time:
   Control case: `xtl400.xtl.com:23` returns telnet negotiation bytes; the Domino
   servers closed instantly on all seven ports tested — which is "no ZPA policy",
   not "server down". The servers were running the whole time.
+
+  **Always include a port the host CANNOT be serving** — an invented high port
+  such as 65001. If it behaves the same as the port you are investigating, you
+  have measured Zscaler, not the box. Done 2026-09-21: 992 and 9470–9476 all
+  "closed immediately", and so did 65001.
+
+  **⚠ THE UNREACHABLE SIGNATURE IS DIFFERENT ON EACH PATH, SO THE CONTROL PORT
+  IS NOT OPTIONAL.** Measured 2026-09-21, same probe, same minute:
+
+  | | unreachable port looks like | reachable port looks like |
+  |---|---|---|
+  | `xtl400.xtl.com` (primary, by name) | **closed immediately** (reset) | held open, or replies |
+  | `192.168.40.20` (target, by IP) | **held open** | held open, or replies |
+
+  On the target path **65001 held open just like 9471 and 9476**, so "held" —
+  the signal that means *real backend* on the primary — means nothing there.
+  A rule of thumb learned on one host is wrong on the other. **Probe an
+  invented port on the SAME host, every time**, and if you need certainty use
+  `openssl s_client` and look for a ServerHello: `read 0 bytes` is nothing
+  home, on any path.
+
+  **⚠ `openssl s_client` IS THE MOST MISLEADING PROBE OF ALL, because it
+  produces a confident TLS-shaped diagnosis.** Against an unbrokered port it
+  prints `no peer certificate available`, `SSL handshake has read 0 bytes`,
+  `Verification: OK`, `Verify return code: 0 (ok)` and a TLS 1.3 banner — which
+  reads as *"the service is there and has no certificate"*. It is not there.
+  **`read 0 bytes` is the tell**: a real TLS endpoint sends a ServerHello.
+
+  **THE INSTRUMENT THAT SETTLES IT IS THE BOX'S OWN LISTENER TABLE.** Ask what
+  it is listening on rather than what you can reach:
+
+  ```sql
+  SELECT LOCAL_PORT, COUNT(*) AS BINDINGS FROM QSYS2.NETSTAT_INFO
+   WHERE TCP_STATE = 'LISTEN' GROUP BY LOCAL_PORT ORDER BY LOCAL_PORT;
+  ```
+
+  **It is a VIEW on 7.3, not a table function** — `SYSROUTINES` lists
+  `NETSTAT_INFO`, but `TABLE(QSYS2.NETSTAT_INFO())` fails `SQL0204`. Select
+  from `QSYS2.NETSTAT_INFO` directly.
+
+  **Measured 2026-09-21, and the two halves disagree — which is the point:**
+
+  | | ports |
+  |---|---|
+  | Box is **LISTENING** (`NETSTAT_INFO`, 2 bindings each, IPv4+IPv6) | 23, 449, **992**, **8470–8476**, **9470–9476** |
+  | **Reachable** through ZPA | **23, 449, 8471, 8473, 8475, 8476** |
+  | Listening but **NOT reachable** | **992, 8470, 8472, 8474, 9470–9476** |
+
+  So the SSL host servers and telnet-SSL **are running**; ZPA simply does not
+  publish them. Any *"SSL is not set up on the 400"* conclusion drawn from
+  outside the estate is unfounded, and enabling TLS to the box is a **ZPA
+  application-segment change**, not a change on the 400.
+
+  Note the published set is a deliberate allowlist, not "all host servers":
+  signon (8476), svrmap (449), database (8471), file (8473), remote command
+  (8475) and telnet (23) — exactly what JDBC/ODBC and 5250 need. Central
+  (8470), data queue (8472) and network print (8474) are listening and
+  blocked. **Do not infer a service is absent because your client cannot
+  reach it, and do not infer one is unreachable because it is unusual.**
 - **Split DNS bites.** Both Zscaler (`100.64.0.1`) and the house Pi-hole
   (`192.168.20.16`) are configured resolvers with **no domain-scoped rule for
   `xtl.com`**, so the Pi-hole answers NXDOMAIN and whichever resolver a given app
@@ -174,6 +233,60 @@ SELECT SRCSEQ, SRCDTA FROM MYLIB.VFYMBR ORDER BY SRCSEQ;
 
 **The alias target needs a dot, not a slash** — `MYLIB/QCLSRC(X)` is rejected
 as `SQL5016` and the message does not explain itself.
+
+### ⚠ `SRCDTA` IS NOT CCSID 37 EVERYWHERE, AND 65535 COMES BACK AS HEX (2026-09-21)
+
+**Ask before you read. Never assume the code page.** Measured as `CCMAP`
+(authority-filtered — 1,295 source files visible):
+
+| CCSID | files | libs | |
+|---|---|---|---|
+| **37** | 1,245 | 194 | US EBCDIC — 96% |
+| **65535** | **39** | **22** | **binary, "do not convert"** — incl. `WMSXTLTS`, `XTLSRC`, `PNETXTL` |
+| 500 / 280 / 297 / 5035 / 1208 | 5 / 3 / 1 / 1 / 1 | | International, **Italian** (`MMAIL`), **French** and **Japanese** (`HPT`), **UTF-8** (`ACSEDI`) |
+
+```sql
+SELECT CCSID, LENGTH FROM QSYS2.SYSCOLUMNS
+ WHERE SYSTEM_TABLE_SCHEMA='<lib>' AND SYSTEM_TABLE_NAME='<srcfile>'
+   AND SYSTEM_COLUMN_NAME='SRCDTA';
+```
+
+**A CCSID 65535 column returns HEX from JDBC** — two characters per byte, 200
+for a 100-byte record. It is not garbled and it does not error: it is EBCDIC
+spelled out, and **it presents as a WIDTH bug, not an encoding one**. The tell
+is a length that is exactly double, and `4040…` (EBCDIC spaces) at the front.
+Convert explicitly: `CAST(SRCDTA AS CHAR(<len>) CCSID 37)`.
+
+**Choosing 37 for a 65535 file is a CHOICE — record it.** 65535 means the box
+does not know the code page either. 37 is right for the ones verified here
+(proved by reproducing a 2026-09-07 capture byte for byte), and is **untested
+for `MMAIL`, `HPT` and `ACSEDI`.**
+
+**And a wrong EBCDIC page does not look wrong.** 37, 500, 280 and 297 differ
+in exactly the characters RPG allows in names — `$`, `#`, `@`, `[`, `]` — so
+the output is *plausible source*, not obvious damage. Any bulk pull must read
+each source file's declared CCSID per file, not once for the estate.
+
+### Fixed-form RPG: the comment marker is COLUMN 7, and column 6 bites
+
+Parsing source? A comment is `*` at **index 6**. Measured on a pilot library:
+**3,073 comment records at index 6, 34 anywhere else.** Columns 1–5 are the
+change-tag area (`A001`, `a002` — the line-level blame), and **column 6 is the
+form type, which on this estate frequently holds a non-ASCII byte** (`U+0082`
+on 220 records of one library; present in members captured in 2026-09, so it
+is faithful, not corruption).
+
+**A rule that allows only five characters before the `*` therefore skips every
+TAGGED line — which is exactly the set of modification entries.** It reported
+0 entries for a member carrying eight, and understated a library's
+modification count **12.6×**.
+
+**There are at least three header dialects, and free-form is the newest:**
+fixed-form `*` with labelled fields (`Program Title:`); fixed-form `*` with a
+banner title and a `Program Modifications` table; and **free-form `//` with
+dotted leaders (`Program......:`, `Change Log:`), which is the Tecsys/WMS
+generation — i.e. Tier 1.** A parser that knows only `*` reads the estate's
+best-documented code as its worst.
 
 **`sql400` trims every value it prints**, which silently strips the leading
 indentation from each line and makes an identical file look completely
@@ -1115,6 +1228,33 @@ Check the box for versions rather than assuming; all three are behind current.
   a production read while every SQL statement was allowed). Do not route
   around it; hand the probe to Doug's terminal (`! openssl …`) and record
   that it was not run.
+
+## `RUNSQL` rejects `SELECT` and `VALUES`, and a job can fill every table and still fail (2026-09-21)
+
+- **`RUNSQL SQL('VALUES (…)')` and `RUNSQL SQL('SELECT …')` fail with
+  `SQL0084` *"SQL statement not allowed"*, every time.** Only statements
+  that do not return a result set are accepted. A conditional failure from
+  CL therefore cannot be a `VALUES (CASE … RAISE_ERROR …)`; the idiom that
+  works is a **one-row `UPDATE` whose `WHERE` is a `CASE` around
+  `RAISE_ERROR`** — `CASE` evaluates `THEN` only when the condition holds,
+  so a clean state updates zero rows and a dirty one raises `SQL0438` with
+  your text. Test both branches by hand over JDBC before compiling.
+- **A scheduled job can land every metric and still end abnormally.** The
+  weekly security collector did exactly that on every run: the failing
+  statement was the last one, after all the inserts. The tables looked
+  complete, `SECMETRIC` said 84 metrics, and Robot said *"Job ended
+  abnormally"* — and nobody read Robot. **Verify a job by its completion
+  message in the job log or `ROBOTLIB.RBTMSG` (`CMMSEV = 'T'` is
+  terminated), never by the data alone.**
+- **`QSYS2.JOBLOG_INFO` on a completed job returns `SQL0443` *"job log not
+  displayed because job completed execution"*.** Read the held `QPJOBLOG`
+  spooled file instead: `SPOOLED_FILE_INFO(USER_NAME => …)` joined
+  `LATERAL` to `SYSTOOLS.SPOOLED_FILE_DATA` — the lateral join works on
+  7.3 and lets one statement grep every listing a user produced.
+- **`QSYS2.PROGRAM_INFO` includes `*SRVPGM` rows**, and `PROGRAM_LIBRARY
+  <> 'QSYS'` is not the same filter as `PROGRAM_OWNER <> 'QSYS'`: 965 IBM
+  programs owned by `QSYS` live in `QGPL`, `QUSRSYS` and friends. Say which
+  exclusion a count used.
 
 ## More 7.3 column and view traps, measured 2026-09-20
 
