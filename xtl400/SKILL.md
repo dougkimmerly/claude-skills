@@ -1086,6 +1086,36 @@ Check the box for versions rather than assuming; all three are behind current.
 - **BRMS** — backup, and a possible route to *old versions of source*, which the
   box itself does not keep.
 
+## Four more, measured 2026-09-21 (proj-security, reading the menu system)
+
+- **Some source files are CCSID 65535 and come back as EBCDIC hex.** `XTLSRC`
+  is one: `SELECT SRCDTA` prints `4F4040…` and every `LIKE` filter silently
+  matches nothing. Cast on the way out —
+  `CAST(SRCDTA AS CHAR(100) CCSID 37)` — and filter on the cast. `I93SRC` and
+  `I93CSTMSRC` read fine without it, so check the first line before trusting
+  a grep.
+- **`DSPCMD … OUTPUT(*PRINT)` fails with `CPF9871` inside a `QZDASOINIT` job**
+  (panel-group processing needs a display session). `QSYS2.COMMAND_INFO` does
+  not exist on this 7.3 either. To learn a command's processing program from
+  SQL you are stuck; read the CPP from the command source member or ask
+  someone at a green screen. `DSPPGMREF` on the *program* you suspect is the
+  CPP still works.
+- **`SQL7011 … not table, view, or physical file` means you hit a display
+  file.** A `*FILE` referenced by a program with usage 7 and no
+  `SYSTABLESTAT` row is a `DSPF`; the data you want is in the *other* files
+  the program reads. On this estate a menu's options were in a join logical
+  file, not in the display file that shares its name.
+- **`OBJECT_PRIVILEGES` on a `*LIB` shows a limited profile only its own
+  group's row.** As `CCSEC`, four libraries returned one `CCGRP *USE` row
+  each and no `*PUBLIC` row at all, while other libraries showed `*PUBLIC`
+  normally. Absence of a `*PUBLIC` row is not `*EXCLUDE`; it is *not visible
+  to this profile*. Read library authorities as `SECAUDIT`.
+- **The session's own permission layer can refuse a network probe of a
+  production host** (an `openssl s_client` to `xtl400.xtl.com` was denied as
+  a production read while every SQL statement was allowed). Do not route
+  around it; hand the probe to Doug's terminal (`! openssl …`) and record
+  that it was not run.
+
 ## More 7.3 column and view traps, measured 2026-09-20
 
 Adding to the list above rather than replacing it — each cost a query.
