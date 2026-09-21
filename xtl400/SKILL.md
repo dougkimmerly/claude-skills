@@ -1251,6 +1251,22 @@ Check the box for versions rather than assuming; all three are behind current.
   spooled file instead: `SPOOLED_FILE_INFO(USER_NAME => …)` joined
   `LATERAL` to `SYSTOOLS.SPOOLED_FILE_DATA` — the lateral join works on
   7.3 and lets one statement grep every listing a user produced.
+- **`ifsput` writes the stream file with CCSID 1200 (UTF-16).** Anything
+  that reads the file by its CCSID attribute — `CRTBNDCL SRCSTMF`, `CPYFRMSTMF`
+  without `STMFCCSID` — gets one unreadable record and a `CPD0018 … not
+  valid` on line 1 followed by "no ENDPGM". `CHGATR OBJ('/path')
+  ATR(*CCSID) VALUE(1208)` before compiling. `put400` does not have this
+  problem because it passes `STMFCCSID(1208)` itself.
+- **Syntax-check CL without touching a library: compile it into `QTEMP`.**
+  `ifsput` the source, `CHGATR` it to 1208, `DECLARE GLOBAL TEMPORARY TABLE
+  SESSION.<file>` for any `DCLF` it needs (a plain `CREATE TABLE QTEMP.x`
+  fails `SQL7008` over JDBC), `OVRPRTF FILE(QSYSPRT) HOLD(*YES)
+  OVRSCOPE(*JOB)`, then `CRTBNDCL PGM(QTEMP/x) SRCSTMF('/path')` and read
+  the `x` spooled file. All of it vanishes at disconnect.
+- **`DCLF … OPNID(Q)` prefixes every field as `&Q_…`, and CL variable names
+  are 10 characters plus `&`.** A column named `REVERTED_TS` becomes an
+  undeclared `&Q_REVERTED_TS` (`CPD0727`). Keep driver-table column names
+  to eight characters.
 - **`QSYS2.PROGRAM_INFO` includes `*SRVPGM` rows**, and `PROGRAM_LIBRARY
   <> 'QSYS'` is not the same filter as `PROGRAM_OWNER <> 'QSYS'`: 965 IBM
   programs owned by `QSYS` live in `QGPL`, `QUSRSYS` and friends. Say which
