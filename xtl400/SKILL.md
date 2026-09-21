@@ -992,6 +992,19 @@ Check the box for versions rather than assuming; all three are behind current.
   Vision, then Syncsort, so search accordingly). Replicates object content,
   **not** usage statistics.
 
+  **The vendor documentation is public — read it, don't ask.** Precisely serves
+  the full Assure MIMIX 10.0 set at `help.precisely.com` with no login:
+  Operations Guide, Administrator Reference, Monitor Reference, Installation
+  Wizard, Release Notes. `kb-xtl400/knowledge/mimix-v10-doc-index.md` maps every
+  guide, its chapters and the URL pattern, and is in the `kb-xtl400-docs` RAG —
+  query it, then fetch the page. **Do not copy the pages into any corpus**;
+  Precisely's terms allow indices, not caches (`kb-xtl400` ADR-0001). Two traps
+  if you go looking yourself: their `sitemap.xml` and catalogue API advertise
+  **only the Release Notes**, which is how the estate wrongly concluded the
+  Administrator Reference was behind a customer login; and the site returns HTTP
+  200 with an identical shell for every path, so `curl` cannot test whether a
+  page exists.
+
   **Where the answer to "does X replicate?" lives:**
 
   | File | Holds | Trust |
@@ -1132,6 +1145,50 @@ act** — and a privileged compile is then never the thing being debugged.
 - **Strip your own statement separators.** `@@` is a convention for feeding
   several statements over JDBC; `RUNSQLSTM` separates on semicolons and reads a
   bare `@@` as a syntax error.
+
+## Reading a user's containment: it is FOUR attributes, never one
+
+Measured 2026-09-20 on XTL. **`LMTCPB` alone tells you almost nothing** —
+whether a signed-on user can reach a command line is decided by four
+`QSYS2.USER_INFO` columns together:
+
+| Column | What it decides |
+|---|---|
+| `INITIAL_PROGRAM_NAME` / `..._LIBRARY_NAME` | What runs at sign-on — **and the library matters**, see below |
+| `INITIAL_MENU_NAME` | What happens when that program **ends**. `*SIGNOFF` ends the session and is genuine containment; `MAIN` drops them on IBM's main menu |
+| `LIMIT_CAPABILITIES` | Whether a command line, once reached, accepts anything beyond `ALWLMTUSR(*YES)` commands |
+| `ATTENTION_KEY_HANDLING_PROGRAM_NAME` | **The escape route everyone forgets.** `*SYSVAL` inherits `QATNPGM` |
+
+**The trap that caught XTL: `ATNPGM(*SYSVAL)` with `QATNPGM = QEZMAIN QSYS`.**
+`QEZMAIN` is IBM's Operational Assistant menu, and an IBM menu renders a
+command line for any user who is not `LMTCPB(*YES)`. So 139 profiles sitting
+behind a tight vendor menu driver, exiting to `*SIGNOFF`, were **one keypress
+from an unrestricted command line** — and nobody chose that, because
+`*SYSVAL` is the default and the default points at a menu with a command line.
+**Always resolve `*SYSVAL` before calling a population contained.**
+
+**And check whether the initial program is QUALIFIED.** On XTL ~97 enabled
+profiles name their initial program with `*LIBL`, against 18 that name a
+library — so what runs at sign-on is decided by the library list, and copies
+of two production menu programs were found in a personal library. Group by
+`INITIAL_PROGRAM_LIBRARY_NAME`, not just the name.
+
+**To read what a menu actually exposes**, `DSPPGMREF` to `QTEMP` works and is
+cheap — but remember it cannot see programs called by variable, which is
+exactly what a *menu driver* does. If the counts look implausibly small, the
+menu is probably data-driven and you need the table it reads, not the program.
+
+## Audit entries: `DETAIL_2` carries the before/after value
+
+Do not infer the direction of a change from context. For `CP` (profile-change)
+entries the harvested `DETAIL_2` holds the resulting value outright —
+`*DISABLED` or `*ENABLED`. That is how a lockout-and-release pair was proven
+on XTL rather than guessed: `QSYS/PCTELNET` → `*DISABLED`, then
+`RBTADMIN/<job>` → `*ENABLED` on the same profile five minutes later.
+
+**Pairs separated by a constant interval are a control, not a coincidence.**
+Group by target object and look at the gap before concluding anything about
+who is changing what.
 
 ## Before you report a number
 
