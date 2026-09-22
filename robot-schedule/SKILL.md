@@ -503,6 +503,61 @@ is `0` on every job examined, and `OS_JOB_DATE_CODE` (`DTCODE`) holds
 **Where the date type is stored, and what `Q` means, is UNRESOLVED.** Do not
 report a job's effective date from these columns.
 
+### Screen 7 — `RBT204` *Control Options* — **THE IMPORTANT ONE**
+
+**This is where you define how the job actually runs**, and it is where both of
+this estate's scheduler catastrophes were configured. Everything on it ships as
+`*RBTDFT`.
+
+**Job Submission Options**
+
+| Screen label | `RBTROB` column | System | For `MAPDERIVE` |
+|---|---|---|---|
+| **Job description** / Library | `OS_JOBD_NAME` / `OS_JOBD_LIB_NAME` | `RBJOBD` / `JOBLIB` | **`MAPJOBD` / `XTLPGMMAP`** |
+| Job Queue / Library | `OS_JOBQ_NAME` / `OS_JOBQ_LIB_NAME` | `JOBQ` / `JBQLIB` | `DOUG` / `QGPL` |
+| Message Queue / Library | `OS_MSGQ_NAME` / `OS_MSGQ_LIB_NAME` | `RTMSGQ` / `RTMQLB` | `*RBTDFT` |
+| Library List Name | `LIBRARY_LIST_NAME` | `LSTNME` | `*RBTDFT` |
+| **User Profile** | **`OS_JOB_USER`** | `PROFIL` | **`*RBTDFT` ← the trap** |
+| Message reply value (Default / Operator Required / System Reply / Job Description) | `OS_JOB_INQMSGRPY` | `MSGREP` | `1` = `*RBTDFT` |
+| Job Priority | `OS_JOB_JOBPTY` | `JOBPRY` | blank |
+| Job switches | `OS_JOB_SWITCHES` | `RBTSW` | blank |
+| Current Library | `OS_JOB_CURLIB` | `RTCLIB` | `*RBTDFT` |
+| Accounting Code | `OS_JOB_ACGCDE` | `ACTCOD` | `*RBTDFT` |
+| Initial ASP Group | `OS_JOB_INLASPGRP` | `RTINLASPG` | `*RBTDFT` |
+
+**Other Job Control Options**
+
+| Screen label | `RBTROB` column | System | |
+|---|---|---|---|
+| Pager Name | `ALERT_DEVICE_NAME` | `RTPGR#` | Robot/ALERT device |
+| Calendar Name | `CALENDAR_NAME` | `CALNAM` | |
+| Environment Name | `ENV_NAME` | `RTENVN` | `STANDARD` |
+| **Maximum Run Minutes** / **Action** | `MAX_RUN_DURATION` / `MAX_RUN_ACTION` | `MAXRUN` / `RTMXRT` | **Action defaults to `2` = Warning Status** |
+| Auto Tune Pool Size for this job | `AT_POOL_SIZE` | `ATPOOL` | |
+| Number of runs to track for Job History | `HIST_RETENTION` | `RTRSAV` | `40` |
+
+### ⚠ THE TWO FIELDS ON THIS SCREEN THAT HAVE ALREADY COST THIS ESTATE
+
+**1. `User Profile` — leaving it `*RBTDFT` is a TOTAL failure, not a fallback.**
+An application schema owned `AUT(*EXCLUDE)` gives `SQL0551` to every other
+profile. The job runs, touches nothing it is allowed to touch, **writes no row
+to its own run log**, and every health check built on that log reports the last
+successful run. Name the profile explicitly, then **read `OS_JOB_USER` back**.
+Caught on `MAPDERIVE` 2026-09-22 by reading it back, not by looking at it.
+
+**2. `Job description` — `*RBTDFT` inherits XTL's full application library
+list**, twenty-odd libraries a least-privileged batch profile is excluded from.
+`SBMJOB` then fails *before the program exists*, and it reads as a scheduler
+fault. That is the 2026-09-21 failure and `proj-as400-codemap` ADR 0016.
+**The tell is the same error under two different submitters** — nothing about
+the submitter can explain that, so look at the submitted job's own definition.
+
+**Maximum Run Minutes is blank by default while Action already reads `2`.** The
+action without a duration does nothing, which is why 48% of jobs can carry an
+`Action` value and still have no overrun protection. `2` is labelled *Warning
+Status* on screen; **what `1` does is not on the screen and is unverified here**
+— 295 jobs use it. `F4` prompts.
+
 ## What Robot can do, and what XTL actually uses — census 2026-09-22
 
 **Read this before proposing a scheduling improvement.** 752 jobs.
