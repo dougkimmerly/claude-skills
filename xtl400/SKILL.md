@@ -1507,6 +1507,60 @@ who is changing what.
 `docs/research/index.md` keeps an explicit list of figures that are **not**
 measured. Add to it rather than quietly promoting an estimate.
 
+## Function usage: the entitlement registry most people never look at (2026-09-21)
+
+Not on IBM's authority flowchart at all — a **separate registry**, which is
+why it is the one control type measured able to survive universal `*ALLOBJ`.
+
+```sql
+SELECT FUNCTION_ID, ALLOBJ_INDICATOR, DEFAULT_USAGE, FUNCTION_TYPE
+  FROM QSYS2.FUNCTION_INFO WHERE FUNCTION_ID LIKE 'QIBM_DB%';
+```
+
+- **The view is `QSYS2.FUNCTION_INFO`** (plus `QSYS2.FUNCTION_USAGE` for the
+  per-user grants). It is **not** `FUNCTION_USAGE_INFO`, which does not exist
+  on 7.3 and is what current IBM documentation will lead you to.
+- The column is **`ALLOBJ_INDICATOR`** (`USED` / `NOT USED`), not
+  `ALL_OBJECT_AUTHORITY`.
+- `ALLOBJ_INDICATOR = USED` means *"a user with `*ALLOBJ` is always allowed to
+  use the function"* — i.e. the gate is off for exactly the people you care
+  about. `NOT USED` means they are checked like anyone else. It is settable:
+  `CHGFCNUSG FCNID(x) ALLOBJAUT(*NOTUSED)`.
+- On XTL 2026-09-21: `QIBM_DB_ZDA` (ODBC/JDBC, and port 8478) and
+  `QIBM_DB_DDMDRDA` ship `USED`/`ALLOWED` — open. `QIBM_DB_SECADM`,
+  `QIBM_DB_SQLADM`, `QIBM_DB_SYSMON` ship `NOT USED`/`DENIED`.
+- **Restricting needs three changes together** — `DEFAULT_USAGE(*DENIED)`,
+  `ALLOBJAUT(*NOTUSED)`, and an allow-list. Any one alone is a no-op; the
+  first two without the third cut off every client at once.
+- **Authority Collection cannot see function usage** (7.3 Security Reference
+  ch.10 exclusions). So the usual measure-then-change approach does not work
+  here; you need the connection census from `NETSTAT_JOB_INFO` instead.
+
+## Reading the service surface: four views and one lie (2026-09-21)
+
+- `QSYS2.NETSTAT_INFO` — what listens (`TCP_STATE='LISTEN'`).
+- `QSYS2.NETSTAT_JOB_INFO` — who is connected **right now**, and which job and
+  profile. Note it has **no `TCP_STATE` column**; that is `NETSTAT_INFO`.
+- `QSYS2.HTTP_SERVER_INFO` — per-instance **cumulative** counters.
+- `QSYS2.SOFTWARE_PRODUCT_INFO` — installed products, `RELEASE_LEVEL`,
+  `SUPPORTED`.
+
+**The lie: a connection snapshot cannot tell "unused" from "idle right
+now".** On XTL, ports 80 and 2001 showed zero open connections and read as
+dormant; `HTTP_SERVER_INFO` showed 71,853 and 1,439 connections since IPL,
+both at **zero SSL**. **Where a service keeps its own counters, read those.**
+
+**And `SUPPORTED = NO` is not a signal on an out-of-support release** — all
+173 installed options on XTL's 7.3 report it. The discriminating measure is
+`RELEASE_LEVEL` below the OS: 21 products, including `5722VI1` Content
+Manager at `V5R3M0`.
+
+**Identifying an unnamed port:** join `NETSTAT_JOB_INFO` on `LOCAL_PORT` and
+read `JOB_NAME` — the daemon names it. That resolved four unknowns in one
+query, and showed that 8477/8478/8479 are not separate daemons at all
+(`QPWFSERVSD`, `QZDASRVSD`, `QNPSERVD` — the file, database and print
+servers under extra port numbers).
+
 ## Is this authority IBM's or did someone here set it? (2026-09-21)
 
 Recurring question the moment you find an object with surprising authority —

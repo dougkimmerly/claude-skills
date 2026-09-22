@@ -348,6 +348,60 @@ corpora always rot (the wiki's own declared-metadata-rot lesson applies to itsel
   statistic and zero fabricated quotes — which tells you how far to trust the rest of
   the corpus. Sampling cannot tell you that.
 
+## Orchestrator staleness is now the dominant defect class (2026-09-21, proj-security wave 3)
+
+Across a 12-page wave with three lint passes, **every high-severity
+contradiction finding was the orchestrator's, not an agent's.** The lenses
+were fine. What broke was this: the orchestrator ran on-box measurements
+*while the lenses were writing*, landed those facts in the project's own
+files, and never went back to the pages drafted before they landed. The
+contradiction lint then spent much of its budget rediscovering the
+orchestrator's own edits — a page calling "confirm X" its cheapest, highest
+value action when X had been measured that afternoon and filed as a finding.
+
+Two cheap fixes:
+
+- **Keep a running MEASUREMENTS list during the wave** — one line per thing
+  you measured mid-run — and diff the corpus against it *before* dispatching
+  lints. It converts a lint pass from rediscovery into real coverage.
+- **When you redirect a lens's scope, you own confirming the destination
+  accepted it.** In the same wave, two lenses each correctly decided port
+  8478 belonged to a third page and handed it off; that page never claimed
+  it. Good delegation on both sides produced a hole in the catalogue that
+  only the lint found.
+
+## A RETRACTION needs the same evidentiary standard as an assertion (same run)
+
+The orchestrator searched twice for a lens's central citation using semantic
+search, did not find it, and **retracted the claim** — writing a correction
+banner on the page and reporting the pull to the operator as a win for
+rigour. The exhaustive citation pass then found the quote **verbatim, on the
+originally-cited page**.
+
+The lesson is not "trust agents more". The lens had over-reached: IBM
+documented a security *benefit* and the page claimed *enforcement*. But the
+correct move was to **narrow the claim, not kill it** — and to grep the
+manual before pulling anything, because `ask_about_*` semantic search over a
+manual corpus is a recall instrument, not an exhaustive one, and will miss a
+sentence that a targeted grep finds immediately.
+
+Practical: **feed the citation lint your RETRACTIONS as well as the agents'
+assertions.** "Claims the orchestrator pulled — re-test these" is a distinct
+input class and it caught a real error.
+
+## Do not ship a metric written during the wave without measuring its value
+
+Same run, a monitoring metric written mid-wave counted "installed products
+IBM reports unsupported". Measured after the fact: **all 173 of them**,
+because the OS itself was out of support. A constant that absorbs the change
+it exists to detect — and the wave was *at that moment documenting* the same
+defect in a different counter. Written, committed, and only caught because
+the orchestrator happened to run the query an hour later.
+
+**Any number a run produces as an instrument gets run once against reality
+before it is committed.** The failure mode is not subtle and it is invisible
+in review, because the SQL is correct.
+
 ## Skill maintenance
 
 After each substantial run, fold that run's METHOD-NOTES lessons back into this file —
