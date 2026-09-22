@@ -234,6 +234,14 @@ SELECT SRCSEQ, SRCDTA FROM MYLIB.VFYMBR ORDER BY SRCSEQ;
 **The alias target needs a dot, not a slash** — `MYLIB/QCLSRC(X)` is rejected
 as `SQL5016` and the message does not explain itself.
 
+**And that is not special to aliases — `sql400` runs in SQL naming, so EVERY
+qualified name needs a dot.** `DOUGIMG/XTLPASSLOG` in an ordinary `SELECT`
+fails the same way, with the same `SQL5016` and the same unhelpful text. The
+green-screen and CL world writes `LIB/OBJ` and the documentation in this
+estate is full of it, so the slash form is the one you will reach for first
+and it is wrong through this tool. Two round trips on 2026-09-22 before the
+message was read properly.
+
 ### ⚠ `SRCDTA` IS NOT CCSID 37 EVERYWHERE, AND 65535 COMES BACK AS HEX (2026-09-21)
 
 **Ask before you read. Never assume the code page.** Measured as `CCMAP`
@@ -899,6 +907,32 @@ like valid SQL and fails only at CREATE time.
 does **not** widen the expression that fills it. A `CAST(… AS CHAR(10))` left
 in a procedure kept truncating after the column became `VARCHAR(40)`, and the
 data looked plausible — `030673/MIM` — rather than wrong.
+
+## A `*DISABLED` profile stops YOU, not the jobs running as it (2026-09-22)
+
+`User ID is disabled.:CCIMG` from JDBC means the profile is `STATUS(*DISABLED)`
+— and the obvious next thought, that everything running under that profile has
+stopped too, **is wrong and will cost you an incident report.**
+
+`*DISABLED` blocks **sign-on**: interactive sessions and host-server
+connections, which is every one of these tools. It does **not** stop a batch
+job already submitted under that user, and it does not stop a scheduler
+submitting new ones — `SBMJOB`/`STRPJ` with `USER(x)` keep running and keep
+starting.
+
+Measured on 2026-09-22: `CCIMG` was disabled at 18:55 the previous evening and
+stayed disabled overnight, while its Robot job logged **95 scheduled passes
+that day and 35 more by 08:31 the next**, with no gap. A session was one
+sentence away from publishing "the harvest has been dead all night."
+
+**So when a profile is found disabled, say what is blocked — your access — and
+measure the job separately before saying anything about it.** The job's own log
+is the instrument; your connection failing is not evidence about it.
+
+Re-enabling needs somebody with the authority: `CHGUSRPRF USRPRF(x)
+STATUS(*ENABLED)`. Note `XTL-Transport-Inc/enable-as400-profiles` exists to do
+exactly this on a sweep, but its target list is a `DSPUSRPRF` snapshot last
+refreshed 2026-05-31 — a profile created since then is not in it.
 
 ## Killing a JDBC client does NOT stop the work on the box
 
