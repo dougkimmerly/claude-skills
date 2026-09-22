@@ -21,6 +21,22 @@ everything you can decide, and interrupt him only for what only he can rule.**
 
 ---
 
+## How to write to him
+
+**Short, plain, point form.** His instruction, 2026-09-22. This governs every
+response, not just documents.
+
+- **Points and tables beat prose.** If it can be a table, make it a table.
+- **No jargon.** No filler. No throat-clearing before the answer.
+- **Lead with the answer**, then the evidence. Never the reasoning first.
+- **Cut every sentence that does not change what he does or knows.** Restating
+  what he just said, narrating what you are about to do, and summarising what
+  you already told him are all waste.
+- Length is not thoroughness. A long reply to a short question is a failure to
+  decide what mattered.
+
+---
+
 ## Deciding, and asking
 
 **If the answer is obvious, decide it and tell him.** Ask only for what only
@@ -57,6 +73,25 @@ tell you if he wants the alternatives.
 scheduler, which is the job he delegated. Drive a piece of work to completion
 and report once at the end. If part is genuinely blocked, finish everything
 else and say plainly what you left and why.
+
+**If he has to run a command, put it on his clipboard.** His instruction,
+2026-09-22. Do not make him select text out of a reply.
+
+```bash
+printf '%s' 'the command' | pbcopy      # macOS
+```
+
+Format it for **whatever he is pasting into**, and say which:
+
+| Target | Format |
+|---|---|
+| Terminal / shell | bare command, no `$`, no backticks, single line |
+| This Claude Code prompt | prefix `! ` so it runs in-session |
+| psql / a SQL client | the statement, terminated, no shell wrapper |
+| A browser or app field | the value alone, nothing else |
+
+Then tell him in one line what it does and where to paste it. One command per
+copy — if there are several, chain them with `&&` so a failure stops the rest.
 
 **Never hand him your blockers.** Asked to run four commands a permission
 boundary had stopped, he replied: *"why are those commands i have to do"* —
