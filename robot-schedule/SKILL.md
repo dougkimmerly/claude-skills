@@ -312,10 +312,22 @@ Screen-by-screen field maps are below. **Fill them from the box before you
 present anything** — read an existing job that works and copy its values, rather
 than deriving them from what the fields ought to be.
 
+**⚠ LEAD EVERY BLOCK WITH THE OPTION NUMBER.** The screens are addressable:
+Doug keys the number against the job on the list and goes straight there,
+instead of pressing `F10` through the ones he does not need. A format that
+implies a walk through all of them wastes the feature.
+
+**Known so far: option `5` is `RBT204` Control Options** — the User Profile
+screen (Doug, 2026-09-22). **The rest of the option list is NOT yet recorded**;
+get it before presenting a job, and do not infer it from the `F10` order — that
+order is `RBT201 → RBT292M1 → RBT202 → RBT205 → RBT203 → RBT204 → RBT248`,
+which would put Control Options at 6, not 5. **The two orderings are different
+and guessing conflates them.**
+
 Format, exactly:
 
 ```
-RBT201  Initial Job Setup                    ── screen 1 of N
+Opt 5   RBT204  Control Options
 
   Job Type . . . . . . C
   Job Name . . . . . . MAPDERIVE
@@ -503,7 +515,7 @@ is `0` on every job examined, and `OS_JOB_DATE_CODE` (`DTCODE`) holds
 **Where the date type is stored, and what `Q` means, is UNRESOLVED.** Do not
 report a job's effective date from these columns.
 
-### Screen 7 — `RBT204` *Control Options* — **THE IMPORTANT ONE**
+### Option `5` — `RBT204` *Control Options* — **THE IMPORTANT ONE**
 
 **This is where you define how the job actually runs**, and it is where both of
 this estate's scheduler catastrophes were configured. Everything on it ships as
