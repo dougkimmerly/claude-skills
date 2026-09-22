@@ -887,6 +887,76 @@ SELECT PROGRAM_LIBRARY, PROGRAM_NAME, OBJECT_TYPE
   cannot see which procedure a caller imports.
 - **It is authority-filtered** like everything else here. See above.
 
+## Compiling from a shell session: five traps, all of them found on 2026-09-22
+
+A session lost roughly two hours building one test harness. None of it was
+exotic; all of it is invisible until it bites.
+
+**1. `EVFEVENT` has ONE MEMBER PER PROGRAM, and SQL reads the wrong one.**
+`SELECT * FROM lib.EVFEVENT` reads the *default* member, which is whatever was
+compiled first — a session read a stale, unrelated compile three times and
+"diagnosed" it twice. Address the member:
+
+```sql
+CREATE OR REPLACE ALIAS lib.A_EV FOR lib.EVFEVENT(MYPGM);
+SELECT EVFEVENT FROM lib.A_EV;
+```
+
+**2. `EVFEVENT` comes back as EBCDIC hex** through `sql400`. Decode `cp037`:
+
+```python
+binascii.unhexlify(line).decode('cp037')
+```
+
+Filter on severity, not on the word ERROR: informational rows are
+`... I 00 ...` and the one that stopped the compile is `E 20` or `S 30`. A
+filter for "ERROR" returns forty harmless `RNF7031 name not referenced` lines
+and hides the one that matters.
+
+**3. `DFTACTGRP` / `ACTGRP` / `USRPRF` are rejected at MODULE scope** —
+`RNF1324 E 20`. Valid in an `H`-spec for `OBJTYPE(*PGM)`, fatal for
+`OBJTYPE(*MODULE)`. Set the activation group on `CRTPGM` instead.
+
+**4. `BNDSRVPGM((*LIBL/NAME))` still has to resolve AT BIND TIME** — `CPF5D03`
+if the bind job's library list cannot see it. `*LIBL` defers *run-time*
+resolution; it does not defer the bind. Either put the library on the list for
+the compile, or bind qualified and accept that the library is recorded.
+
+**5. A host variable in `FETCH FIRST :n ROWS ONLY` is not valid in static
+SQL.** Bound the loop in RPG instead — which is better anyway, because "the
+first N" then means the same N on every run.
+
+**And the one that is not a compile trap:** `sql400` **splits statements on
+semicolons**, including semicolons *inside string literals*. A comment column
+containing `...; monitored by MONMSG` became two broken statements. Keep `;`
+out of literals.
+
+## Testing whether an IFS file exists when you have no attribute authority
+
+`QSYS2.IFS_OBJECT_STATISTICS` returns **NULL** rather than failing for a file
+you have data authority to but not attribute authority — so *missing* and
+*unreadable* are indistinguishable through it, which is the exact failure mode
+to avoid.
+
+`IFS_READ_BINARY` with `IGNORE_ERRORS => 'YES'` returns **no rows** for a file
+that is not there, and rows for one that is. That is a clean existence test:
+
+```sql
+SELECT D.NAME,
+       (SELECT COUNT(*) FROM TABLE(QSYS2.IFS_READ_BINARY(
+          '/path/' CONCAT TRIM(D.NAME), 1000000, 'NONE', 'YES'))) AS FOUND
+  FROM sometable D
+```
+
+Signature on 7.3 is `(PATH_NAME, MAXIMUM_LINE_LENGTH, END_OF_LINE,
+IGNORE_ERRORS)` — **not** the `FILE_OFFSET`/`FILE_LENGTH` form. Set the line
+length large so a file returns one row rather than thousands of 4-byte rows.
+
+**Measured throughput, XTLTOR 2026-09-22:** ~125 documents/second from SQL,
+and **~628/second** from RPG calling C `open()`/`close()` in a loop. Ten
+million files is about five hours by the RPG route. Existence-checking a whole
+archive is a day's job, not a project.
+
 ## Db2 for i 7.3 SQL traps that cost a session each
 
 All hit while installing real code on 2026-09-19. None is exotic; each looks
