@@ -1598,16 +1598,41 @@ Two things it needs:
 
 - **`HOME` must be set** in the QSH environment. A profile with no home
   directory (a batch identity typically has none) otherwise fails.
-- **Threading must be off.** At 1,434 files, `git add` failed with:
+- **⚠ THE PORCELAIN DOES NOT SCALE HERE AT ALL. USE PLUMBING.** At 1,434 files
+  `git add` failed with `unable to create threaded lstat`, and
+  `-c core.preloadIndex=false -c index.threads=1` got past that one. **At 88,912
+  files it fails again on a different threading path** and no configuration
+  reaches it:
 
   ```
-  fatal: unable to create threaded lstat: Resource temporarily unavailable
+  fatal: unable to create lazy_dir thread: Resource temporarily unavailable
   ```
 
-  `-c core.preloadIndex=false -c index.threads=1` fixes it. **The failure scales
-  with file count and does NOT reproduce on a small test** — it appears the
-  first time the job does something worth doing. `pack.threads` and
-  `checkout.workers` are the next two if a bigger job needs them.
+  `git add -A`, `git add -- <one path>` and `git status` all fail this way once
+  the index is large. **What works, against the same 88,912-entry index:**
+
+  ```
+  git update-index --add --remove -- <paths>     # batch the paths
+  git write-tree                                 # -> tree sha
+  echo "msg" | git -c user.name=X -c user.email=Y commit-tree $T -p HEAD
+  git update-ref HEAD $C
+  ```
+
+  The whole chain runs in **2.5 seconds** where `add -A` took twenty minutes,
+  so this is the right answer even where the porcelain works: you almost always
+  know which paths changed, and making git rediscover it costs work
+  proportional to the repository rather than to the change.
+
+  **Ruled out as causes, each by measurement** — record these so nobody
+  re-tests them: the job type (a batch job under its own JOBD fails
+  identically), `SBMJOB ALWMLTTHD(*YES)`, the class's `MAXTHD` (`*NOMAX` on the
+  one measured), `PASE_THREAD_ATTR_STACKSIZE` at three values,
+  `GIT_TEST_INDEX_THREADS=1`. A throwaway 2,500-file repository in the same job
+  stages fine, so it is **scale-dependent and unexplained**.
+
+- **`commit-tree` needs an identity or it fails outright** — "empty ident name".
+  Pass `-c user.name` / `-c user.email` rather than configuring a dotfile on the
+  box that nothing versions.
 
 Note `git init` is idempotent, and git 2.26 predates the `safe.directory`
 ownership check, so a repository written by one profile and read by another
@@ -1674,3 +1699,66 @@ both.
   servers documented above. Whether ZPA publishes either is **untested** — and
   remember the reachability probe lies on this path, so settle it with the
   listener table plus a ZPA question, not with `nc` or `openssl`.
+
+## A batch job runs at CCSID 65535 on this estate — and that is invisible interactively
+
+`QCCSID` is **65535**, and profiles taking `*SYSVAL` inherit it. So every SQL
+variable in a **submitted** job defaults to 65535, and assigning UTF-8 to one
+fails:
+
+```
+SQL0332 Character conversion between CCSID 1208 and CCSID 65535 not valid
+```
+
+**A JDBC job negotiates a real CCSID with the client, so this cannot be
+reproduced from `sql400` and every interactive test passes.** It cost a
+55-minute batch run that did all its work correctly and then reported itself
+FAILED while reading its own output back.
+
+Two fixes, and using both is reasonable because they protect different things:
+
+```sql
+CALL QSYS2.QCMDEXC('CHGJOB CCSID(37)');            -- the whole job
+... CAST(LINE AS VARCHAR(300) CCSID 37) ...        -- the one statement
+```
+
+**To reproduce a batch-CCSID bug from an interactive session**, set it first:
+`CALL QSYS2.QCMDEXC('CHGJOB CCSID(65535)')`. That is how this one was confirmed
+rather than guessed at, and it is the cheapest way to test anything that will
+run under the scheduler.
+
+## Prove a scheduled job by SUBMITTING it, never by calling it
+
+Calling a procedure over JDBC exercises the SQL and **nothing that actually
+breaks**: not the library list, not the identity, not the output queue, not the
+job's CCSID. All four have caused failures on this estate that looked like code
+problems.
+
+```
+SBMJOB CMD(RUNSQL SQL('CALL LIB.PROC()') COMMIT(*NONE)) JOB(X)
+       JOBD(<lib>/<jobd>) USER(*JOBD) INLLIBL(*JOBD)
+```
+
+And when reading the scheduler's own tables back afterwards — **do it**. A
+one-character typo in a Robot command (`XTLPGMAP` for `XTLPGMMAP`) fails with
+`SQL0204` *before* the procedure runs, so **no run-log row is written at all**
+and every health check built around that table sees a quiet night. Read
+`ROBOTLIB.RBTCMD` back after any change:
+
+```sql
+SELECT CMD_SET_OID, CMD_LINE_NUMBER, CAST(CMD_STRING AS VARCHAR(120))
+  FROM ROBOTLIB.RBTCMD
+ WHERE UPPER(CAST(CMD_STRING AS VARCHAR(250))) LIKE '%<YOURPROC>%';
+```
+
+**And Robot's job name is `ROBOT_JOB_NAME`, not `JOB_NAME`.** `RBTROB.JOB_NAME`
+holds something else entirely — a session read it and reported a scheduled job
+was named `455562/QUSER/QZDASOINIT`, then recommended renaming it. Its real
+name was fine.
+
+## `sql400` splits on `;` blindly — including inside comments
+
+A `.sql` file with a semicolon in a `--` comment is cut in half at that point,
+and the halves fail with errors pointing at the following token. Four analysis
+queries in `proj-as400-codemap` had this and produced confident-looking partial
+output. Keep semicolons out of comments in anything meant to be piped in whole.
