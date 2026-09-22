@@ -175,6 +175,15 @@ Not a full audit — spot-check the claims this session touched:
 
 - Numbers quoted in more than one file. **A number written twice drifts in one
   of them.** Prefer a pointer to the query; if it must be repeated, verify.
+- **Anything corrected earlier in this session: grep the whole repo for it.**
+  Correcting the copy you were looking at is not correcting the fact. On
+  2026-09-22 a session fixed a false sentence in `proj-01-standards`' ADR-0003
+  ("until cutover, the fused RAG keeps serving both tiers" — the cutover had run
+  sixteen days earlier), and `kb-xtl400` had already fixed its own two copies.
+  **A third copy sat in `docs/migration-map.md` and was found only by
+  housekeeping** — in a working checklist nobody re-reads, which is precisely
+  where a status claim survives longest. Grep the distinctive phrase, not the
+  filename you remember.
 - Anything stated as "current" — is it still?
 - Anything a session asserted without measuring. Say so explicitly in the doc
   rather than leaving it indistinguishable from a measured fact.
