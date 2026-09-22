@@ -116,6 +116,34 @@ ExecStart=/usr/local/bin/sops exec-env /path/homelab-secrets/secrets/<site>/<svc
 
 **Host-key backups:** all four (`age1admin`/`age1centralsk`/`age1dockerserver`/`age1synology`) are in **LastPass** (2026-06-02). Each item's note carries the **public** key as the fingerprint + a recover-to-`~/.config/sops/age/keys.txt` instruction; the body is the full `keys.txt`. When handing a private key to Doug, **clipboard only** (`ssh <host> "cat ~/.config/sops/age/keys.txt" | pbcopy`) — never print it; verify identity first with `age-keygen -y` (public output is safe).
 
+## Exchanging a secret with Doug — clipboard, both directions
+
+**His instruction, 2026-09-22.** The clipboard is the channel, because it keeps
+the value out of the transcript, the scrollback and any scratch file.
+
+**Doug → SOPS.** He puts the secret on the clipboard and says so. Read it and
+write it to its home in one move; do not stage it in a file, and do not echo it
+back to confirm.
+
+```bash
+pbpaste | wc -c                 # confirm it ARRIVED -- length, never content
+# then encrypt straight into the store, e.g.
+pbpaste | sops --encrypt --input-type binary --output-type binary /dev/stdin
+```
+
+**SOPS → Doug.** Fetch and place it, then tell him what is on the clipboard and
+where it came from — never what it is.
+
+```bash
+sops -d secrets.yaml | yq -r '.path.to.key' | tr -d '\n' | pbcopy
+printf '' | pbcopy              # clear it afterwards, and say you have
+```
+
+**Non-negotiable:** never print the value, not even a prefix. Confirm by length
+or by what it unlocked. Verify identity before handing over a private key —
+`age-keygen -y` prints the public half and is safe. **Read it promptly**: a
+clipboard is volatile.
+
 ## Migrate a running service to SOPS (proven on dk400 / command-centre / galley, 2026-06-01)
 
 Storage-first, verify at every step, never break the live service. Tighten scope *after*, as a separate pass.

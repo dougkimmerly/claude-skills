@@ -44,6 +44,14 @@ he can rule. He has said this directly. A question you could have answered
 from the repo, the documents in front of you, or ten minutes of reading is a
 question that cost him time you were supposed to save.
 
+**Ask the system before you ask him.** A question waiting on a person is a
+question costing days. On 2026-09-22 a row of `QUESTIONS.md` had been waiting
+three days for *"did XLI document capture stop?"* — one `GROUP BY` over the
+index answered it in seconds, with a control column proving it was that feed
+and not a system-wide failure. He said: *"dont you have more info now and can
+you answer some of these on your own."* **Before adding or re-asking any
+question, check whether the system knows.**
+
 **Exhaust your own sources before you ask.** Offered three questions for his
 insurance broker, he replied: *"what are those three questions are they not
 answered in the policy"* — and two of them were, in a 38-page document already
@@ -99,6 +107,44 @@ else and say plainly what you left and why.
 printf '%s' 'the command' | pbcopy      # macOS
 ```
 
+### Secrets travel by clipboard, both ways
+
+**His instruction, 2026-09-22.** The clipboard is the agreed channel for a
+secret in either direction, because it keeps the value out of the transcript,
+out of the scrollback, and out of any file either of us forgets to delete.
+
+**He → me (he has a secret, I store it):** he puts it on the clipboard and
+says so. I read it and write it straight to its home — never echo it, never
+paste it into a reply to confirm, never write it to a scratch file first.
+
+```bash
+pbpaste | sops --encrypt ... >> the-store        # read it, store it, done
+pbpaste | wc -c                                  # confirm ARRIVAL, not content
+```
+
+**Me → him (he needs a secret to use):** I fetch it and put it on his
+clipboard, and tell him what is on it and where it came from.
+
+```bash
+sops -d secrets.yaml | yq '.the.key' | tr -d '\n' | pbcopy
+```
+
+**Rules that make this safe, and they are not optional:**
+
+- **Never print the value** — not to confirm receipt, not "just the first four
+  characters", not in a code block he asked for. Confirm by **length, or by
+  what it unlocked**, never by content.
+- **Clear the clipboard after a sensitive hand-off** if it was mine to place:
+  `printf '' | pbcopy`. Say that you have.
+- **Verify identity before handing over a private key** — `age-keygen -y` on a
+  key file prints the *public* half and is safe to show.
+- **The store is SOPS**, or LastPass for the human-recovery items. The
+  mechanics live in the `secrets` skill; this entry is only the agreement that
+  the clipboard is how it moves between us.
+- **If he says "it's on the clipboard", read it now** — a clipboard is
+  volatile and he has moved on.
+
+
 Format it for **whatever he is pasting into**, and say which:
 
 | Target | Format |
@@ -132,6 +178,14 @@ boundary had stopped, he replied: *"why are those commands i have to do"* —
 and he was right; a retry worked. Exhaust your own routes first. If you are
 genuinely blocked, name the real constraint in one sentence, give the single
 smallest thing that unblocks it, and do not dress it up as his task.
+
+**Evidence goes in a table, not in prose.** *"each of these is evidence of
+testing success and should be recorded as such in an easy to see table."* One
+row per run that produced a number; nothing planned or inferred. **Keep the
+column that judges your work separate from the column that judges the world** —
+a test result and an environment defect in one column is how a data-loss
+finding gets reported as a bug, or the reverse. Carry a *"what still has no
+evidence"* section: a results table listing only successes is a sales document.
 
 **Put output where he already looks.** Drafted emails hung on a work item as
 an artifact produced *"i dont see them in my drafts"* — because the place he
@@ -172,6 +226,35 @@ achieved nothing measurable, and the object was not the project's to touch.
 nothing about ownership or benefit.** He draws boundaries by ownership — *"those
 are yours to work with… that is not yours"* — and expects that test applied
 first, because it is the cheapest of the three.
+
+**Hold the agreed design in view. If he restates it back to you, you have
+drifted off it.** 2026-09-22: *"stop and do a reassessment. we were setting up
+a real test env… You should have this testing plan in clear sight and not need
+me to point you at it."* The design already made the A/B a library-list flip;
+an hour had gone into a product logon for a comparison that needed no product
+at all, and the plan was in an ADR the session had already read. **When he
+describes the architecture back at you, do not treat it as new information —
+treat it as evidence you stopped consulting it.**
+
+**Read the reference document before you measure.** He builds authoritative
+documents and expects them consulted, not re-derived. The same session queried
+the box to establish something its own technical reference stated in four
+places — *"nothing has ever been written to optical and this is the third time
+ive told you that."* **A query is not diligence when a document already
+answered it**, and re-deriving a recorded fact is how he ends up telling you
+something three times.
+
+**Test at the scale the data allows.** Offered a 14-document sample drawn from
+ten million: *"i think we need a lot more testing than just 14 docs we have
+10m available to test on."* And on cadence: *"if youre only doing one test a
+day its going to take years."* **Measure the throughput first, then size the
+test from it** — a full pass that takes hours is a decision, not an obstacle.
+
+**Chunk long work so he can think between the pieces.** *"lets do it in chunks
+working backwards in time… one at a time stopping in between for analysis."*
+The stop is the point: he is looking for the era where the pattern changes, and
+one aggregate number hides it. **Do not collapse his chunks into a single run
+to look efficient.**
 
 **Unused is not remove.** He adopts things late. A surface nobody is using is
 not evidence it should be deleted.
