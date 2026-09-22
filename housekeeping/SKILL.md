@@ -64,8 +64,25 @@ nobody can tell whether a repo is non-compliant or deliberately excepted.
 
 Things worth checking explicitly, because they are the ones that drift:
 
+- **The spine (XTL `proj-` repos, ADR-0008).** Six required items, and it is a
+  **minimum**: `README.md`, `CLAUDE.md`, `HANDOFF.md`, `QUESTIONS.md`,
+  `docs/adr/`, `docs/log.md`. **Anything beyond them is the repo's own business
+  and is NOT a deviation** — do not file an exception note for an extra
+  directory, and do not create a directory to satisfy a checklist. Both
+  happened: four repos filed careful exception notes for ordinary structure, and
+  one carried an `evidence/` directory containing nothing but a README. (ADR-0008
+  superseded ADR-0002 Part B on 2026-09-22; `deliverables/` and `evidence/` are
+  gone from the spine.)
+- **`HANDOFF.md` and `QUESTIONS.md` must exist even when empty.** A repo that
+  deletes the file when it empties silently stops receiving.
 - **Where artifacts live.** Anything extracted from a system, any source, any
   dated capture — is it in the knowledge-base repo rather than this one?
+  Exception (ADR-0005, amended): where the source system itself hosts a
+  version-controlled corpus, that corpus is canonical and the kb links to it.
+- **Source in the repo, if any** (ADR-0008 §4). Code we wrote and deploy to the
+  box is named for **what it installs as** (`secaudit/`, `mapcoll/`); `src/` is
+  reserved for mod-marked working copies of someone else's source. Do not
+  normalise one into the other.
 - **Superseded documents.** Is the archive rule followed — moved, not
   banner-topped in place?
 - **Repo naming and org.** Is it in the right GitHub organisation, named by
@@ -96,6 +113,30 @@ file reads:
 
 Anything historical moves to **`docs/log.md`**, linked from the README. Move
 it, do not summarise it away — the reasoning is why the log is worth having.
+
+**Then check the shape, not just the rules** (ADR-0007 as amended 2026-09-22 —
+there is a template at `proj-01-standards/templates/README-project.md`):
+
+- [ ] **The eight sections, in order:** title + goal + access · `## Status`
+      (milestone table + one bold **"The one number:"** line) · `## Now` ·
+      `## Waiting on a person` · `## Traps` · `## Read` · `## Layout` ·
+      `## At close`. Omit one only if genuinely empty.
+- [ ] **No paragraph inside a table cell.** A cell is a label, not an argument.
+      What-is-left cells cap at ~20 words and end in a link. This is the rule
+      every repo broke — cells of 60, 110, 170 and 200 words were all found.
+- [ ] **No "recent events" / "where things stand" narrative section.** That is
+      the log wearing a status page's clothes, and it is how the original
+      failure returns under a new heading.
+- [ ] **It fits one or two screens, and no section but the milestone table grows
+      with the project.** Checkable proxy: **~900 words + 25 per milestone**. A
+      flat cap penalises a project for decomposing its work finely, which is why
+      the constant became a rule.
+- [ ] **Links resolve.** Check them mechanically, do not eyeball them.
+
+**The no-status rule binds every OTHER document too.** If it is not the status
+page, it carries no status claim — a "where we are" block in a research index or
+a spec preamble is the worst case, because **a status claim rots fastest in the
+document least likely to be re-read.** Spot-check one or two while you are here.
 
 ## 3. The HANDOFF inbox
 
