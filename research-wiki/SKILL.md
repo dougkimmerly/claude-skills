@@ -370,6 +370,39 @@ Two cheap fixes:
   it. Good delegation on both sides produced a hole in the catalogue that
   only the lint found.
 
+## A CORRECTION LANDS IN SIX PLACES, AND THE BANNER IS ONLY THE FIRST (2026-09-22)
+
+The verdict-consistency pass on proj-security wave 3 found **six of twelve
+protocol pages contradicting themselves** after the orchestrator applied
+fixes. Not one was an agent error. The pattern was identical every time: the
+correction went in as a `## 0.` banner or a section-level insert, read as
+done, and never propagated.
+
+**When you correct a page, the same correction must reach all six of:**
+
+1. the body passage it corrects;
+2. **every other passage on the same page that reasoned from the old fact** —
+   usually §4 "our risk" and any conditional built on it;
+3. the **verdict / "what we have"** section, which is where the old value
+   most often survives as "UNKNOWN";
+4. the **ordered action list**, where the now-answered item is frequently
+   still ranked first and other items are *conditioned on it*;
+5. the **"testable here" list**, which repeats the query you already ran;
+6. the **frontmatter — `title`, `hook`, `verdict_for_xtl`** — which is written
+   last, feels done, and is the field most likely to be quoted into a plan.
+   One page had all three stale while its own §2 said RESOLVED.
+
+And **sideways**: the sibling page covering the adjacent protocol, and any
+concept page synthesised from the old text. In this run a concept page
+carried a falsified statistic in bold, inherited from pre-lint source text,
+and another filed a live candidate control under "controls that do not
+exist" — which would have made a reader ranking work discard it.
+
+**Cheapest mitigation:** after applying fixes, grep the corpus for the OLD
+value and the old framing words ("unmeasured", "unconfirmed", "unknown",
+"not yet run") before declaring the fix landed. That is a thirty-second check
+that would have caught most of these.
+
 ## A RETRACTION needs the same evidentiary standard as an assertion (same run)
 
 The orchestrator searched twice for a lens's central citation using semantic
