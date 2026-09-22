@@ -317,12 +317,63 @@ Doug keys the number against the job on the list and goes straight there,
 instead of pressing `F10` through the ones he does not need. A format that
 implies a walk through all of them wastes the feature.
 
-**Known so far: option `5` is `RBT204` Control Options** — the User Profile
-screen (Doug, 2026-09-22). **The rest of the option list is NOT yet recorded**;
-get it before presenting a job, and do not infer it from the `F10` order — that
-order is `RBT201 → RBT292M1 → RBT202 → RBT205 → RBT203 → RBT204 → RBT248`,
-which would put Control Options at 6, not 5. **The two orderings are different
-and guessing conflates them.**
+**⚠ THE OPTION ORDER IS NOT THE `F10` ORDER.** Confirmed 2026-09-22 — they
+diverge at the second screen, so inferring one from the other is wrong and
+looks right:
+
+| | |
+|---|---|
+| Option order | `RBT201` · **`RBT202`** · **`RBT292M1`** · `RBT203` · `RBT204` … |
+| `F10` walk | `RBT201` · **`RBT292M1`** · **`RBT202`** · `RBT205` · `RBT203` · `RBT204` · `RBT248` |
+
+**THE OPTION LIST IS ON THE BOX — DO NOT ASK A PERSON FOR IT.** Robot's own
+message file carries it, which makes it version-correct by construction:
+
+```sql
+SELECT MESSAGE_ID, CAST(MESSAGE_TEXT AS VARCHAR(90))
+  FROM QSYS2.MESSAGE_FILE_DATA
+ WHERE MESSAGE_FILE_LIBRARY = 'ROBOTLIB' AND MESSAGE_FILE = 'ROBOTMSG'
+   AND MESSAGE_ID BETWEEN 'OPT0095' AND 'OPT0122'
+ ORDER BY MESSAGE_ID;
+```
+
+The `OPT####` series alternates **option text then its one-line description**.
+Read 2026-09-22:
+
+| Opt | Screen | Robot's own words |
+|---|---|---|
+| **1** | `RBT201` | Initial Job Setup — *basic scheduling options* |
+| **2** | `RBT202` | Advanced Scheduling — *advanced scheduling options* |
+| **3** | `RBT292M1` | Robot Command Entry — *command entry* |
+| **4** | `RBT203` | Output Options — *update output options* |
+| **5** | `RBT204` | **Control Options** — *update job control options* |
+| **6** | — | Group Control Job — *update group job options* |
+| **7** | — | Reactive Jobs — *prerequisites for react jobs* |
+| **8** | `RBT288` | Local Data Area Entry — *update LDA* |
+| **9** | `RBT301` | Report Distribution — *report distribution options* |
+| **10** | `RBT205` | Exception Scheduling |
+| **11** | — | Job Completion History — *view job completion history* |
+| **12** | — | Report Recipients — *recipients of a report* |
+| **13** | — | Dependent REACT Jobs |
+| **14** | — | Print Job — *print list of job cntl optns* |
+| **15** | `RBT248` | **Job Monitors** |
+| **21** | — | Text for Job Name — *enter text for this job* |
+
+**⚠ THE SAME NUMBER MEANS DIFFERENT THINGS ON DIFFERENT LISTS.** `10` is
+*Exception Scheduling* here and **`10=Run History`** in five other `OPT`
+messages, each belonging to another panel. The contiguous `OPT0095`–`OPT0122`
+block is the job-setup list; `10` and `15` were found outside it (`OPT0418`,
+`OPT1271`). **Confirm the number against the panel you are actually on**, and
+search the message file rather than carrying a number between screens.
+
+**Searching the message file is the general technique**, not a one-off. Any
+literal you can see on a Robot screen is in `ROBOTMSG`, and it is the installed
+version's own text — which outranks any Fortra document, all of which describe
+a product two generations newer:
+
+```sql
+... WHERE UPPER(MESSAGE_TEXT) LIKE '%<the words on the screen>%'
+```
 
 Format, exactly:
 
@@ -348,7 +399,7 @@ asked for.** Not to check his typing — to catch the fields a later panel
 defaults that neither of you named. That is how `OS_JOB_USER = *RBTDFT` was
 found on `MAPDERIVE` (2026-09-22), which would have failed the job completely.
 
-### Screen 1 — `RBT201` *Initial Job Setup for Job Number NNNNNNNNNNNN*
+### Option `1` — `RBT201` *Initial Job Setup for Job Number NNNNNNNNNNNN*
 
 Verified against the live screen and read back from `RBTROB`, 2026-09-22.
 
@@ -369,7 +420,7 @@ Do not ask Doug for a start time; ask for run times.
 Keys: `F3`=Exit · `F4`=Prompt · **`F10`=Next Option** · `F12`=Previous ·
 `F21`=Command Line · `F23`=More Options.
 
-### Screen 2 — `RBT292M1` *Robot Command Entry* (`F10` from screen 1)
+### Option `3` — `RBT292M1` *Robot Command Entry*
 
 The command list. Header reads *"Commands for job . . . : MAPDERIVE"*.
 
@@ -389,7 +440,7 @@ Keys: `F3` · `F4`=Prompt · `F7`=Reserved Cmd Variables · `F8`=Command Finder 
 | Command | `RBTCMD` | `CMD_STRING` |
 | **Error** | `RBTCMD` | **`CMD_ERROR_HANDLING`** — `C` on screen = `2` stored |
 
-### Screen 3 — `RBT291` *Extended Command Entry* (`1`=Select a line)
+### `RBT291` *Extended Command Entry* — a drill-down from option `3`, not an option itself (`1`=Select a line)
 
 Where one command is defined in full.
 
@@ -427,7 +478,7 @@ real dates and real names (`BARRY`, 2015). This is the opposite of
 minutes ago. **To find out when a job's work last changed, read `RBTCMD`, not
 `RBTROB`.**
 
-### Screen 4 — `RBT202` *Advanced Scheduling* (`F10` from screen 2)
+### Option `2` — `RBT202` *Advanced Scheduling*
 
 *"CHOOSE ONE TO SCHEDULE OTHER THAN BY DAY OF THE WEEK"*. **Usually left
 entirely blank** — a job that runs on days of the week needs nothing here — but
@@ -460,7 +511,7 @@ question you answered, and add the interval jobs to the picture.
 formatted.** Observed values include blank, `0600`/`2100`, and `00550`/`02350`.
 A numeric comparison against them returns nothing and raises no error.
 
-### Screen 5 — `RBT205` *Exception Scheduling* (`F10` from screen 4)
+### Option `10` — `RBT205` *Exception Scheduling*
 
 Also usually blank. *"MISCELLANEOUS SCHEDULING EXCEPTIONS"* and *"EXCEPTION
 SCHEDULING OBJECTS"*.
@@ -485,7 +536,7 @@ list — and on nothing else. Where the screen-5 *exclude* list is stored is
 **unresolved**, and no job on this estate appears to use it. Do not report a
 job as having no date exclusions on the strength of that column.
 
-### Screen 6 — `RBT203` *Output Options* (`F10` from screen 5)
+### Option `4` — `RBT203` *Output Options*
 
 For an ordinary job **the only field typed here is the Output Queue.**
 
@@ -570,7 +621,39 @@ action without a duration does nothing, which is why 48% of jobs can carry an
 Status* on screen; **what `1` does is not on the screen and is unverified here**
 — 295 jobs use it. `F4` prompts.
 
-### Screen 8 — `RBT248` *Job Monitor Entry* — the last standard screen
+### Option `8` — `RBT288` *Local Data Area Entry*
+
+*"Enter data to be put in the `*LDA` at execution time of the Job"* — a 1024-byte
+scratchpad handed to the job, shown as an offset grid (`0`, `50`, `100` … in
+50-character rows, `More...` past 500).
+
+| | |
+|---|---|
+| Table | `ROBOTLIB.RBTLDA`, joined on `ROBOT_JOB_NUMBER` |
+| Columns | `DESCRIPTION` (`LDADES`), **`LDA_DATA`** (`LOCAL`) |
+| **In use on** | **55 jobs** |
+
+Keys add `F7`=Dup LDA and `F8`=LDA Finder.
+
+**This is how a job is parameterised without editing its command** — the same
+job definition behaves differently by what is in the LDA. Distinct from the
+`@1`/`@2` substitution on the command screen, which is Reserved Command
+Variables (`F7` there).
+
+### Option `9` — `RBT301` *Report Distribution*
+
+Per-print-file distribution for the job. Options `A`=Add/Copy/Delete,
+`1`=Select, `?`=More Options; `F6`=Add Record, `F8`=Print File Finder. A job
+starts with a single `*ALL` / *"\*ALL Print File"* row.
+
+Armed by **`RBTROB.USE_REPORT_DIST`** on option `4` — `Y`=Yes, `N`=No,
+`R`=Robot Reports.
+
+**⚠ Unused on this estate: `ROBOTLIB.RBTRD` holds ZERO rows.** Report
+distribution is configured for nothing at all, so no job distributes output
+through Robot. Do not describe a job's output routing from this feature.
+
+### Option `15` — `RBT248` *Job Monitor Entry*
 
 **This is `JOB_HAS_MONITOR`, and it is the most under-used capability in the
 schedule.** Table: `ROBOTLIB.RBTJM`, joined to `RBTROB` on `ROBOT_JOB_NUMBER`.
