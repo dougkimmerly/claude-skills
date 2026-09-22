@@ -403,6 +403,61 @@ value and the old framing words ("unmeasured", "unconfirmed", "unknown",
 "not yet run") before declaring the fix landed. That is a thirty-second check
 that would have caught most of these.
 
+## A RETRACTION THAT DOES NOT PROPAGATE CAN BE AMPLIFIED (2026-09-22, proj-security wave 4)
+
+The six-places rule is not enough, because it is six places **per page**. In
+wave 4 every correction the orchestrator applied landed in `systems/` and **not
+one reached `concepts/`**. Three concept pages still carried retracted content
+hours later, including a **fabricated** worked example presented as fact in the
+section that named the concept, on a page whose title was built on that term.
+
+The sharp part: one retracted claim had been **upgraded**. The entity page's
+corrected text said "a market-leading SIEM's user community, on the public
+record"; the concept page's *verdict* said "confirmed by the vendor's own staff
+on the public record" — stronger than the source ever claimed. **A concept
+writer works from pre-correction text and writes it more confidently than the
+entity page did**, so a failed propagation does not merely persist, it hardens.
+
+**Cheap fix: after correcting an entity page, immediately grep `concepts/` for
+the retracted value.** Cheaper than the lint pass that found it, and concept
+pages are what get quoted.
+
+**And regenerate the index before the verdict pass, not after.** Deriving
+`index.md` lays every `hook:` side by side, which surfaces a stale one in
+seconds — the same wave had a hook still carrying an overbroad claim after the
+title, the verdict and a body section saying "state this narrowly" had all been
+fixed.
+
+## A NEW FAILURE SHAPE: the quote is real and the authority is invented
+
+Wave 4's citation lint (~272 citations, ~214 verified, 6 fabricated) found a
+class worth naming separately. A community forum answer was cited as **"Splunk's
+own staff"** in two independent pages. The quoted text was verbatim and correct.
+The badge was a community engagement badge, not an employee marker.
+
+**"Vendor staff confirms a flaw in their own product" is a disproportionately
+attractive claim**, and it is the one most worth a badge-level check. Verifying
+the quote is not verifying the authority.
+
+**The mirror-image trap, same run:** three of four verification passes nearly
+declared a genuine paper fabricated on a **title/abstract mismatch alone**. Full
+text showed the quote present. And the orchestrator flagged an arXiv ID as
+"implausible" — it was real, three weeks old, and the best-sourced citation in
+the corpus. **Pull full text before concluding fabrication, and treat your own
+suspicion as the weakest instrument in the pass.**
+
+## ADD AN INTEROPERABILITY LENS WHEN THE SUBJECT EMITS DATA
+
+Wave 4's five lenses asked *what does the world do*. The decisive answer came
+from the operator mid-wave and was a different question: *what could we become
+compatible with*. Checked at source, OCSF's `base_event` already defined
+`count`/`start_time`/`end_time` — the aggregate record the project thought it
+had invented — and left undefined exactly the one field it had added.
+
+A lens asking **"how would our output be consumed by someone else's system"**
+would have found that on day one. For any wave researching a thing that emits
+data, make that its own lens.
+
 ## A RETRACTION needs the same evidentiary standard as an assertion (same run)
 
 The orchestrator searched twice for a lens's central citation using semantic

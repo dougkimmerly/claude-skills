@@ -953,8 +953,35 @@ lies.** JDBC server jobs are `QZDASOINIT` running under **`QUSER`**; only the
   file the job touches (check member locks too), or `WRKACTJOB JOB(QZDASOINIT)`
   and look for one burning CPU. Both need a profile that can see other jobs.
 
+**A third time, 2026-09-22, and the skill already said all of the above.** A
+~30-minute scan was killed to free a session; `MAPHDR` stayed locked with three
+`*SHRRD` for **over an hour**, and every `ALTER TABLE` against it failed
+`SQL0913`. Reading this section first would have cost thirty seconds.
+
+**The cheapest way to find the survivor, and it works from a least-privileged
+profile** — `WRKOBJLCK` and `WRKACTJOB` both need authority to see other jobs,
+`OBJECT_LOCK_INFO` does not:
+
+```sql
+SELECT JOB_NAME, LOCK_STATE, LOCK_STATUS, COUNT(*) AS N
+  FROM QSYS2.OBJECT_LOCK_INFO
+ WHERE SYSTEM_OBJECT_SCHEMA = '<lib>' AND SYSTEM_OBJECT_NAME = '<file>'
+ GROUP BY JOB_NAME, LOCK_STATE, LOCK_STATUS
+```
+
+⚠ **`SYSTEM_OBJECT_NAME`, not `OBJECT_NAME`,** and there is **no
+`JOB_USER_NAME`** column — that one is `SQL0206`.
+
+**⚠ `QSYS2.CANCEL_SQL` is not the escape hatch.** It needs the
+`QIBM_DB_SQLADM` function usage and returns `SQL0552 Not authorized to
+PROCEDURE` without it. A least-privileged batch profile does not have it and
+**should not be given it to work around this** — the authority exists to stop
+one job cancelling another's work.
+
 **Before starting anything long, know how you will stop it.** Ending it needs
-`ENDJOB` from someone with the authority — not the profile that started it.
+`ENDJOB` from someone with the authority — not the profile that started it. If
+there is no such route, **let the query finish** rather than killing the client:
+a killed client leaves the same work running with nobody watching it.
 
 ## Sizing a journal read BEFORE you run it
 
@@ -1777,6 +1804,109 @@ sets the flag again before the next `FETCH` — and that is the obvious first fi
 The tell was a run log recording *members screened* and *members copied*
 separately and the two disagreeing, which is an argument for always recording
 both.
+
+### ⚠ AND THE SAME DEFECT SITS BEFORE THE LOOP, WHERE IT IS EASIER TO MISS (2026-09-22)
+
+A zero-row `DELETE` or `UPDATE` **between the handler declaration and the
+`OPEN`** raises `NOT FOUND` too, sets the done-flag, and the loop then leaves on
+its **first** `FETCH` check having read nothing:
+
+```sql
+DELETE FROM ... WHERE <matches nothing>;   -- raises NOT FOUND, sets V_DONE
+GET DIAGNOSTICS V_STALE = ROW_COUNT;
+SET V_DONE = 0;                            -- ⚠ REQUIRED, and easy to omit
+OPEN C;
+```
+
+Measured: a harvest reported *"0 harvested"* in **0.8 seconds** with 1,434
+members waiting. The in-loop version at least runs once; this one produces a
+clean, fast, confident nothing — and the pre-loop housekeeping statement that
+matches nothing is the **normal** case on an incremental job, so it fails every
+night rather than occasionally.
+
+**Rule: reset the flag immediately before `OPEN`, not only at the end of the
+body.**
+
+### `sql400` cannot bind `OUT` parameter markers
+
+`CALL LIB.PROC('A','B', ?, ?)` fails `SQL0313`, so **a procedure with `OUT`
+parameters is not callable by hand at all** — and `RUNSQL` will not take
+parameter markers either. Write a two-line wrapper procedure that declares the
+locals and calls the real one, use it, then **drop it**: a test harness that
+outlives its test is a permanent object somebody has to protect.
+
+### ⚠ CAST ONCE, THEN WORK IN THE CAST TYPE — `SQL0802` type 7 (2026-09-22)
+
+Touching a table function's **raw** column alongside a **cast** copy of it in
+the same query raises `SQL0802` *"Data conversion or data mapping error … type 7
+— DBCS or UTF-8 data that is not valid"* on rows that read perfectly well on
+their own.
+
+```sql
+-- WRONG: L.LINE used raw for one test and cast for another
+SELECT CAST(L.LINE AS VARCHAR(400) CCSID 1208), 
+       CASE WHEN SUBSTR(L.LINE, 7, 1) = '*' THEN 1 ELSE 0 END
+  FROM TABLE(QSYS2.IFS_READ_UTF8(...)) L
+```
+
+It presents as **"29% of these files are corrupt"** — a serious claim about the
+data — and it is the query. Cast once in the innermost CTE and reference only
+the cast column afterwards, including in `LIKE`, `SUBSTR` and `REGEXP_*`.
+
+**And keep the whole pipeline in one CCSID.** Forcing the job to 37 with
+`CHGJOB CCSID(37)` fails on any source that is not plain English — this estate
+has French, Italian and Japanese source files and a non-ASCII byte in the
+form-type column of hundreds of members. Declare the columns `CCSID 1208` and
+cast literals into it (`CAST('^[A-Za-z]+' AS VARCHAR(20) CCSID 1208)`).
+
+### ⚠ WHEN THE SHELL FIGHTS, THE ANSWER IS SQL (2026-09-22)
+
+Five attempts to inventory a keyword across 9,470 mirrored members failed in the
+PASE shell before the right instrument was used. Record these so nobody spends
+the afternoon again:
+
+| Attempt | Why it failed |
+|---|---|
+| `grep -rl --include=*.pf` | **`--include` is GNU-only**; AIX grep ignores it and `-r` is unreliable |
+| `grep -o "REF([A-Z]*"` | **AIX grep has no `-o`.** Returns nothing, silently |
+| `find … \| xargs grep -h \| awk -F"REF\\("` | Three layers of quoting — SQL → `QCMDEXC` → `QSH` → `awk` — mangle the separator |
+| A shell script written to the IFS and run with `/QOpenSys/usr/bin/sh` | Ran, produced no output, left no error |
+| `REGEXP_SUBSTR(txt, 'REF\\(([^)]*)\\)', 1, 1, '', 1)` | **`SQL0901` system error** (`CPF4204`) — the capture-group form is not safe here |
+
+**What worked, in 2 m 21 s over the same 9,470 members:** `IFS_READ_UTF8` in a
+`LATERAL` join with plain `LOCATE` and `SUBSTR`.
+
+```sql
+SELECT UPPER(SUBSTR(TXT, LOCATE('REF(', TXT) + 4,
+             LOCATE(')', TXT, LOCATE('REF(', TXT)) - LOCATE('REF(', TXT) - 4))
+  FROM lines WHERE TXT LIKE '%REF(%' AND TXT NOT LIKE '%REFFLD(%'
+```
+
+**`grep -c` on a single known file is the control worth running first** — it
+proves the string is there and the shell can see it, which separates "my pattern
+is wrong" from "this grep lacks that flag".
+
+### Reading many members at once: `IFS_READ_UTF8` in a `LATERAL` join
+
+```sql
+SELECT M.MBRNAME, L.LINE_NUMBER, L.LINE
+  FROM <member list> M,
+       LATERAL (SELECT LINE_NUMBER, LINE
+                  FROM TABLE(QSYS2.IFS_READ_UTF8(PATH_NAME => M.IFSPATH,
+                                                 IGNORE_ERRORS => 'YES'))
+                 WHERE LINE_NUMBER <= 40) L
+```
+
+- **`IGNORE_ERRORS => 'YES'` is accepted** and keeps one unreadable file from
+  killing the statement.
+- **The line-number filter is applied AFTER the read**, so cost is the whole
+  file: **~30 ms** for small CL members, **~200 ms** for large RPG. 90,000
+  members is hours — a submitted job, not a session.
+- **A set-based INSERT over a whole source file is the wrong grain.** These
+  routines run `COMMIT(*NONE)`, so one poison member kills the statement *and
+  leaves the rows already inserted committed* — a partial result that looks
+  complete. Loop per member with a `CONTINUE` handler, and **record the
+  unreadable ones as rows** rather than as absence.
 
 ## Two more facts about this estate (2026-09-21)
 

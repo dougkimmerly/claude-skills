@@ -132,6 +132,37 @@ SELECT CMD_SET_NAME, LAST_UPDATE_TIME, LAST_UPDATE_USER
 
 Command sets join to jobs by `CMD_SET_OID`.
 
+## ⚠ Resolving a scheduled job to the COMMANDS it runs — the join that works
+
+**`RBTROB.CMD_SET_OID` is `0` on almost every job, so it is not the link** (see
+the `xtl400` skill's warning not to conclude a job has no command from it). The
+link that works, measured 2026-09-22 on XTL:
+
+**`RBTCS_CMD_SETS.CMD_SET_NAME` holds the ROBOT JOB NUMBER**, zero-padded to 12
+characters (`000000001364`) — not a name. So the chain is job → command set by
+*number*, command set → commands by OID:
+
+```sql
+SELECT R.ROBOT_JOB_NAME, C.CMD_LINE_NUMBER, CAST(C.CMD_STRING AS VARCHAR(120))
+  FROM ROBOTLIB.RBTROB R
+  JOIN ROBOTLIB.RBTCS_CMD_SETS S
+    ON CAST(S.CMD_SET_NAME AS CHAR(12)) = CAST(R.ROBOT_JOB_NUMBER AS CHAR(12))
+  JOIN ROBOTLIB.RBTCMD C ON C.CMD_SET_OID = S.CMD_SET_OID
+ WHERE R.ROBOT_JOB_NAME = '<job>'
+ ORDER BY C.CMD_LINE_NUMBER;
+```
+
+That is what turns *"a job called `FOURKITES` exists"* into *"it runs
+`CALL PGM(PARTNCSVCL) PARM('01')` every fifteen minutes"* — the second hop the
+section below calls "not always resolvable" is resolvable this way for ordinary
+command jobs.
+
+**Searching `RBTCMD` alone still misses things**, and knowing why saves a wrong
+negative: a `LIKE '%FOURKITE%'` over `CMD_STRING` returns nothing for that job,
+because the vendor's name appears only in the job name and description and in
+the *program's* source. Search `RBTROB.ROBOT_JOB_DESC` too, and remember the
+command names a program, not a purpose.
+
 ## `RBTMSG` is a MESSAGE table, not a run table
 
 - Up to **26 rows** share one `(CMRNAM, CMRJOB, CMSDAT, CMSTIM)`. Treating a row
