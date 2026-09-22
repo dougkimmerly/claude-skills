@@ -558,6 +558,71 @@ action without a duration does nothing, which is why 48% of jobs can carry an
 Status* on screen; **what `1` does is not on the screen and is unverified here**
 — 295 jobs use it. `F4` prompts.
 
+### Screen 8 — `RBT248` *Job Monitor Entry* — the last standard screen
+
+**This is `JOB_HAS_MONITOR`, and it is the most under-used capability in the
+schedule.** Table: `ROBOTLIB.RBTJM`, joined to `RBTROB` on `ROBOT_JOB_NUMBER`.
+
+Three independent monitors, each with its own trigger and actions:
+
+| Screen | Trigger fields | `RBTJM` columns |
+|---|---|---|
+| **Job Overrun** — Maximum Duration (H/M) | `OVERRUN_MAX_FLAG`, `_HOUR`, `_MIN` | `JMOMAXFLG`, `JMOMHOUR`, `JMOMMIN` |
+| — Must Complete by (HH:MM) | `OVERRUN_COMP_FLAG`, `_TIME` | `JMCMPFLG`, `JMCMPTIME` |
+| **Job Underrun** — Minimum Duration (H/M) | `UNDER_MIN_FLAG`, `_HOUR`, `_MIN` | `JMUMINFLAG`, `JMUMINHOUR`, `JMUMINMIN` |
+| **Late Start** — Later than scheduled by (H/M) | `LATE_SCHED_FLAG`, `_HOUR`, `_MIN` | `JMLSCHFLG`, `JMLSCHHOUR`, `JMLSCHMIN` |
+| — Must Start by (HH:MM) | `LATE_START_FLAG`, `_TIME` | `JMLSTRFLG`, `JMLSTRTIME` |
+
+Actions per monitor — *Send a warning to* **Job's Message Queue** / **Robot
+Alert Device** / **Robot Network**, and for overrun and late start, **End the
+Job**:
+
+`OVERRUN_ACT_FLAG` · `_MSGQ` · `_ALR` · `_NET` · `_END`, and the matching
+`UNDER_ACT_*` (no `_END`) and `LATE_ACT_*` sets.
+
+**⚠ A DURATION WITHOUT ITS FLAG IS INERT.** `DRVRLOGIMG` carries
+`OVERRUN_MAX_HOUR = 1` with `OVERRUN_MAX_FLAG = 0`. The value is on the screen,
+the monitor is off, and nothing says so. **Always test the `_FLAG`, never the
+hours/minutes**, or you will report monitoring that does not exist.
+
+### ⚠ THE ESTATE MONITORS ONLY ONE OF THE THREE FAILURE SHAPES
+
+Measured 2026-09-22 across all 11 monitored jobs of 752:
+
+| Monitor | Jobs using it |
+|---|---|
+| Job Overrun | **11** |
+| **Job Underrun** | **0** |
+| **Late Start** | **0** |
+
+**Every monitor on this estate watches a job running too LONG. Nothing watches
+the two failures that have actually happened here.**
+
+- **Late Start catches the job that never ran at all.** 2026-09-21: Robot fired,
+  `SBMJOB` failed on a library list, the job never existed, its own tables held
+  *no row* — not a failure row, no row — and nothing noticed for seven hours.
+  **No check built on the job's own output can ever catch this**, because the
+  program never runs to write anything. `Must Start by` is the only instrument
+  that sees it.
+- **Job Underrun catches the job that "succeeded" instantly.** The recurring
+  shape in this estate's own tooling: a harvest reporting `QUIET` in 0.8 s with
+  1,400 members waiting; a mirror loop running exactly once and reporting
+  success. A least-privileged job hitting `SQL0551` on its own schema fails in
+  seconds, writes nothing, and looks identical to a quiet night.
+  **`Minimum Duration` is the outer boundary that a run log cannot draw.**
+
+**This is also the answer to "nothing unattended can poll the box."** Robot's
+job monitor runs ON the box and alerts from there — which is the rule anyway
+(*"anything we build should live on the box and any monitoring should be there;
+if we need to schedule something we use `ROBOTLIB`"* — Doug, 2026-09-21). A
+session-start read from a laptop is a second-best that only works when somebody
+opens a session.
+
+**A monitor is a commitment, not a setting** — somebody begins receiving its
+alerts. Adding one is a conversation with whoever operates the estate. But
+proposing *Late Start* and *Underrun* for any job that matters is the single
+highest-value change available in this schedule, and it is free.
+
 ## What Robot can do, and what XTL actually uses — census 2026-09-22
 
 **Read this before proposing a scheduling improvement.** 752 jobs.
@@ -569,7 +634,7 @@ Status* on screen; **what `1` does is not on the screen and is unverified here**
 | Schedule override code | `SCHED_OVRRD` | 191 (25%) | |
 | Execution-time window | `EVERY_RANGE_START/_END` | 44 (6%) | |
 | Reactive (prerequisite) jobs | `JOB_IS_REACTIVE` | 13 | |
-| **Job monitor** | **`JOB_HAS_MONITOR`** | **11 (1.5%)** | |
+| **Job monitor** | **`JOB_HAS_MONITOR`** | **11 (1.5%)** | **all overrun-only; underrun 0, late-start 0** |
 | Non-working-day handling other than `Y` | `RUN_ON_NONWORK_DAY` | 2 | |
 | OPAL schedule logic | `OPAL_NAME` | 1 | |
 | Submit-Delay model | `SUBMIT_DELAY_TYPE` | **0** | shipped, never used here |
