@@ -473,6 +473,36 @@ list — and on nothing else. Where the screen-5 *exclude* list is stored is
 **unresolved**, and no job on this estate appears to use it. Do not report a
 job as having no date exclusions on the strength of that column.
 
+### Screen 6 — `RBT203` *Output Options* (`F10` from screen 5)
+
+For an ordinary job **the only field typed here is the Output Queue.**
+
+| Screen label | `RBTROB` column | System | Default |
+|---|---|---|---|
+| **Output Queue** | `OS_OUTQ_NAME` | `RBOUTQ` | `*RBTDFT` |
+| Library | `OS_OUTQ_LIB_NAME` | `OUTQLB` | `*RBTDFT` |
+| Print text | `SPLF_PRINT_TEXT` | `PRTTXT` | blank |
+| Number of copies (1–255) | `SPLF_COPIES` | `RBCOPY` | `0` |
+| Output priority (1–9) | `OS_JOB_OUTPTY` | `OUTPRY` | `0` |
+| Use Report Distribution? | `USE_REPORT_DIST` | `URPDST` | `N` — **`Y`=Yes, `N`=No, `R`=Robot Reports** |
+
+**Typing `*JOBD` in Output Queue clears the Library field**, and that pairing is
+what you want for an application with its own job description: the queue comes
+from the `JOBD`, which is where you can set `DSPDTA(*YES)` and actually read
+your own job logs. Leaving the shipped `*RBTDFT`/`*RBTDFT` sends job logs to
+Robot's default queue, where `SYSTOOLS.SPOOLED_FILE_DATA` returns **zero rows
+and no error** for a file your profile does not own.
+
+Keys add `F15`=Select PreReq here — the reactive-job prerequisite list.
+
+**⚠ The *Job date calculator* is only partly resolved.** The screen shows
+*"Start with date type . . : `1`  F4  System Date"*, *"Date, Day Nbr, + or −
+Days"* and a computed *"Equals the job date"*. `OS_JOB_DATE_VALUE` (`JOBDAT`)
+is `0` on every job examined, and `OS_JOB_DATE_CODE` (`DTCODE`) holds
+**blank ×437, `+` ×169, `Q` ×146** — which is not the `1` on the screen.
+**Where the date type is stored, and what `Q` means, is UNRESOLVED.** Do not
+report a job's effective date from these columns.
+
 ## What Robot can do, and what XTL actually uses — census 2026-09-22
 
 **Read this before proposing a scheduling improvement.** 752 jobs.
