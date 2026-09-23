@@ -308,6 +308,30 @@ and spelling** — not the SQL column names, not your own wording. A value he
 leaves alone is shown as `(leave)`, never omitted, so he never has to wonder
 whether you forgot it or meant the default.
 
+**⚠ WRITE THE COMMAND AS A LABELLED FIELD, NOT AS A ROW WITH COLUMNS BESIDE
+IT.** 2026-09-23: the command line was laid out as the panel shows it, with the
+`Error` column trailing on the same line —
+
+```
+  Seq 1   RUNSQL SQL('CALL XTLPGMMAP.MAPREFS()') COMMIT(*NONE)     Error C
+```
+
+— and Doug reasonably read a command-shaped line as a command, pasted it into
+ACS, and got **`SQL0104 Token RUNSQL was not valid`**. Two faults in one line: a
+panel column looked like part of the command, and a CL command in ACS needs the
+`CL:` prefix and a terminating `;`. Use one field per line instead:
+
+```
+  Seq  . . . . . . . . 1
+  Command  . . . . . . RUNSQL SQL('CALL XTLPGMMAP.MAPREFS()') COMMIT(*NONE)
+  Error  . . . . . . . C
+```
+
+**And if the command is also worth running by hand, give the ACS form
+separately and say which is which** — `CL: <command>;`. The keying sheet and a
+runnable command are different artifacts; a block that could be either will be
+pasted.
+
 Screen-by-screen field maps are below. **Fill them from the box before you
 present anything** — read an existing job that works and copy its values, rather
 than deriving them from what the fields ought to be.
