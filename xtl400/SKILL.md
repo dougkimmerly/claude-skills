@@ -1140,6 +1140,39 @@ SELECT PROGRAM_LIBRARY, PROGRAM_NAME, OBJECT_TYPE
   cannot see which procedure a caller imports.
 - **It is authority-filtered** like everything else here. See above.
 
+## `DSPPGMREF` cannot see triggers either — `SYSTRIGGERS` can
+
+**A trigger is an edge no static read of a program will ever produce.** The
+program declares the file and stops there; the trigger fires underneath the
+write, runs other code and touches other files. So *"what writes this file"*
+answered from `DSPPGMREF` alone is incomplete on this estate in a way that looks
+complete.
+
+**470 triggers, 168 tables, 57 programs, 28 schemas** — measured 2026-09-23,
+readable by a plain read profile in 0.1 s.
+
+```sql
+SELECT TRIGGER_PROGRAM_LIBRARY, TRIGGER_PROGRAM_NAME,
+       ACTION_TIMING, EVENT_MANIPULATION, ENABLED
+  FROM QSYS2.SYSTRIGGERS
+ WHERE SYSTEM_EVENT_OBJECT_TABLE = 'WOJOBS'
+```
+
+⚠ **Join on `SYSTEM_EVENT_OBJECT_TABLE` / `SYSTEM_EVENT_OBJECT_SCHEMA`, never on
+`EVENT_OBJECT_TABLE`.** The SQL name and the system name are different strings
+for most of this estate's files, and joining on the SQL one finds nothing and
+raises nothing — the same family as the generated-index-name trap above.
+
+**Where they are:** `MIMIX` 203 over 58 tables (replication, 2 programs),
+`QSYS` 51, `QSYS2` 39, `ROBOTLIB` 33, and then XTL's own — `I93FILE` 19 over 11
+tables with 13 distinct programs, `XDIFILE` the same.
+
+**And the trigger programs are often unreadable.** In XTL's data libraries the
+only programs present are the triggers (`CMBEFINS`, `JOBEFINS`, `JOBEFUPD`,
+`TMBEFINS`, `TMBEFUPD`, one set per library) and they are closed to a read
+profile. Do not read that as a reason to seek a grant: `SYSTRIGGERS` already
+states what fires on what, and the object only holds the body.
+
 ## Compiling from a shell session: five traps, all of them found on 2026-09-22
 
 A session lost roughly two hours building one test harness. None of it was
