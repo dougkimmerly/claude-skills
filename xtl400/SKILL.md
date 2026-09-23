@@ -266,14 +266,32 @@ is a length that is exactly double, and `4040…` (EBCDIC spaces) at the front.
 Convert explicitly: `CAST(SRCDTA AS CHAR(<len>) CCSID 37)`.
 
 **Choosing 37 for a 65535 file is a CHOICE — record it.** 65535 means the box
-does not know the code page either. 37 is right for the ones verified here
-(proved by reproducing a 2026-09-07 capture byte for byte), and is **untested
-for `MMAIL`, `HPT` and `ACSEDI`.**
+does not know the code page either.
+
+**⚠ THE TWO SETS ARE DISJOINT — the non-English files are NOT the 65535 ones.**
+Measured 2026-09-22, correcting the obvious inference: `MMAIL` (280), `HPT`
+(297/5035) and `ACSEDI/SQLSRC2` (1208) **declare their CCSID**, so `getString`
+converts them correctly and the 65535 branch never fires for them. Every one of
+the 39 is RPG/DDS/S36 source in an XTL or IBM-shipped library. 37 is the right
+default, and the box argues for it itself:
+
+| Check | Result |
+|---|---|
+| `QLANGID` / `QCNTRYID` | `ENU` / `US` → 37 |
+| Siblings of the 39, same libraries | 183 of 184 declare 37 |
+| Reading a 65535 member as 37 vs 500 | identical in 6 of 8 files tested; 6 records of 1037 differ in the other two, at a marker byte in the sequence-number area no compiler reads |
+
+**`QCCSID` IS 65535 SYSTEM-WIDE ON THIS BOX, and that is why the 39 exist.** A
+source file created by a job that let the system value through, instead of
+resolving it from `QLANGID`, inherits 65535. It is not a signal that the content
+is unusual — it is a signal that nobody set a CCSID at creation.
 
 **And a wrong EBCDIC page does not look wrong.** 37, 500, 280 and 297 differ
 in exactly the characters RPG allows in names — `$`, `#`, `@`, `[`, `]` — so
 the output is *plausible source*, not obvious damage. Any bulk pull must read
-each source file's declared CCSID per file, not once for the estate.
+each source file's declared CCSID per file, not once for the estate, and should
+**record which page it read each member under** — `kb-xtl400`'s `MANIFEST.tsv`
+carries `srcdta_ccsid` (`65535->37`) for exactly this reason.
 
 ### Fixed-form RPG: the comment marker is COLUMN 7, and column 6 bites
 
@@ -427,6 +445,35 @@ SELECT JOB_NAME, JOB_STATUS, JOB_SUBSYSTEM
 
 Note the inversion before assuming a release ordering: `JOB_INFO` is the
 *newer* function and it works, while the older `ACTIVE_JOB_INFO` is missing.
+
+### ⚠ `JOB_INFO.JOB_STATUS` cannot see MSGW — so from here, you cannot
+
+**A job sitting at an unanswered inquiry message reports `JOB_STATUS =
+'ACTIVE'`.** `MSGW` is the *active job status*, which lives in
+`ACTIVE_JOB_INFO` — the function this box does not have. So the substitute
+above is not a substitute for this question, and there is no SQL route to it
+from a PC client.
+
+Found the hard way 2026-09-22: a `cl400` call hung, every `QZRCSRVS` job came
+back `ACTIVE`, and the session told Doug *"none in MSGW."* He was looking at
+the green screen — three of them were, one of them that call's own job,
+holding a function check with `(C S D F)` on the bottom line.
+
+**The failure mode is the dangerous one**: the query succeeds, returns rows,
+and the rows are wrong for the question. Nothing announces it.
+
+So:
+
+- **Never conclude "not in MSGW" from SQL.** Report *"I cannot see MSGW from
+  here"* and ask for a `WRKACTJOB` / `DSPJOBLOG` look.
+- A `cl400`/`sql400` call that hangs with no output is **MSGW until proven
+  otherwise** — the client shows nothing because the box is waiting for a
+  reply that will never come from this side.
+- Reading the job log is what settles it: the inquiry and its valid replies
+  are the last lines. `DSPJOBLOG JOB(nnnnnn/QUSER/QZRCSRVS) OUTPUT(*PRINT)`
+  captures it before the prestart job is recycled.
+- A stranded job holds a `QZRCSRVS` prestart job until someone answers it.
+  They accumulate silently.
 PTF-group level, not release, decides what is on this box — so settle it with
 one query rather than by reasoning about what 7.3 shipped:
 
@@ -558,11 +605,29 @@ housekeeping (the `housekeeping` skill) and the two columns start as **"not
 verified"**, because an object nobody has confirmed is covered is an object
 that is not covered.
 
+**⚠ DOUG HAS NOW GIVEN THIS INSTRUCTION TWICE** — 2026-09-19, and again
+2026-09-23: *"Each project needs to be keeping a list of the objects it creates
+permanently so that at the end of dev they can be added to the replication and
+the backup."* **A rule restated is a rule that was not being followed**, so check
+that the register exists rather than assuming it does. As of 2026-09-23
+`proj-security` and `proj-as400-codemap` had one; `proj-imaging` did not, despite
+creating libraries (its ADR 0013). The rule also lives **only in this skill**,
+which is part of why it was missed — a repo auditing itself against
+`proj-01-standards` never meets it.
+
 **Two things that are easy to forget are on the list:**
 
 - **Scheduled jobs are objects too.** A Robot job definition lives in the
   scheduler's own library. If that library is not replicated, the programs
-  survive a role swap and nothing runs them.
+  survive a role swap and nothing runs them. **`ROBOTLIB` IS replicated on this
+  estate** (Doug, 2026-09-23) — so the scheduler does come across, and the
+  exposure is the job's *targets*, not the job. **Do not re-derive this from
+  `MIMIX.MXLIBREPP` or `MIMIX.OMOBJXEP`** — both mislead, and this is the direct
+  answer from the person who knows.
+- **The monitoring objects are NOT yet replicated** (Doug, 2026-09-23), and that
+  is deliberate: they go in when the development that creates them finishes.
+  Until then **assume monitoring does not survive a swap.** A known state with a
+  known closing condition is not an unknown — and it is not being covered either.
 - **The user profile the work runs as.** A replicated program owned by a
   profile that did not come across authenticates as nobody.
 
@@ -2125,6 +2190,40 @@ SELECT CMD_SET_OID, CMD_LINE_NUMBER, CAST(CMD_STRING AS VARCHAR(120))
 holds something else entirely — a session read it and reported a scheduled job
 was named `455562/QUSER/QZDASOINIT`, then recommended renaming it. Its real
 name was fine.
+
+## ⚠ QTEMP DIES WITH THE CONNECTION, AND EVERY `sql400` CALL IS A NEW CONNECTION
+
+**An object created by one `sql400` invocation is gone before the next one
+runs.** This is the documented behaviour of QTEMP — job-scoped — but the trap is
+that a shell loop *looks* like one session:
+
+```bash
+sql400 "CREATE ALIAS QTEMP.A FOR LIB.SRCF(MBR)"   # job 1 ... and job 1 ends here
+sql400 "SELECT * FROM QTEMP.A"                    # job 2: SQL0204, A not found
+```
+
+**It fails as `SQL0204 … type *FILE not found`, which reads like a missing
+object, not a missing session.** `kb-xtl400`'s `source_sync.py history` was built
+this way and **never produced a single output in its entire existence** — the
+failure was blamed on an unrelated stdout defect, fixed, and the command still
+returned nothing. Found 2026-09-22 only by running it.
+
+**Put every statement that shares QTEMP into ONE `sql400` call**, separated by
+`;` — the tool splits on `;` and runs the parts on one `Statement`, so the
+connection and therefore QTEMP are shared:
+
+```bash
+sql400 "CREATE ALIAS QTEMP.A FOR LIB.SRCF(MBR); SELECT SRCSEQ, SRCDAT FROM QTEMP.A"
+```
+
+Nothing needs dropping afterwards — QTEMP dies with the connection, so a stale
+alias from a crashed run is impossible. Parsing the output means skipping the
+`rows: N` lines the DDL statements emit before the SELECT's header.
+
+This applies to **anything** job-scoped, not just aliases: `QTEMP` outfiles from
+`DSPFD`/`DSPOBJD`/`DSPPGMREF`, `OVRDBF`, `ADDLIBLE`. `cl400` is different — it
+runs several commands in **one** `CommandCall` job by design, which is why
+`ADDLIBLE`/`OVRDBF` work there and not here.
 
 ## `sql400` splits on `;` blindly — inside comments AND inside string literals
 

@@ -375,6 +375,26 @@ a product two generations newer:
 ... WHERE UPPER(MESSAGE_TEXT) LIKE '%<the words on the screen>%'
 ```
 
+### The whole message file is in the RAG — ask it before you query the box
+
+All 4,558 messages and 1,282 second-level help texts were extracted on
+2026-09-22 into `kb-xtl400`'s `robot-fortra` collection. **Ask the
+`kb-xtl400-docs` MCP (`search_as400`, `ask_about_as400`) first** — it answers
+without CCMAP, without Zscaler, and without a session on the box, and it is the
+same text. Regenerate it with `kb-xtl400/tools/robotmsg_extract.py` (the corpus
+itself is gitignored; the extractor is the durable artifact, and a rebuild off
+the box takes about two minutes).
+
+Go to the SQL above when you need a message the corpus does not have, or when
+you are checking that the corpus has not drifted from the installation.
+
+**⚠ THE `F1` PANEL HELP IS NOT IN EITHER.** It lives in compiled `*PNLGRP`
+objects — `RBTHELP` alone is 667 KB — and Fortra ships no source for them. There
+is no retrieve command, no SQL view, and no source member anywhere in the
+estate's mirror. **So a question neither the corpus nor `MESSAGE_FILE_DATA` can
+answer may still be answerable on a real `F1` screen.** That is a hole in what
+can be read remotely, not evidence that Robot has no answer.
+
 Format, exactly:
 
 ```
@@ -418,6 +438,17 @@ His reasons, 2026-09-22, each answering "how does a person find this later":
 asked for.** Not to check his typing — to catch the fields a later panel
 defaults that neither of you named. That is how `OS_JOB_USER = *RBTDFT` was
 found on `MAPDERIVE` (2026-09-22), which would have failed the job completely.
+
+**⚠ AND READ IT BACK AGAIN BEFORE YOU BUILD ANYTHING ON THE SLOT — A DIFFERENT
+START TIME INVALIDATES EVERY NUMBER DERIVED FROM IT, NOT JUST THE RECORD.**
+2026-09-23: `MAPDERIVE`'s spec argued 04:15 and the job was keyed at **04:30**;
+the two commands were in the other order as well. The stale sentence was
+harmless — the stale *number* was not. The job's member budget had been sized
+from the clear air a 04:15 start gives (~25 minutes), and at 04:30 there are
+eleven. It fit by seconds on a fast night and would have run into a five-job
+wave on a slow one, reporting success either way. **A slot is an input to a
+budget, an interval and a timeout. When the read-back shows a different time,
+re-derive them all before touching anything else.**
 
 ### Option `1` — `RBT201` *Initial Job Setup for Job Number NNNNNNNNNNNN*
 
