@@ -380,6 +380,21 @@ before the ask:
 A bare "can we find 30 minutes" makes the recipient do all the work of
 deciding whether it is worth it.
 
+**Reply to THEIR item first, not the logistics.** His President proposed a
+time and mentioned she had ideas to share. The drafted reply opened "Friday PM
+works"; his opened *"Yes I'm interested to hear what you have."* The
+scheduling is the small half even when scheduling is the ostensible subject.
+
+**Widen availability rather than accepting the slot offered.** She proposed
+Friday afternoon; he replied *"I'm available anytime on Friday so just let me
+know what works for you."* He gives the other person more room than they
+asked for, consistently — the same instinct as offering to unstick a supplier.
+Never narrow someone's options when you don't have to.
+
+**Short internal replies carry no sign-off.** Two sentences to a colleague
+ended with neither a name nor a closing. Save the sign-off for letters that
+are doing work.
+
 **The whole posture is collaborative, not demanding.** His words: *"my style
 is not to demand but more to work together."* This is the thread running
 through every edit he has made — questions instead of instructions, offering
