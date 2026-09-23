@@ -346,9 +346,9 @@ being changed and that is a decision rather than an omission (leaving a
 `Maximum Run Minutes` that a job just breached), say so in a sentence under the
 table, not as a row.
 
-**⚠ WRITE THE COMMAND AS A LABELLED FIELD, NOT AS A ROW WITH COLUMNS BESIDE
-IT.** 2026-09-23: the command line was laid out as the panel shows it, with the
-`Error` column trailing on the same line —
+**⚠ A COMMAND IN THE `Change to` COLUMN WILL BE PASTED SOMEWHERE. SAY WHERE IT
+IS NOT FOR.** 2026-09-23: a command was handed over with the panel's own `Error`
+column trailing on the same line —
 
 ```
   Seq 1   RUNSQL SQL('CALL XTLPGMMAP.MAPREFS()') COMMIT(*NONE)     Error C
@@ -356,19 +356,22 @@ IT.** 2026-09-23: the command line was laid out as the panel shows it, with the
 
 — and Doug reasonably read a command-shaped line as a command, pasted it into
 ACS, and got **`SQL0104 Token RUNSQL was not valid`**. Two faults in one line: a
-panel column looked like part of the command, and a CL command in ACS needs the
-`CL:` prefix and a terminating `;`. Use one field per line instead:
+panel column looked like part of the command, and **a CL command in ACS needs
+the `CL:` prefix and a terminating `;`**, which the green-screen form must not
+have.
 
-```
-  Seq  . . . . . . . . 1
-  Command  . . . . . . RUNSQL SQL('CALL XTLPGMMAP.MAPREFS()') COMMIT(*NONE)
-  Error  . . . . . . . C
-```
+In the change table, a command belongs in one cell with nothing beside it, and
+the `Error` value is its own row:
 
-**And if the command is also worth running by hand, give the ACS form
-separately and say which is which** — `CL: <command>;`. The keying sheet and a
-runnable command are different artifacts; a block that could be either will be
-pasted.
+| Opt | Screen | Field on screen | Now | Change to |
+|---|---|---|---|---|
+| **3** | `RBT292M1` | Seq 1 command | *(new job)* | `RUNSQL SQL('CALL XTLPGMMAP.MAPREFS()') COMMIT(*NONE)` |
+| | | Seq 1 Error | — | `C` |
+
+**If the same command is also worth running by hand, give the ACS form
+separately and label it** — `CL: <command>;`. The keying value and a runnable
+statement are different artifacts that happen to share their middle; a block
+that could be either gets pasted.
 
 Screen-by-screen field maps are below. **Fill them from the box before you
 present anything** — read an existing job that works and copy its values, rather
