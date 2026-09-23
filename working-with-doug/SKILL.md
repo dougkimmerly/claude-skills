@@ -338,6 +338,34 @@ and the mast entirely rather than batch four things to one person. **Never
 manufacture urgency**: a line reading *"needs to be in the plan now rather
 than discovered in December"* was deleted outright.
 
+**Unrequested explanation is an invitation to a follow-up question. Answer
+what was asked, at the scope it was asked.** 2026-09-23. A drafted reply to
+his insurer prefaced the underwriting answers with *"the house has been
+essentially rebuilt since we bought it."* He cut it, and named exactly why:
+
+> *"more explanation that is not needed like the house has been
+> rebuilt [not relevant, built by who, were there permits........]"*
+
+It reads as helpful context. To an underwriter it opens a file — rebuilt by
+whom, under what permits, inspected when, is any of it unpermitted — on work
+going back twenty-five years, none of which was asked about and any answer to
+which can be priced or used to deny.
+
+The line was written while *fixing* a different disclosure error (quoting a
+1994 inspection), which is the warning: **tightening one disclosure is exactly
+when you introduce another.** With any counterparty who can act on what you
+tell them — underwriter, auditor, regulator, tax authority, opposing
+solicitor — every volunteered sentence is new surface. She asked what the
+plumbing is; the answer is what the plumbing is.
+
+**And he cuts what does not matter to HIM, not what is technically
+interesting.** The same edit removed two careful clarifications of the GRC
+wording — the B+C+D cap arithmetic and whether the $10,000 improvement
+threshold is cumulative. Both correct, neither something he cares about: he
+self-insures, so the fine mechanics of a limit he will not test are somebody
+else's hobby. **Before writing a point, ask whether it changes what HE would
+do.** If not, it is your interest, not his business.
+
 **When they have asked you for something, just give it. Attach nothing.**
 2026-09-23, his insurance broker asked eight underwriting questions so she
 could requote. The drafted reply answered them and added two clarifications on
