@@ -663,6 +663,24 @@ The same code covers both, and only `MESSAGE_TEXT` separates them:
 | *"Not authorized to object X in LIB"* | an authority problem | a grant |
 | *"STARTING_SEQUENCE OR ENDING_SEQUENCE NOT FOUND"* | your start position **aged out of the chain** | none — that evidence is gone at any price |
 
+### ⚠ AN SQL NAME OVER TEN CHARACTERS IS NOT THE NAME THE BOX REPORTS
+
+**Auditing a list of objects against the box produces false positives, and it
+did on 2026-09-23.** `CREATE INDEX XTLPGMMAP.MAPHDR_NAME` exists on the box as
+**`MAPHD00001`**: over ten characters, so the system generated a short name, and
+`OBJECT_STATISTICS` answers with the generated one while your DDL and your docs
+carry the SQL one.
+
+```sql
+SELECT INDEX_NAME, SYSTEM_INDEX_NAME FROM QSYS2.SYSINDEXES WHERE INDEX_SCHEMA = '<lib>';
+SELECT TABLE_NAME, SYSTEM_TABLE_NAME FROM QSYS2.SYSTABLES  WHERE TABLE_SCHEMA = '<lib>';
+```
+
+Resolve before chasing a discrepancy. Same family as the
+`TABLE_SCHEMA`-versus-`SYSTEM_TABLE_SCHEMA` trap above — **anything that
+round-trips a name between SQL and the object model needs the pairing, not the
+name you wrote.**
+
 ### ⚠ ASK FOR THE CONTAINERS, NOT THE CONTENTS — A SWEEP CANNOT SEE A CLOSED LIBRARY
 
 **The single cheapest correction on this estate, measured 2026-09-23.**
