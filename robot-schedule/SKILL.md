@@ -310,7 +310,7 @@ untouched field buried six real changes in forty lines of noise.
 | Column | Holds |
 |---|---|
 | 1 | **the option number** to key against the job on the main list — **blank if the same as the row above** |
-| 2 | **the screen name** — Robot's own words (`Control Options`), blank if same as above |
+| 2 | **the screen NUMBER** — the panel id, `RBT204`. Doug, 2026-09-23: *"not the name the screen number like rbt276"*. The number is what identifies the panel unambiguously; the name is what the panel calls itself and two panels can read alike. Blank if same as above |
 | 3 | **the field label** as it appears on that screen |
 | 4 | **what is there now** — read from `RBTROB`, not assumed |
 | 5 | **what to change it to** |
@@ -328,10 +328,10 @@ Worked example, 2026-09-23:
 
 | Opt | Screen | Field on screen | Now | Change to |
 |---|---|---|---|---|
-| **1** | Initial Job Setup | Notes | *(blank)* | `nightly QAUDJRN harvest, 26 types` |
-| **4** | Output Options | Output Queue | `SECOUTQ` | `*JOBD` |
+| **1** | `RBT201` | Notes | *(blank)* | `nightly QAUDJRN harvest, 26 types` |
+| **4** | `RBT203` | Output Queue | `SECOUTQ` | `*JOBD` |
 | | | Library | `SECAUDIT` | *(clears itself when you key `*JOBD`)* |
-| **5** | Control Options | Job description | `IL` | `SECJOBD` |
+| **5** | `RBT204` | Job description | `IL` | `SECJOBD` |
 | | | Library | `I93FILE` | `SECAUDIT` |
 | | | User Profile | `SECAUDIT` | `SECSCAN` |
 
