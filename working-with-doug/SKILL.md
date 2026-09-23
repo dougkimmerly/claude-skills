@@ -338,25 +338,41 @@ and the mast entirely rather than batch four things to one person. **Never
 manufacture urgency**: a line reading *"needs to be in the plan now rather
 than discovered in December"* was deleted outright.
 
-**Unrequested explanation is an invitation to a follow-up question. Answer
-what was asked, at the scope it was asked.** 2026-09-23. A drafted reply to
-his insurer prefaced the underwriting answers with *"the house has been
-essentially rebuilt since we bought it."* He cut it, and named exactly why:
+### Do not answer questions that were not asked
 
-> *"more explanation that is not needed like the house has been
-> rebuilt [not relevant, built by who, were there permits........]"*
+**His own rule, in his words, and it cost him a house policy to learn:**
 
-It reads as helpful context. To an underwriter it opens a file — rebuilt by
-whom, under what permits, inspected when, is any of it unpermitted — on work
-going back twenty-five years, none of which was asked about and any answer to
-which can be priced or used to deny.
+> *"in general ive learned not to answer questions that are not asked. when we
+> first bought the house i was eager to help and sent that inspection report to
+> the insurance company. they came back immediately and told me they could not
+> insure the house. they hadnt asked for the report they had asked some
+> questions just like this."*
 
-The line was written while *fixing* a different disclosure error (quoting a
-1994 inspection), which is the warning: **tightening one disclosure is exactly
-when you introduce another.** With any counterparty who can act on what you
-tell them — underwriter, auditor, regulator, tax authority, opposing
-solicitor — every volunteered sentence is new surface. She asked what the
-plumbing is; the answer is what the plumbing is.
+He was not careless. **He was being helpful** — which is exactly an assistant's
+failure mode, and the reason this is the single most important line in this
+file when drafting anything outbound. The report answered questions nobody
+asked, and the answers were disqualifying.
+
+Thirty-two years later the same document was nearly sent to the same kind of
+counterparty, in a draft written to be thorough.
+
+So, on any letter to anyone who can act on what you tell them — underwriter,
+auditor, regulator, tax authority, opposing solicitor, a vendor pricing work:
+
+- **Answer the question asked, at the scope it was asked.** She asked what the
+  plumbing is. The answer is what the plumbing is.
+- **Attach nothing.** No supporting document that was not requested. No
+  context, no history, no reasoning.
+- **Every volunteered sentence is new surface**, and you cannot predict which
+  one gets pulled. Even a favourable-sounding fact opens a file: *"the house
+  has been essentially rebuilt since we bought it"* was cut with his reason
+  attached — *"not relevant, built by who, were there permits........"* —
+  twenty-five years of work nobody asked about, each answer priceable.
+- **Tightening one disclosure is when you introduce another.** That rebuilt
+  line was written while *removing* the 1994 report. Attention was on the
+  deletion, not on the replacement.
+- **Re-read every outbound draft asking only: what new question does this
+  invite?** Not "is it true", not "is it helpful". What does it open.
 
 **And he cuts what does not matter to HIM, not what is technically
 interesting.** The same edit removed two careful clarifications of the GRC
