@@ -136,6 +136,19 @@ else and say plainly what you left and why.
 printf '%s' 'the command' | pbcopy      # macOS
 ```
 
+**Revising a draft in place is invisible to an open compose window — say when
+you have done it.** 2026-09-23: a drafted insurer reply was corrected in place
+(same draft id, no duplicate, which is right). He reported it blank. The draft
+was complete server-side — 1,914 characters, read back in full — but his Gmail
+compose window had been open across the edit and was showing its own stale
+copy. **Worse, had he typed into that window, Gmail would have saved the blank
+over the good version.**
+
+So: revise in place, but **tell him in the same breath that you revised rather
+than replaced**, and that an open compose window must be closed *without
+typing* and reopened. When you have no idea whether he is looking at it, say
+what you changed so a stale window is recognisable rather than alarming.
+
 ### Secrets travel by clipboard, both ways
 
 **His instruction, 2026-09-22.** The clipboard is the agreed channel for a
