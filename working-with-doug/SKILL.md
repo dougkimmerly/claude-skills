@@ -323,6 +323,24 @@ So do not drop it — **date it**. Anything deferred this way becomes a dated
 item timed to their horizon, with the dependency spelled out, so it lands when
 it can be acted on rather than being remembered by luck.
 
+**And he picks that date from the recipient's own calendar, not from yours.**
+Told to defer the boatyard asks to December, he then moved them to the Tuesday
+of US Thanksgiving week, reasoning about the yard's year:
+
+> *"its a week where things will be both speeding up as more people prepare to
+> go to their boats at the end of hurricane season, and be slowing down as the
+> ones that want to be in the water before thanksgiving probably are and the
+> ones that want to wait for after are not there yet. As well they will be
+> getting tight on schedule and will want to get things organized as their time
+> is filling up. and it still gives them lots of time to get it all done before
+> january."*
+
+Four conditions compounding: their demand curve, their slack, their own
+pressure to organise, and enough runway to deliver. **When you propose a
+follow-up date, say which of those you are reasoning from** — and write the
+rule down next to the counterparty, not just the date on the item, because the
+rule recurs every year and the date does not.
+
 **Do not justify his decisions to third parties.** Drafting a deferral, the
 sentence explaining *why* the sequence made sense — "so the two work together
 rather than lighting what's there now" — was cut. He states the decision and
