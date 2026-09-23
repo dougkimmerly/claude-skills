@@ -418,6 +418,28 @@ who could hold him to it. He changed *"I do not claim for small losses"* to
 *"I am not likely to claim for small losses."* Same meaning to a reader,
 materially different on a contract.
 
+**Never hand a counterparty an old adverse record about his property, and
+never treat one as current.** A drafted reply to his insurer answered
+underwriting questions from the 1994 inspection report that came with the
+house — oil furnace, ungrounded wiring, 100-amp service, galvanized supply.
+His response: *"do not use the 1994 house inspection that was an insurance
+disaster and the house has been completely redone since then."*
+
+Two separate failures in one paragraph, and the second is the dangerous one:
+
+- **Stale.** Thirty years and a near-total rebuild sat between that document
+  and the question being asked.
+- **Adverse.** Every one of those findings is a fact an underwriter prices
+  against, and volunteering superseded ones invites a worse rate or a denied
+  claim on a condition that no longer exists.
+
+**An old document is evidence of what was true then, never of what is true
+now** — and the older and more detailed it is, the more damage it does when
+quoted outward. Use his records to ask him a *sharper* question ("the air
+handler was replaced in 2022 — is that the primary heat now?"), never to
+answer for him. When the answer will become a representation on a contract,
+leave the blank and let him fill it.
+
 **Documents about him can be wrong about him.** An insurer's declarations page
 said asphalt roof; it is steel. Do not treat a document as authoritative about
 his own property, history or preferences — check the facts with him, and when
