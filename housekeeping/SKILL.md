@@ -89,6 +89,37 @@ Things worth checking explicitly, because they are the ones that drift:
   type?
 - **The README** — the most-failed one, and it gets its own step below.
 
+## 1b. The governance check (XTL repos only)
+
+**Only for XTL's `proj-` and `kb-` repos.** The governing set lives in
+`~/Programming/proj-ai-adoption/docs/adr/` — `0004` (the set), `0005` (the ten
+invariants, each with its check), `0006` (the six classes and their
+obligations), `0007` (this check). Read them; do not work from memory.
+
+```bash
+cd ~/Programming/proj-ai-adoption && git pull -q && ls docs/adr/
+```
+
+Three things, in order:
+
+1. **The declaration** — a `## Governance` block at the top of this repo's
+   `CLAUDE.md` naming its classes, its data tier and its live waivers. Missing?
+   Propose one from what the repo actually does, and say you did.
+2. **The ten invariants** — walk each one's check against the repo's current
+   state. They are written as checks so this takes minutes.
+3. **The declared classes' obligations** — only the classes this repo declared.
+
+Then **one line in `docs/log.md`**, whatever the outcome:
+
+```
+2026-09-23 · governance check · classes R·S·A · 10/10 invariants · 1 waiver (W-1, expires 2026-10-31)
+```
+
+A failed check gets exactly one of three outcomes, never none: **fixed now**
+(the default), **a waiver** (an ADR in this repo naming what, why, who owns it
+and the date it expires), or **a question** in `QUESTIONS.md` with the waiver
+clock started anyway. An expired waiver is a non-compliance, not a renewal.
+
 ## 2. The README (`proj-` repos: this is the big one)
 
 **ADR-0007 in `proj-01-standards`: the README is a status page, not a log.**
