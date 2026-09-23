@@ -1,6 +1,6 @@
 ---
 name: housekeeping
-description: "Tidy up a repo at the end of a working session — audit it against the governing standards repo (re-read, never remembered), verify the README is a current status page (proj- repos, ADR-0007), clear the HANDOFF inbox, land the knowledge into skills/memory/ADRs, and leave the tree clean. Use when Doug says housekeeping, tidy up, wrap up, clean up, or before handing a repo over."
+description: "Tidy up a repo at the end of a working session — audit it against the governing standards repo (re-read, never remembered), verify the README is a current status page (proj- repos, ADR-0007), clear the HANDOFF inbox, re-test every open question in QUESTIONS.md for whether it is still worth asking and whether you can now answer it yourself, land the knowledge into skills/memory/ADRs, and leave the tree clean. Use when Doug says housekeeping, tidy up, wrap up, clean up, or before handing a repo over."
 triggers:
   - housekeeping
   - tidy up
@@ -153,7 +153,63 @@ a batchq job to that repo's queue, or an entry appended to its `HANDOFF.md`.
 Check queues with `sbmjob -wrk`. An undelivered cross-domain finding is an
 unfinished one.
 
-## 4. Land the knowledge
+## 4. Work the open questions — are they still worth asking, and can you answer them now?
+
+**Only if the repo has a `QUESTIONS.md`** (XTL `proj-` repos do — ADR-0009).
+Read every open question and put each through two tests, in this order.
+
+**Test 1 — is it still the right question?** Sessions change the world. What it
+blocks may have been resolved, superseded or descoped; the thing it asks about
+may be dead; a decision may have made it moot. A register that accumulates
+questions nobody re-reads is the same failure as a stale status page.
+
+**Test 2 — can you answer it yourself, now?** This is the one that pays, and it
+has to be asked fresh each time, because **two things change underneath a
+question after it is written**:
+
+- **What you can reach.** Authority gets granted, a credential is added, a
+  library becomes readable. A question parked because "we lack the authority"
+  is not re-tested when the authority arrives — nothing prompts it.
+- **What you know how to ask.** The reason a question was left for a person is
+  often an *assumption about your own limits*, written in a hurry, never
+  revisited.
+
+**The worked case this rule came from** (`proj-imaging`, 2026-09-23): a question
+about which machines were connecting had sat for four days behind the sentence
+*"IT can map an address to a machine in seconds; we cannot."* One view —
+`QSYS2.NETSTAT_JOB_INFO`, which carries the remote address and the authenticated
+profile **on the same row** — answered it outright, and named the single largest
+consumer of the system as the application nobody had connected to the problem.
+Nothing had blocked it but a sentence. A second row in the same question was
+answerable by plain measurement: the feed had delivered nothing in five months,
+which is the same test the project already used to retire two other feeds.
+
+**So, for each question, do the work before deciding it needs a person.** Run
+the query. Most "waiting on a person" rows have a measurable half and a
+business half, and only the business half genuinely waits.
+
+**Three disciplines when you do answer one:**
+
+1. **An absence is not an answer until a control says the query can see a
+   presence.** This matters most here, because the questions that survive
+   longest are the ones about things that are missing. Ask the same question
+   about something you *know* exists; if that also comes back empty, you have
+   measured your own authority, not the world. On the same day as the case
+   above, a profile lookup returned zero rows and nearly became "the account has
+   no description" — it was an authority wall.
+2. **Split what you answered from what is left.** Update the row to the
+   genuinely remaining question rather than annotating it with findings; the
+   register's one valuable property is being the *open* set.
+3. **Follow the register's own rules on closing.** Under ADR-0009 that means:
+   a fully answered row is **deleted**, its answer moves to the spec, the ADR or
+   the log, and **the commit message names where it landed**. A question deleted
+   without its answer going anywhere is the failure the register exists to stop.
+
+**And if it still needs a person, say what you established anyway.** A narrowed
+question gets answered faster: "which of these six profiles" is a better ask
+than "what is this unidentified reader".
+
+## 5. Land the knowledge
 
 Ask the three questions, and act on the answers rather than noting them:
 
@@ -169,7 +225,7 @@ Rule of thumb from the global conventions: **every non-trivial fix updates
 exactly one artifact.** If today produced fixes and no artifact changed,
 something was not captured.
 
-## 5. Check the docs against reality
+## 6. Check the docs against reality
 
 Not a full audit — spot-check the claims this session touched:
 
@@ -188,7 +244,7 @@ Not a full audit — spot-check the claims this session touched:
 - Anything a session asserted without measuring. Say so explicitly in the doc
   rather than leaving it indistinguishable from a measured fact.
 
-## 6. Leave the tree clean
+## 7. Leave the tree clean
 
 - [ ] `git status` clean. Everything committed with a message explaining **why**,
       not just what.
@@ -200,7 +256,7 @@ Not a full audit — spot-check the claims this session touched:
       done, it is revoked and removed from the secret store.
 - [ ] Push if the repo has a remote.
 
-## 7. Say what is still open
+## 8. Say what is still open
 
 End with the short list of what the next session or Doug needs to pick up,
 and be specific — a named command or file beats "finish the monitoring". If
@@ -210,6 +266,10 @@ something is blocked, say on what.
 
 ## Notes
 
+- **A question left for a person is a claim about your own limits, and it
+  decays like any other claim.** Step 4 exists because that claim is never
+  re-tested on its own — no hook fires when authority is granted or when you
+  learn a better query. Housekeeping is the only place it gets re-asked.
 - **Do not turn housekeeping into a rewrite.** The job is to make the repo
   true and findable, not to improve it. If a doc needs restructuring, note it
   as open work rather than doing it here.
