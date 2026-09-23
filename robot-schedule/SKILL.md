@@ -302,11 +302,44 @@ operates the estate, not a config change.
 SQL column names.** Hand him anything else and he has to translate it while
 typing, which is the work he delegated.
 
-**The standard is: reproduce the screen.** One block per panel, in panel order,
-fields in the order they appear on that panel, using **the screen's own labels
-and spelling** — not the SQL column names, not your own wording. A value he
-leaves alone is shown as `(leave)`, never omitted, so he never has to wonder
-whether you forgot it or meant the default.
+**THE STANDARD IS A CHANGE TABLE, FIVE COLUMNS, CHANGES ONLY.** Doug,
+2026-09-23, replacing the screen-reproduction format that used to be here:
+*"that format is much easier"*. Reproducing whole panels with `(leave)` on every
+untouched field buried six real changes in forty lines of noise.
+
+| Column | Holds |
+|---|---|
+| 1 | **the option number** to key against the job on the main list — **blank if the same as the row above** |
+| 2 | **the screen name** — Robot's own words (`Control Options`), blank if same as above |
+| 3 | **the field label** as it appears on that screen |
+| 4 | **what is there now** — read from `RBTROB`, not assumed |
+| 5 | **what to change it to** |
+
+**One row per CHANGE. Nothing else.** No `(leave)` rows, no untouched fields.
+Order the rows by option number, then by the order the fields appear on that
+screen.
+
+Column 4 is not decoration — it is how he confirms he is on the right field
+before overtyping, and how you both notice if the box does not match what you
+were told. **Read it from the box immediately before presenting**, never from a
+previous session's note or a design document.
+
+Worked example, 2026-09-23:
+
+| Opt | Screen | Field on screen | Now | Change to |
+|---|---|---|---|---|
+| **1** | Initial Job Setup | Notes | *(blank)* | `nightly QAUDJRN harvest, 26 types` |
+| **4** | Output Options | Output Queue | `SECOUTQ` | `*JOBD` |
+| | | Library | `SECAUDIT` | *(clears itself when you key `*JOBD`)* |
+| **5** | Control Options | Job description | `IL` | `SECJOBD` |
+| | | Library | `I93FILE` | `SECAUDIT` |
+| | | User Profile | `SECAUDIT` | `SECSCAN` |
+
+Anything the table does not mention stays as it is — say that once, below the
+table, rather than adding rows to prove it. Where a value is deliberately NOT
+being changed and that is a decision rather than an omission (leaving a
+`Maximum Run Minutes` that a job just breached), say so in a sentence under the
+table, not as a row.
 
 **⚠ WRITE THE COMMAND AS A LABELLED FIELD, NOT AS A ROW WITH COLUMNS BESIDE
 IT.** 2026-09-23: the command line was laid out as the panel shows it, with the
