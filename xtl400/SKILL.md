@@ -663,6 +663,37 @@ The same code covers both, and only `MESSAGE_TEXT` separates them:
 | *"Not authorized to object X in LIB"* | an authority problem | a grant |
 | *"STARTING_SEQUENCE OR ENDING_SEQUENCE NOT FOUND"* | your start position **aged out of the chain** | none — that evidence is gone at any price |
 
+### ⚠ ASK FOR THE CONTAINERS, NOT THE CONTENTS — A SWEEP CANNOT SEE A CLOSED LIBRARY
+
+**The single cheapest correction on this estate, measured 2026-09-23.**
+
+`OBJECT_STATISTICS('*ALLUSR','*PGM')` returns nothing at all for a library whose
+`*LIB` object your profile cannot read. Not an error, not an empty library —
+**the library is absent from the answer**, so every count, percentage and
+register built on that sweep silently describes a smaller estate than exists.
+
+```sql
+-- what you asked (324 s) — and it cannot see the door that is shut
+SELECT OBJLIB, COUNT(*) FROM TABLE(QSYS2.OBJECT_STATISTICS('*ALLUSR','*PGM')) GROUP BY OBJLIB;
+
+-- what to ask FIRST (0.5 s) — 522 rows, and the closed ones are in it
+SELECT OBJNAME, CASE WHEN OBJOWNER = '' OR OBJOWNER IS NULL THEN 'CLOSED' ELSE 'OPEN' END
+  FROM TABLE(QSYS2.OBJECT_STATISTICS('QSYS','*LIB','*ALL'));
+```
+
+⚠ **The third argument is required** — `('QSYS','*LIB')` returns one row.
+
+**What it found:** `SEIOBJ`, 161 programs all `*PUBLIC *CHANGE`, missing from a
+code map for a week because the *library* was closed while every object in it
+was open. One `GRTOBJAUT` on the `*LIB` recovered **4,360 declared edges, 1.3%
+of the graph** — against a "blind spot" that had been carefully measured at
+0.3% by comparing two profiles *inside the filter*. **93 of 522 libraries are
+closed to that profile**, including six libraries of a production application.
+
+**The rule: a measurement taken through a filter cannot measure the filter.**
+Before quoting any estate-wide count, ask what the enumeration itself could not
+see, and ask for the containers to find out.
+
 **⚠ AND WHEN THE TEXT SAYS *NOT FOUND*, THAT IS NOT PROOF EITHER — RUN IT AS A
 SECOND IDENTITY.** 2026-09-23: `DSPPGMREF` over eight libraries failed `-443`,
 and by hand the box said `CPF3033 Object *ALL in library I93FILE of type PGM
