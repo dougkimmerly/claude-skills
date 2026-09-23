@@ -394,6 +394,26 @@ Opt 5   RBT204  Control Options
   F10=Next Option
 ```
 
+### Three conventions that are Doug's, not Robot's — put them in every job
+
+His reasons, 2026-09-22, each answering "how does a person find this later":
+
+- **A real description, and `Desc` cannot carry it.** `ROBOT_JOB_DESC` is
+  **25 characters** — full at "pgm map derived harvests". The estate's actual
+  documentation habit is **`Notes` (60 chars), filled on 328 of 751 jobs**, so
+  fill it always. For anything longer use **option `21`, Text for Job Name**
+  (`RBTTXT`, unlimited 60-char lines) — **used by only 6 jobs**, and Doug had
+  forgotten it existed. *"we should have a good description so that new people
+  know what this is for."*
+- **Share the name prefix.** *"i like to keep the names starting the same
+  because the defualt search is alpha."* `MAPCOLL`, `MAPDERIVE`, `MAPGITCOL`
+  sort together and a person scanning the list finds the set.
+- **Always assign an application.** *"so you can pull it all together if the
+  names dont do it for you."* `RBTROB.APP_OID` → `RBTAP_APPLICATIONS`. The
+  estate uses them properly — XTL 78, EDI 66, SAVOIE 36, TECSYSWMS 35 — but
+  **54 jobs have none**, and a job with no application is invisible to the
+  grouping that exists precisely to find it.
+
 **After he keys it, read it back from `RBTROB` and diff it against what you
 asked for.** Not to check his typing — to catch the fields a later panel
 defaults that neither of you named. That is how `OS_JOB_USER = *RBTDFT` was
