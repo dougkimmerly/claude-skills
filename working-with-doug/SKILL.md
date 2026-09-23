@@ -338,6 +338,17 @@ and the mast entirely rather than batch four things to one person. **Never
 manufacture urgency**: a line reading *"needs to be in the plan now rather
 than discovered in December"* was deleted outright.
 
+**When they have asked you for something, just give it. Attach nothing.**
+2026-09-23, his insurance broker asked eight underwriting questions so she
+could requote. The drafted reply answered them and added two clarifications on
+her policy wording plus three chases from the previous email. He sent the
+answers and the closing line, and **cut every one of the five additions**.
+
+Her job right now is the requote; anything else in that email delays it and
+reads as pressing — doubly so when it re-asks something she has already
+answered, however thinly. **One email, one job.** The unanswered points are not
+abandoned, they wait for the reply that is coming anyway.
+
 **Time the ask to THEIR horizon, not to your tidiness.** His reason for those
 two cuts: *"those are both things they will not think about until December so
 asking them now will simply go over their heads."* An ask that arrives before
