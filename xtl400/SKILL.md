@@ -663,6 +663,23 @@ The same code covers both, and only `MESSAGE_TEXT` separates them:
 | *"Not authorized to object X in LIB"* | an authority problem | a grant |
 | *"STARTING_SEQUENCE OR ENDING_SEQUENCE NOT FOUND"* | your start position **aged out of the chain** | none — that evidence is gone at any price |
 
+**⚠ AND WHEN THE TEXT SAYS *NOT FOUND*, THAT IS NOT PROOF EITHER — RUN IT AS A
+SECOND IDENTITY.** 2026-09-23: `DSPPGMREF` over eight libraries failed `-443`,
+and by hand the box said `CPF3033 Object *ALL in library I93FILE of type PGM
+not found` while `OBJECT_STATISTICS` reported five programs there minutes
+earlier. It was **authority**, and all eight scanned cleanly under a more
+authorised profile. One view filters silently, the other calls the filtered
+result absence, and **neither can tell you which** — so two instruments
+disagreeing about the same object is a signal to change *who is asking*, not to
+find a third instrument.
+
+The same comparison quantified the blind spot, and this is the part to carry:
+**the gap is object-level, not library-level.** The eight libraries were 166 of
+a 980-edge difference; ~814 edges were hidden *inside* libraries the lesser
+profile scans successfully, worst in `ROBOTLIBV9`, `RBTRCLLIB` and `ROBOTLIB`.
+**Spot-checking one library under two profiles and finding agreement proves
+nothing estate-wide** — that exact check had passed the day before.
+
 **Never read `-443` as an authority failure without reading the text.** Measured:
 a collector reported `UNREACHABLE` on journal `DSN` **on the very day a `DSN`
 authority grant had been revoked** — the predicted failure, in the predicted
