@@ -300,6 +300,37 @@ what he wanted, what he'd prefer, or what leverage he held. Draft the facts
 and the asks in full; then strip anything that states his position. Who is
 receiving it decides how much reasoning survives.
 
+**Ask; do not instruct or chase.** Sent a four-item letter to his boatyard
+demanding dates, he cut it to two items and turned every demand into a
+question: *"Have you received it yet? Is the chain on hand? Do you have the
+job scheduled yet? Are there any questions you need answered?"* — that last
+one being the tell. He assumes a delay may mean **they** are stuck, and offers
+to unstick them, rather than pressing. "I want this scheduled" became "do you
+have the job scheduled yet?"
+
+**One or two asks per email, not everything you have.** He cut the bottom job
+and the mast entirely rather than batch four things to one person. **Never
+manufacture urgency**: a line reading *"needs to be in the plan now rather
+than discovered in December"* was deleted outright.
+
+**With people, the ask is the smallest part of the letter.** Asked to draft
+"schedule a catch-up call" he replaced three transactional lines with a
+letter that leads with his read of a colleague's progress, shares news, offers
+himself — *"I'm always available if you need me for anything"* — and only then
+asks, for **her perspective and her direction**, not for a slot. A scheduling
+email is never only scheduling. He gives before he asks.
+
+**Never ask, or imply, whether someone is doing their job.** A drafted line
+asking his IT director *"is anyone watching disk across the Domino servers and
+the 400?"* drew a flat correction: *"we dont need to bother him with the notes
+servers or ask about if he is doing his job."* Two errors in one sentence —
+it widened into an estate that was not his, and it read as an audit. Ask for
+the specific thing you need; do not diagnose someone's department for them.
+
+**He knows things the record does not.** He added *"I did demonstrate this
+issue to Silvain"* to a draft describing the same fault as unreported. Before
+asserting history to a counterparty, leave room for him to correct it — or ask.
+
 **Never draft an absolute claim about his future conduct** to a counterparty
 who could hold him to it. He changed *"I do not claim for small losses"* to
 *"I am not likely to claim for small losses."* Same meaning to a reader,
