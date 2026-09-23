@@ -439,16 +439,11 @@ asked for.** Not to check his typing — to catch the fields a later panel
 defaults that neither of you named. That is how `OS_JOB_USER = *RBTDFT` was
 found on `MAPDERIVE` (2026-09-22), which would have failed the job completely.
 
-**⚠ AND READ IT BACK AGAIN BEFORE YOU BUILD ANYTHING ON THE SLOT — A DIFFERENT
-START TIME INVALIDATES EVERY NUMBER DERIVED FROM IT, NOT JUST THE RECORD.**
-2026-09-23: `MAPDERIVE`'s spec argued 04:15 and the job was keyed at **04:30**;
-the two commands were in the other order as well. The stale sentence was
-harmless — the stale *number* was not. The job's member budget had been sized
-from the clear air a 04:15 start gives (~25 minutes), and at 04:30 there are
-eleven. It fit by seconds on a fast night and would have run into a five-job
-wave on a slow one, reporting success either way. **A slot is an input to a
-budget, an interval and a timeout. When the read-back shows a different time,
-re-derive them all before touching anything else.**
+**⚠ AND READ IT BACK AGAIN BEFORE YOU QUOTE THE SLOT — A SPEC IS NOT THE
+SCHEDULE.** 2026-09-23: `MAPDERIVE`'s spec argued 04:15 and the job was keyed at
+**04:30**, with its two commands in the other order as well. `RBTROB` and
+`RBTCMD` are the record; a design document that argued for a time is not
+evidence that anybody keyed it.
 
 ### Option `1` — `RBT201` *Initial Job Setup for Job Number NNNNNNNNNNNN*
 
@@ -854,6 +849,32 @@ the morning surge.
 take exclusive locks and one runs at 03:30; a five-minute job at 03:00 clears
 it, a twenty-minute one would not. Journal receivers also roll about 01:05, so
 anything reading journals wants to be after that.
+
+### ⚠ THE SPACING IS LOAD-EVENING, NOT OCCUPANCY — AND NEVER SIZE A NUMBER FROM IT
+
+**Doug, 2026-09-23**, correcting exactly this mistake:
+
+> *"the system can handle many jobs at once the spreading out of robot jobs is
+> just to even the load instead of running everything at the same time."*
+
+**A "wave" of five jobs starting at 04:45 is not a wall.** A job finishing as
+they start is normal operation. Spread work because evening the load is good
+practice — and then stop, because the next step is where the damage is:
+
+**Do not derive a budget, timeout, batch size or deadline from the minutes
+between your start time and the next job's.** `proj-as400-codemap` sized a
+6,000-member harvest budget that way and it read as measured — arithmetic over a
+real number, just not a number about capacity. **A scheduling convention is the
+easiest thing on this estate to mistake for its limit.**
+
+Size such a number from what it actually trades: **how long one unattended job
+runs, against what it yields** (members drained, rows collected). Both are in
+your own run log. If you believe there IS a capacity ceiling, measure it —
+nobody here has.
+
+**Contention is the exception and it is a different fact.** An exclusive lock
+(`RGZPFM` above) is a claim on an object, not load, and avoiding it is evidence.
+Avoiding a minute because five jobs start in it is not.
 
 ## ⚠ Robot reporting success is not evidence the work happened
 
