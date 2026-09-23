@@ -153,10 +153,11 @@ a batchq job to that repo's queue, or an entry appended to its `HANDOFF.md`.
 Check queues with `sbmjob -wrk`. An undelivered cross-domain finding is an
 unfinished one.
 
-## 4. Work the open questions — are they still worth asking, and can you answer them now?
+## 4. Work the open questions — still worth asking, answerable by you, and askable in plain language
 
 **Only if the repo has a `QUESTIONS.md`** (XTL `proj-` repos do — ADR-0009).
-Read every open question and put each through two tests, in this order.
+Read every open question and put each through three tests, in this order.
+The third only applies to the ones that survive the first two.
 
 **Test 1 — is it still the right question?** Sessions change the world. What it
 blocks may have been resolved, superseded or descoped; the thing it asks about
