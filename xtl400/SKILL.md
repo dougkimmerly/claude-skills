@@ -653,6 +653,88 @@ Two conclusions, and the second is the one that sizes a job:
   walk. So a harvester should keep its window as short as it can get away with,
   which is an argument for running often rather than catching up in bulk.
 
+### `JOURNAL_ENTRY_TYPES` TAKES A COMMA-SEPARATED LIST, and it pushes down (2026-09-22)
+
+Not documented anywhere obvious and it changes how you census a journal.
+Measured on `QSYS/QAUDJRN`, same hour, same box:
+
+| Read | Rows | Time |
+|---|---|---|
+| no type filter | ~915,000 | **80 s** |
+| `JOURNAL_ENTRY_TYPES => 'JS,PS,GS,IP,OM,LD,ZR,PO,SG,SO,PG,NR,PR'` | 302,000 | **21 s** |
+| `=> 'ZC'` alone | 570,000 | 32 s |
+
+So **one filtered read covering thirteen types beats one unfiltered read**, and
+you do not have to choose between "one read per type" and "read everything".
+
+**Census the journal before believing any list of entry types.** XTL's audit
+journal produced **26 distinct types in a single hour** on 2026-09-22 — a
+`proj-security` finding written four days earlier said 25 and had been quoted
+into eight research pages. The list is cheap to re-derive and goes stale:
+
+```sql
+SELECT J.JOURNAL_ENTRY_TYPE, COUNT(*)
+  FROM TABLE(QSYS2.DISPLAY_JOURNAL(
+         JOURNAL_LIBRARY => 'QSYS', JOURNAL_NAME => 'QAUDJRN',
+         STARTING_RECEIVER_NAME => '*CURCHAIN',
+         STARTING_TIMESTAMP => CURRENT TIMESTAMP - 1 HOUR)) J
+ GROUP BY J.JOURNAL_ENTRY_TYPE ORDER BY 2 DESC;
+```
+
+**⚠ AN HOUR IS OFTEN TOO SHORT A WINDOW TO SEE A TYPE'S SHAPE.** `PG` measured
+2 entries and 1 pattern in the census hour; a two-day backfill gave 58 patterns
+and 1,980 events. Volumes burst. **If a measurement is going to decide a design,
+take it over a window long enough to contain a business cycle**, or re-take it
+after the design runs — see the `LD` case below.
+
+**Only a profile with authority on the journal can read it.** `CCSEC` gets
+`SQL0443 Not authorized to object QAUDJRN in QSYS` — an authority failure, and
+note this is the *other* meaning of `SQL0443` documented above, so read
+`MESSAGE_TEXT` before concluding the data aged out.
+
+### Aggregating a journal on the way in: pick the key, then MEASURE IT AGAIN
+
+When a journal type is too voluminous to store per event, the move is to insert
+one row per (type, day, pattern) rather than per entry. **The grouping key is
+per entry type and choosing it wrongly destroys the finding without failing** —
+there is no error, just a smaller, plausible table.
+
+Worked on XTL's `LD` (link/unlink/search directory), all four measured:
+
+| Key | Result |
+|---|---|
+| user+program+**object type** | 42 patterns/hour — an IFS traversal is invisible |
+| user+program+**full path** | 3,419/hour — a copy wearing a summary's name |
+| user+program+**directory** | **14,824 pattern-days from a 2-day backfill** |
+| user+program+**first two path components** | **588.** Chosen |
+
+**The third row is the lesson.** It was chosen from the hourly census, deployed,
+and only then measured against real output — at ~7,400 rows a day for one entry
+type it was not a summary at all. **Measure the key after it runs, not only
+before.** The columns to consider are wider than they look: `DISPLAY_JOURNAL`
+carries `REMOTE_ADDRESS`, `PATH_NAME` and `CURRENT_USER` as well as the obvious
+object columns, and on `PW` the finding lives *only* in the remote address.
+
+**Keep a dimension that adds no cardinality today if it is the payload.** Equal
+counts mean every (user, program) currently maps to one swapped-to profile from
+one address — which is exactly the state whose *change* is the event worth
+seeing. Fold it away and the change lands silently inside an existing row.
+
+**⚠ A SECOND WRITER TO A SHARED TABLE BREAKS WATERMARKS NOBODY THOUGHT WERE
+SHARED.** Two roll-up jobs read `MAX(LAST_HARVEST_TS)` across the whole pattern
+table — correct while one member was the only writer. The moment a second kind
+of member wrote a newer timestamp, the folding job would skip raw rows it had
+never folded and the prune job would **delete them as consumed**. Measured on
+the box after deploying: the global form saw **0** unconsumed rows, the
+per-entry-type form **143,052**. *A watermark is only sound while you know who
+writes it* — adding a writer is the moment to re-read every reader.
+
+**And if you dedupe on `SEQUENCE_NUMBER >` a high-water, guard the reset.** XTL's
+audit journal burns ~32.6M sequence numbers a day against a ~10-billion ceiling
+— a reset is months, not years, away — and on reset a sequence high-water
+matches nothing and returns a clean, fast, confident zero. Check what you hold
+against `MAX(LAST_SEQUENCE_NUMBER)` from `JOURNAL_RECEIVER_INFO` and fail loudly.
+
 ### Harvesting a journal forward — the pattern, not a library
 
 Both `proj-security` and `proj-as400-codemap` harvest journals into tables.
@@ -2044,9 +2126,23 @@ holds something else entirely — a session read it and reported a scheduled job
 was named `455562/QUSER/QZDASOINIT`, then recommended renaming it. Its real
 name was fine.
 
-## `sql400` splits on `;` blindly — including inside comments
+## `sql400` splits on `;` blindly — inside comments AND inside string literals
 
 A `.sql` file with a semicolon in a `--` comment is cut in half at that point,
 and the halves fail with errors pointing at the following token. Four analysis
 queries in `proj-as400-codemap` had this and produced confident-looking partial
 output. Keep semicolons out of comments in anything meant to be piped in whole.
+
+**It breaks quoted strings too, and that half is not obvious.** A literal like
+`'Rising is healthy; a fall is a reset'` is cut mid-string and reports
+`SQL0010 String constant not delimited` — an error that points at the string
+rather than at the tool. `RUNSQLSTM` parses properly and is unaffected, so this
+breaks **only the by-hand test**, which is the test you need before scheduling
+anything. Keep `;` out of comments *and* literals in any member you will also
+run through `sql400`.
+
+**`RAISE_ERROR` inside a `SELECT` does work through `sql400`** (unlike through
+the `RUNSQL` CL command, which rejects `SELECT`/`VALUES` outright) — useful for
+testing both branches of a guard before compiling it into a job:
+`SELECT CASE WHEN <cond> THEN RAISE_ERROR('85002','msg') ELSE 'OK' END FROM SYSIBM.SYSDUMMY1`.
+Test the failing branch, not just the passing one.
