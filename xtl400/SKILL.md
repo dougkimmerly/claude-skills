@@ -138,6 +138,15 @@ drift. Run `tools/x400/install.sh` on a new machine, `build.sh` after changing a
 `.java`. Before that date they lived only in `~/.local` under no version control
 and `Src400.java` was lost outright.
 
+**⚠ `sql400` splits the text you give it on `;` — including semicolons inside
+`--` comments and inside quoted strings** (observed 2026-09-23; handed to
+kb-xtl400, ruling pending). The symptom is `SQL0104 Token <AN ENGLISH WORD>
+was not valid`, naming a word out of your prose, which reads like a syntax
+error in the SQL and is not. **Strip comments before sending a heavily
+commented statement** (`sed 's/--.*$//'`) and keep `;` out of string literals.
+`RUNSQLSTM` on the box handles both correctly, so the same text works deployed
+and fails from the tool — do not "fix" the query.
+
 **Credentials come from SOPS, never a plaintext file, and the profile is a
 per-project choice.** `x400 <profile> <command>` decrypts one profile out of
 `homelab-secrets` `secrets/home/xtl400.sops.yaml` and exports
@@ -405,6 +414,7 @@ release":
 | `SYSFILES` absent (7.4+) | `OBJECT_STATISTICS`, `DSPFD` |
 | `SOURCE_STREAM_FILE_PATH` absent | n/a on this estate |
 | `VARCHAR(<timestamp>)` → `SQL0171 argument not valid` | `CHAR(<timestamp>)`, then `SUBSTR` if you want it short |
+| **A `WITH` inside a nested table expression** → `SQL0199 keyword AS not expected`, listing join keywords as the valid tokens. So `MERGE … USING (WITH … SELECT …)` and `SELECT * FROM (WITH …) q` both fail, and the message points at the CTE's `AS` rather than at the nesting (tested 2026-09-23) | A CTE **is** accepted in `DECLARE GLOBAL TEMPORARY TABLE SESSION.x AS (WITH … ) WITH DATA WITH REPLACE NOT LOGGED` and in `CREATE TABLE QTEMP.x AS (…) WITH DATA`. Stage into one of those, then `MERGE … USING SESSION.x`. Beats splitting the logic across several permanent views |
 
 **The column names in current IBM documentation are frequently not the column
 names on 7.3, and the error never says so.** `SQL0206 … not found` is what a
@@ -1139,6 +1149,28 @@ SELECT PROGRAM_LIBRARY, PROGRAM_NAME, OBJECT_TYPE
   *exports*, which often names its purpose well enough to be useful, but you
   cannot see which procedure a caller imports.
 - **It is authority-filtered** like everything else here. See above.
+
+## ⚠ `JOB_NAME` is a DB2 BUILT-IN and silently beats a column that is not there
+
+`SELECT JOB_NAME FROM ROBOTLIB.RBTROB` returns **your own job name on every
+row** — 752 identical values, no error, no warning. `JOB_NAME` is a built-in in
+DB2 for i; when the table has no column of that name the built-in answers
+instead. Robot's column is **`ROBOT_JOB_NAME`**.
+
+```sql
+--  wrong, and it looks fine
+SELECT JOB_NAME, OS_JOB_USER FROM ROBOTLIB.RBTROB WHERE JOB_NAME LIKE 'MAP%'   -- 0 rows
+--  right
+SELECT ROBOT_JOB_NAME, OS_JOB_USER FROM ROBOTLIB.RBTROB
+ WHERE ROBOT_JOB_NAME LIKE 'MAP%'                                              -- 4 rows
+```
+
+**The tell is a column that is the same on every row, or a `WHERE` on it
+returning nothing.** Found 2026-09-23 in `RBTROB` and `RBTCMD`; the same shape
+will bite on any vendor file whose column names collide with a built-in.
+**Confirm column names against `QSYS2.SYSCOLUMNS` before believing a result
+from an unfamiliar file** — Robot's files carry column headings there, so it
+doubles as the data dictionary.
 
 ## `DSPPGMREF` cannot see triggers either — `SYSTRIGGERS` can
 
