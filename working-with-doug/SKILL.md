@@ -313,12 +313,49 @@ and the mast entirely rather than batch four things to one person. **Never
 manufacture urgency**: a line reading *"needs to be in the plan now rather
 than discovered in December"* was deleted outright.
 
-**With people, the ask is the smallest part of the letter.** Asked to draft
-"schedule a catch-up call" he replaced three transactional lines with a
-letter that leads with his read of a colleague's progress, shares news, offers
-himself — *"I'm always available if you need me for anything"* — and only then
-asks, for **her perspective and her direction**, not for a slot. A scheduling
-email is never only scheduling. He gives before he asks.
+**Time the ask to THEIR horizon, not to your tidiness.** His reason for those
+two cuts: *"those are both things they will not think about until December so
+asking them now will simply go over their heads."* An ask that arrives before
+the recipient will act on it is not early, it is wasted — it gets filed and
+forgotten, and it dilutes the asks that are live. This is his decision-point
+rule pointed at other people: **ask at the moment THEY can act.**
+So do not drop it — **date it**. Anything deferred this way becomes a dated
+item timed to their horizon, with the dependency spelled out, so it lands when
+it can be acted on rather than being remembered by luck.
+
+**Do not justify his decisions to third parties.** Drafting a deferral, the
+sentence explaining *why* the sequence made sense — "so the two work together
+rather than lighting what's there now" — was cut. He states the decision and
+the sequence and stops. A supplier needs the decision, not the reasoning
+behind it. Also: **"I", not "we"**, and no flattering filler ("that gave me a
+much better feel for it" — cut).
+
+**Never just ask for someone's time — that is a wasted email.** His rule,
+2026-09-23, and he generalised it himself: *"with merany and anyone we dont
+just ask for time, thats a wasted email. we give information they can use and
+explain why we want time."*
+
+Asked to draft "schedule a catch-up call", he replaced three transactional
+lines with a letter that leads with his read of a colleague's progress, shares
+news the recipient can use, offers himself — *"I'm always available if you need
+me for anything"* — and only then asks, for **her perspective and her
+direction**, not for a slot. So every request for time carries two things
+before the ask:
+
+1. **Information they can use** — what you have seen, what has changed, what
+   they would want to know and may not.
+2. **Why you want the time** — the specific thing you hope to get from the
+   conversation, named.
+
+A bare "can we find 30 minutes" makes the recipient do all the work of
+deciding whether it is worth it.
+
+**The whole posture is collaborative, not demanding.** His words: *"my style
+is not to demand but more to work together."* This is the thread running
+through every edit he has made — questions instead of instructions, offering
+to unblock rather than chasing, giving before asking, and assuming the other
+side has constraints you cannot see. Draft as a colleague, never as a client
+issuing instructions.
 
 **Never ask, or imply, whether someone is doing their job.** A drafted line
 asking his IT director *"is anyone watching disk across the Domino servers and
