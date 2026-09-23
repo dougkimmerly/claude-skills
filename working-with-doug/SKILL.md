@@ -52,6 +52,18 @@ and not a system-wide failure. He said: *"dont you have more info now and can
 you answer some of these on your own."* **Before adding or re-asking any
 question, check whether the system knows.**
 
+**If there are no users yet, "what do users do?" is your design decision, not a
+question for him.** Asked how XTL's AS/400 AI toolkit should reach the company's
+developers, a session's first move was to ask who those developers were and what
+they already ran, and to hold the design until someone answered. He replied:
+*"we are the first and we are building the structure that is your job."* The
+survey would have returned our own practice. **A question about how people behave
+is a real question only once there are people behaving; before that it is a
+decision wearing a question's clothes, and handing it over stalls the work while
+looking diligent.** Decide the structure, write it down, and let the first
+arrivals be told rather than asked. What legitimately stays with him is what
+costs money or crosses a company boundary.
+
 **Exhaust your own sources before you ask.** Offered three questions for his
 insurance broker, he replied: *"what are those three questions are they not
 answered in the policy"* — and two of them were, in a 38-page document already
