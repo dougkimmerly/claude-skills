@@ -1,6 +1,6 @@
 ---
 name: housekeeping
-description: "Tidy up a repo at the end of a working session — audit it against the governing standards repo (re-read, never remembered), verify the README is a current status page (proj- repos, ADR-0007), clear the HANDOFF inbox, re-test every open question in QUESTIONS.md for whether it is still worth asking and whether you can now answer it yourself, land the knowledge into skills/memory/ADRs, and leave the tree clean. Use when Doug says housekeeping, tidy up, wrap up, clean up, or before handing a repo over."
+description: "Tidy up a repo at the end of a working session — audit it against the governing standards repo (re-read, never remembered), verify the README is a current status page (proj- repos, ADR-0007), clear the HANDOFF inbox, re-test every open question in QUESTIONS.md — still worth asking, answerable by you now, and written in plain language the person waiting can actually answer, land the knowledge into skills/memory/ADRs, and leave the tree clean. Use when Doug says housekeeping, tidy up, wrap up, clean up, or before handing a repo over."
 triggers:
   - housekeeping
   - tidy up
@@ -187,6 +187,41 @@ which is the same test the project already used to retire two other feeds.
 **So, for each question, do the work before deciding it needs a person.** Run
 the query. Most "waiting on a person" rows have a measurable half and a
 business half, and only the business half genuinely waits.
+
+**Test 3 — if it survives 1 and 2, can it be asked in plainer language?** A
+question that reaches a person and is still open is, by definition, one they
+have not answered. Often that is because **it was written for you, not for
+them.**
+
+**The reader is whoever it waits on** — a director, a business owner, whoever
+holds the decision. They do not know your table names, job names, profile names
+or error codes, and a question built from them does not read as "hard", it reads
+as **somebody else's problem, written in a language that says so.** It does not
+come back as *"I don't know"*. It comes back as nothing, which is
+indistinguishable from never having asked.
+
+**The test to apply, literally:** could the person it waits on answer it
+**without opening another file and without asking what a word means?** If not,
+rewrite it.
+
+- **Expanding an acronym is not removing jargon.** *"`XLIIMGGEN` (the Robot job
+  that generates XLI documents) — retire or release?"* still asks them to hold
+  a job name and a scheduler concept. *"XLI document capture stopped on 27
+  August. Should it start again, or is it finished for good?"* asks the same
+  thing and can be answered in four words.
+- **Put the technical evidence where it belongs.** Keep it — it is what makes
+  the answer trustworthy and it is why the row can be closed cleanly. But it
+  goes in the evidence column. **The question itself is a sentence, in their
+  vocabulary, about a decision they own.**
+- **Name the consequence, not the mechanism.** Not *"step 8 disables this
+  account"* but *"doing this stops documents being captured automatically —
+  is that acceptable?"* People answer consequences; they defer mechanisms.
+- **One decision per question.** If the plain-language version needs the word
+  "and" twice, it is probably two questions, or the lettered-row form.
+
+**Rewriting is not cosmetic and it is not optional.** A question that has sat
+unanswered for days is evidence about the question at least as much as about
+the person. Before chasing anyone, re-read what you actually sent them.
 
 **Three disciplines when you do answer one:**
 
