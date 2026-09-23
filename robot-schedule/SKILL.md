@@ -335,6 +335,18 @@ Worked example, 2026-09-23:
 | | | Library | `I93FILE` | `SECAUDIT` |
 | | | User Profile | `SECAUDIT` | `SECSCAN` |
 
+**⚠ FEED ANY VALUE OVER ~10 CHARACTERS TO HIS CLIPBOARD, ONE AT A TIME.**
+Doug, 2026-09-23: *"is it possible to give me copy links in the ones that are
+more than 10ch"*. Terminal output cannot carry a clickable copy button, so the
+working equivalent is `pbcopy` in **keying order**, advancing on his word. He
+pastes into the 5250 session rather than retyping a 50-character `Notes` line or
+a `RUNSQL` command into a green screen — which is transcription work, and
+transcription into a scheduler is where a typo runs unattended for a month.
+
+Short values (`*JOBD`, `SECJOBD`, `SECSCAN`) he simply types; do not clutter the
+exchange by offering those. Say up front **which fields in the table are long
+enough to need it** so he knows how many to expect — often it is only one.
+
 Anything the table does not mention stays as it is — say that once, below the
 table, rather than adding rows to prove it. Where a value is deliberately NOT
 being changed and that is a decision rather than an omission (leaving a
