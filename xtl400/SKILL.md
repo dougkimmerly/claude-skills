@@ -1150,27 +1150,19 @@ SELECT PROGRAM_LIBRARY, PROGRAM_NAME, OBJECT_TYPE
   cannot see which procedure a caller imports.
 - **It is authority-filtered** like everything else here. See above.
 
-## ⚠ `JOB_NAME` is a DB2 BUILT-IN and silently beats a column that is not there
+## ⚠ A DB2 BUILT-IN silently beats a column that is not there
 
-`SELECT JOB_NAME FROM ROBOTLIB.RBTROB` returns **your own job name on every
-row** — 752 identical values, no error, no warning. `JOB_NAME` is a built-in in
-DB2 for i; when the table has no column of that name the built-in answers
-instead. Robot's column is **`ROBOT_JOB_NAME`**.
+`SELECT JOB_NAME FROM <table>` returns **your own job name on every row** when
+the table has no column of that name — no error, no warning. A `WHERE` on it
+then returns zero rows and reads as an empty table.
 
-```sql
---  wrong, and it looks fine
-SELECT JOB_NAME, OS_JOB_USER FROM ROBOTLIB.RBTROB WHERE JOB_NAME LIKE 'MAP%'   -- 0 rows
---  right
-SELECT ROBOT_JOB_NAME, OS_JOB_USER FROM ROBOTLIB.RBTROB
- WHERE ROBOT_JOB_NAME LIKE 'MAP%'                                              -- 4 rows
-```
+**The tell is a column identical on every row, or a filter on it matching
+nothing.** Confirm column names against `QSYS2.SYSCOLUMNS` before believing a
+result from an unfamiliar file.
 
-**The tell is a column that is the same on every row, or a `WHERE` on it
-returning nothing.** Found 2026-09-23 in `RBTROB` and `RBTCMD`; the same shape
-will bite on any vendor file whose column names collide with a built-in.
-**Confirm column names against `QSYS2.SYSCOLUMNS` before believing a result
-from an unfamiliar file** — Robot's files carry column headings there, so it
-doubles as the data dictionary.
+**The Robot instance of this — `RBTROB`, whose real column is
+`ROBOT_JOB_NAME` — is documented with its measurement in the `robot-schedule`
+skill. Load that skill before querying any `ROBOTLIB` file.**
 
 ## `DSPPGMREF` cannot see triggers either — `SYSTRIGGERS` can
 
