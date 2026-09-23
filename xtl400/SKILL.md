@@ -911,6 +911,46 @@ Worked implementation: `proj-security/secaudit/src/qsqlsrc/EV*.sql` plus
 
 ## Blind spots that make confident answers wrong
 
+- **An authority wall is reported as an empty result, and `CHKOBJ` is the
+  instrument that separates the two.** Found 2026-09-23 the expensive way: a
+  scan of every library for a source member named `IMPSEI*`
+  (`QSYS2.SYSPARTITIONSTAT`) returned **zero rows**, and that was published as
+  *"the program has no source anywhere on the system"*, which changed a design
+  decision. The member exists — `SEISRC/QRPGLESRC(IMPSEID)`, 505 lines.
+  **`SEISRC` is `*PUBLIC *EXCLUDE`**, and `CPF9820 Not authorized to use
+  library` stays in the job log where an SQL result never sees it.
+
+  **Ask the question that has three distinguishable answers:**
+
+  ```
+  cl400 "CHKOBJ OBJ(<LIB>/<SRCFILE>) OBJTYPE(*FILE) MBR(<MBR>)"
+  ```
+
+  | Result | Means |
+  |---|---|
+  | `OK` | it is there and you can reach it |
+  | `CPF9815` | member genuinely not found |
+  | `CPF9820` | **not authorized to the library** — you cannot tell either way |
+
+  Run it against a member you *know* exists and one you *know* does not, in a
+  library you can read, before trusting the third answer.
+
+- **`DSPOBJAUT` and `QSYS2.OBJECT_PRIVILEGES` return YOUR line, not the
+  object's authority list**, when you lack authority to manage the object. Same
+  day, same root cause, two more wrong published claims: `SEIOBJ` was reported
+  as having **no `*PUBLIC` row** (it has `*PUBLIC *EXCLUDE`, plus `QPGMR *ALL`
+  and two more), and its programs as *"160 of 161 `*PUBLIC *CHANGE`, one is the
+  exception"* — all 161 are, and only the row granted to the querying profile's
+  group was visible. **An authority row *count* is never evidence about an
+  object you cannot manage.** A profile with `*ALLOBJ` sees four rows where an
+  ordinary one sees one.
+
+  **And the control has to vary the thing you are worried about.** A presence
+  control *was* run for the first of these — against two libraries the profile
+  could already see into, which proved only that the view returns `*PUBLIC` rows
+  *in general*. It could not test the case in doubt, which was authority.
+
+
 - **Anything you create may be owned by a group, not by you — and that quietly
   undoes the authority you just set.** If the creating profile has
   `OWNER(*GRPPRF)`, new objects are owned by its **primary group**, and an owner
