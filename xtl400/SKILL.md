@@ -1895,6 +1895,55 @@ act** — and a privileged compile is then never the thing being debugged.
   several statements over JDBC; `RUNSQLSTM` separates on semicolons and reads a
   bare `@@` as a syntax error.
 
+## ⚠ `GET DIAGNOSTICS` NEVER RETURNS WHY A `QCMDEXC` COMMAND FAILED (2026-09-24)
+
+**Any CL command run through `QSYS2.QCMDEXC` fails as `SQL0443`, message text
+*"Trigger program or external routine detected an error."*** That is SQL's
+wrapper. It names no object, no library, no authority, and it is **identical for
+every possible cause** — not authorised, does not exist, wrong type, out of
+space.
+
+So `GET DIAGNOSTICS CONDITION 1 ... = MESSAGE_TEXT` inside a handler gives you
+nothing to classify on, and **any `CASE` that tests that text for a `CPF` id can
+never match.** This is not theoretical: `proj-as400-codemap` shipped two
+procedures with exactly that classifier. One (`MAPSRCP`) found the trap and
+carries a twelve-line warning about it; the other (`MAPREFH`) was written later,
+tested `V_ETXT LIKE '%CPF3033%'`, and was dead from the day it was written — all
+50 of its blocked libraries recorded that one sentence and none was
+distinguishable from any other.
+
+**The cause is the message UNDER the wrapper in the job log:**
+
+```sql
+SELECT SUBSTR(RTRIM(MESSAGE_ID) CONCAT ' ' CONCAT COALESCE(MESSAGE_TEXT,''),1,200)
+  FROM TABLE(QSYS2.JOBLOG_INFO('*'))
+ WHERE MESSAGE_ID IS NOT NULL
+   AND MESSAGE_ID NOT LIKE 'SQL%'     -- SQL0443, the outer wrapper
+   AND MESSAGE_ID <> 'CPF0001'        -- "Error found on X command" — a SECOND
+                                      -- wrapper that also names nothing
+ ORDER BY ORDINAL_POSITION DESC
+ FETCH FIRST 1 ROW ONLY;
+```
+
+- **Skip every wrapper, not just the outer one.** `CPF0001` (command failed) and
+  `CPFA097` (object not copied) are each a second layer that says only *something
+  went wrong*. Skip the SQL layer alone and you classify every failure as
+  "command failed".
+- **Wrap the job-log read in its own `CONTINUE HANDLER`** — you are already
+  inside a failure path and a second exception there loses the first.
+- **Keep the wrapper text when the job log yields nothing.** An unexplained
+  failure must still read as a failure; blanking it makes *could not tell* look
+  like *nothing there*.
+- **Run the command by hand when a classifier looks wrong.** Interactively the
+  box says `CPF3033 Object *ALL in library I93FILE of type PGM not found` — the
+  real answer was always one manual run away.
+
+**The generalisation, which is the expensive part:** this trap was found, written
+up and defeated in one file of an application, and a sibling file twenty
+directories away shipped it anyway. **A trap beaten in one program is not beaten
+in the codebase.** When you fix one of these, grep the whole tree for
+`GET DIAGNOSTICS` and for `MESSAGE_TEXT`.
+
 ## Reading a user's containment: it is FOUR attributes, never one
 
 Measured 2026-09-20 on XTL. **`LMTCPB` alone tells you almost nothing** —
