@@ -2458,3 +2458,81 @@ the `RUNSQL` CL command, which rejects `SELECT`/`VALUES` outright) — useful fo
 testing both branches of a guard before compiling it into a job:
 `SELECT CASE WHEN <cond> THEN RAISE_ERROR('85002','msg') ELSE 'OK' END FROM SYSIBM.SYSDUMMY1`.
 Test the failing branch, not just the passing one.
+
+## ⚠ ILE STAMPS THE LIBRARY IT RESOLVED A SERVICE PROGRAM TO — AND NO LIBRARY LIST OVERRIDES IT LATER (2026-09-24)
+
+**The trap that ends a migration halfway.** You move an application to a new
+library, rebuild it there, set the run-time library list correctly, prove the
+list is right — and the program still runs the OLD code.
+
+Measured on `proj-imaging`, 2026-09-24:
+
+```sql
+SELECT PROGRAM_NAME, BOUND_SERVICE_PROGRAM, BOUND_SERVICE_PROGRAM_LIBRARY
+  FROM QSYS2.BOUND_SRVPGM_INFO WHERE PROGRAM_LIBRARY = 'DOUGIMGP';
+-- XTLFILERJ | XTLFILER | DOUGIMG     <-- rebuilt in DOUGIMGP, bound to DOUGIMG
+```
+
+`DOUGIMGP/XTLFILERJ` was created **after** `DOUGIMGP/XTLFILER` existed, with
+`DOUGIMGP` first on the build's library list, and still bound to `DOUGIMG`. At
+run time it activated the old build — which was SQL-bound to the old library —
+and every pass died with `SQL0204 <table> in <old library> not found`.
+
+**`BOUND_SERVICE_PROGRAM_LIBRARY` is the fact. Read it after every build into a
+new library**, the same way you read `OBJCREATED` instead of the completion
+message:
+
+- `*LIBL` — resolved at **activation**, the library list decides. Fine.
+- a **library name** — nailed at bind time. **Nothing downstream changes it.**
+
+Both occur in one application: on the same estate `GETDOCPTH` was `*LIBL` while
+third-party `AOS_V1.0` service programs were qualified. **So "ILE binds service
+programs at compile time" is conditional, not absolute** — it records the
+library *as specified*, and `*LIBL` is a legal specification.
+
+**Where it comes from is the binding directory, not the library list.**
+`ADDBNDDIRE` records a qualified library per entry, so a `BndDir` carried over
+from the old library points at the old library forever. Check it before blaming
+anything else:
+
+```
+CL: DSPBNDDIR BNDDIR(<lib>/<bnddir>) OUTPUT(*OUTFILE) OUTFILE(<lib>/ZZBND);
+```
+then read the outfile — **get the column names from `SYSCOLUMNS` first**;
+`BNOTYP` is not one of them.
+
+**The order to check, cheapest first:** the binding directory's entries → then
+`BOUND_SRVPGM_INFO` on the built object → and only then the library list. A
+session spent two builds on the library list because the list was the visible
+thing and the binding directory was not.
+
+## ⚠ `ADDLIBLE` ON A LIBRARY ALREADY IN THE LIST FAILS, AND YOUR `MONMSG` HIDES IT (2026-09-24)
+
+`ADDLIBLE LIB(X) POSITION(*FIRST)` where `X` is already on the list raises
+`CPF2103` and **leaves it exactly where it was**. The idiomatic
+`MONMSG MSGID(CPF2103)` then swallows it, so the code reads as "X is now first"
+and X is still 32nd.
+
+That cost two identical failed builds: `AOS_V1.0` was added `*FIRST` to beat
+eleven other copies of a `/copy` prototype, stayed at position 32, and the build
+failed the same way twice.
+
+**IBM says this outright** — *Security Reference*, "Recommendations for the user
+portion of the library list": *"If the library is already on the library list,
+but you are not sure if it is at the beginning of the list, **you must remove
+the library and add it**."*
+
+```
+RMVLIBLE   LIB(X)
+MONMSG     MSGID(CPF2104)
+ADDLIBLE   LIB(X) POSITION(*FIRST)
+MONMSG     MSGID(CPF2103)
+```
+
+**And the reason position matters at all:** twelve libraries on this estate hold
+a `QPROTOSRC(SO_SORTPR)` — `AOS_V1.0`, `DMI`, `DSNLOGSRC`, `ED`, `EI400`,
+`LOGSRC`, `MVMSGS`, `MVSEI`, `TMMI`, `TS`, `VHOS40`, `VHSEI` — **and they are
+not the same prototype.** An unqualified `/copy` takes whichever the list
+reaches first, so a build that works from a short library list fails from a
+normal one with `RNF5406 ... fewer parameters than the prototype`. A build whose
+correctness depends on the caller's library list is **reproducible by accident**.
