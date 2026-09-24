@@ -414,6 +414,7 @@ release":
 | `SYSFILES` absent (7.4+) | `OBJECT_STATISTICS`, `DSPFD` |
 | `SOURCE_STREAM_FILE_PATH` absent | n/a on this estate |
 | `VARCHAR(<timestamp>)` → `SQL0171 argument not valid` | `CHAR(<timestamp>)`, then `SUBSTR` if you want it short |
+| **A subquery in a `JOIN … ON` clause** → `SQL0104 Token EXISTS was not valid`, offering `<IDENTIFIER> <INTEGER> <CHARSTRING>` as valid tokens — it wants a value, not a predicate (tested 2026-09-23) | Move the test into `WHERE`. With an inner join the two are equivalent; with an OUTER join they are not, so check which you have before moving it |
 | **A `WITH` inside a nested table expression** → `SQL0199 keyword AS not expected`, listing join keywords as the valid tokens. So `MERGE … USING (WITH … SELECT …)` and `SELECT * FROM (WITH …) q` both fail, and the message points at the CTE's `AS` rather than at the nesting (tested 2026-09-23) | A CTE **is** accepted in `DECLARE GLOBAL TEMPORARY TABLE SESSION.x AS (WITH … ) WITH DATA WITH REPLACE NOT LOGGED` and in `CREATE TABLE QTEMP.x AS (…) WITH DATA`. Stage into one of those, then `MERGE … USING SESSION.x`. Beats splitting the logic across several permanent views |
 
 **The column names in current IBM documentation are frequently not the column
