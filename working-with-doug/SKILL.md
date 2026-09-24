@@ -134,7 +134,22 @@ else and say plainly what you left and why.
 
 ```bash
 printf '%s' 'the command' | pbcopy      # macOS
+cat file-of-commands | pbcopy           # a batch goes the same way
 ```
+
+**This binds hardest for a LONG list, which is where it gets broken.**
+2026-09-24: twenty-four `CHGOBJOWN` commands were generated, written to
+`/tmp/reown.txt`, and then **printed in a fenced block**. That felt like
+delivering the work and was exactly what the rule forbids; he had to ask again.
+The trap is the inversion — with one command, pasting it into the reply looks
+lazy, so the rule is easy to remember; with twenty-four, printing them looks
+*thorough*, so the rule feels satisfied at the moment it is being ignored.
+
+**The test is not "did I produce the commands" but "can he run them without
+selecting anything".** Generating them to a file is the right first step;
+piping that file to `pbcopy` is the second and is not optional. Say what is on
+the clipboard, how many lines, and where it goes — **do not also print the
+body.**
 
 **Revising a draft in place is invisible to an open compose window — say when
 you have done it.** 2026-09-23: a drafted insurer reply was corrected in place
