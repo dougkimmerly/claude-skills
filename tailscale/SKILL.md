@@ -120,6 +120,43 @@ Once enabled: `ssh doug@192.168.20.19`, `ping 192.168.22.15`, browser to `http:/
 
 **Mac key expiry:** disabled 2026-05-14.
 
+### ⚠ The Mac's subnet toggle turns itself off, and nothing says so (2026-09-24)
+
+Symptom: `tailscale status` is healthy, tailnet IPs ping fine, and **every
+`192.168.20.x` / `192.168.22.x` address is dead** — services read as down,
+MCP servers time out on connect, and a session concludes the remote host is
+broken. It is the Mac. Cost a session real time before it was checked; the
+w5 MCP surface was reported unreachable when it was serving normally.
+
+`tailscale status` does NOT show this. Check the pref directly:
+
+```bash
+/Applications/Tailscale.app/Contents/MacOS/Tailscale debug prefs | grep RouteAll
+route -n get 192.168.20.19 | grep -E 'gateway|interface'
+```
+
+`"RouteAll": false` is the fault. A healthy Mac routes LAN-range addresses out
+**`utun*`**; a broken one sends them to the default gateway (`en0`/`en8`), where
+they die — and they die **silently at connect**, which is exactly the
+couldn't-reach-it vs nothing-there confusion.
+
+Fix, no restart needed:
+
+```bash
+/Applications/Tailscale.app/Contents/MacOS/Tailscale set --accept-routes
+```
+
+Two notes:
+- **This is the Mac, the one client that SHOULD accept routes.** Do not confuse
+  it with the `--accept-routes=false` rule below, which is for a Linux host
+  sharing a LAN with another tailnet member (the asymmetric-routing trap).
+- **An MCP server that failed at session start will not reconnect mid-session**
+  even once routing is fixed. Probe the endpoint with `curl` to confirm it is
+  actually up, and tell Doug the tools need a new session.
+
+Who advertises what, live: `tailscale status --json` → any peer's
+`PrimaryRoutes` (currently `pihole-backup` carries both /24s).
+
 ---
 
 ## Admin console checklist
