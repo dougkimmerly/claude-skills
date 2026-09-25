@@ -532,7 +532,13 @@ at the wrong line. All three cost an afternoon on 2026-09-18.
   silently. Source files here are `SRCDTA CHAR(100)`, so an 84-character
   `INSERT INTO t (a, b, c)` loses `, c)` — and the parse error lands on the
   **next** record (`SQL0104 … token X was not valid`, naming a token that is
-  fine). **Always pass `MARGINS(100)`**, or match the file's `SRCDTA` length.
+  fine). **Always pass `MARGINS(<the file's `SRCDTA` length>)`** — 100 for a
+  default `RCDLEN(112)` file, **228** for the `RCDLEN(240)` files a project
+  creates for SQL source (`DOUGMAP/QSQLSRC`). Read it rather than assuming:
+  `SELECT LENGTH FROM QSYS2.SYSCOLUMNS WHERE SYSTEM_TABLE_NAME = '<file>' AND
+  COLUMN_NAME = 'SRCDTA'`. Bit again 2026-09-25 on an 85-character line, in a
+  file wide enough to hold it — **the member is never the problem; the reader
+  is.**
 - **`OUTPUT` defaults to `*NONE`.** Per-statement messages go **only to the
   listing**, never to the job log — the job log gets a bare `SQL9010 … command
   failed` and, via `QCMDEXC`, a useless `SQL0443`. **Always `OUTPUT(*PRINT)`.**

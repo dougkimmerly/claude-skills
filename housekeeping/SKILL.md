@@ -179,6 +179,17 @@ Entries often contain a correction to something this repo asserts. Take those
 seriously; a cross-repo correction is usually right, because the other side hit
 the thing in practice.
 
+**A handoff entry crosses a tier boundary, and its contents do not automatically
+travel with it.** An entry from a tighter-tier repo routinely carries exactly the
+specifics that repo keeps to itself — measured attack routes, counts, the
+mechanism of a weakness — because it is talking to you, not publishing. **Quoting
+them into your own ADRs and log republishes them at your tier.** Found
+2026-09-25: `proj-ai-adoption` (department-shared) had copied `proj-security`'s
+(named-few) measured routes and figures into a decision record, while writing the
+rule that forbids it. **Take the finding, take the shape, cite the register for
+the numbers** — the rule is that a derived copy carries the classification of its
+most restricted input.
+
 If work here touched **another repo's domain**, deliver it before finishing —
 a batchq job to that repo's queue, or an entry appended to its `HANDOFF.md`.
 Check queues with `sbmjob -wrk`. An undelivered cross-domain finding is an
