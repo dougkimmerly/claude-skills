@@ -329,6 +329,16 @@ End with the short list of what the next session or Doug needs to pick up,
 and be specific — a named command or file beats "finish the monitoring". If
 something is blocked, say on what.
 
+**Then, if the repo is actually being handed over, run the
+[`handover`](../handover/SKILL.md) skill.** It asks a different and deeper
+question than this one: not *is the repo tidy* but *could someone with none of
+today's context resume, and would anything they read mislead them?* The gap it
+catches is the one housekeeping structurally cannot — **the documents that
+describe the thing you changed, which you never opened**. A session that had
+completed every step above still left the folder's self-declared authoritative
+runbook describing a component in a shape it had stopped having two days
+earlier, and left two credential expiry dates written down nowhere.
+
 ---
 
 ## Notes
