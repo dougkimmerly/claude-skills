@@ -91,7 +91,31 @@ session leans on silently splits in two, and the failure mode is discovering it
 
 **Survives** — if the new config dir was set up to share it. Symlinked or
 absolute-path content resolves from one home regardless of identity: `skills/`,
-`CLAUDE.md`, `commands/`, `settings.json` hooks + statusline, plugin cache.
+`CLAUDE.md`, `commands/`, plugin cache.
+
+> ### ⚠ `settings.json` is NOT shared, and a hook is a SAFETY CONTROL that goes missing silently
+>
+> Measured 2026-09-25: `~/.claude/settings.json` and `~/.claude-kbl/settings.json`
+> are **two separate regular files**, not one symlinked home. The first carried a
+> `PreToolUse` hook that examines every AS/400 command before it runs and refuses
+> writes outside a project's own library; the second carried **no hook at all**.
+> Sessions under `claude-kbl` had therefore never been checked by it — and in its
+> place sat a broad static permission rule that allows every command under the
+> same profile.
+>
+> **This is worse than a lost memory file, because it fails in the direction that
+> looks like success.** A missing hook produces *no prompt*, which is exactly
+> what a working hook produces for an allowed command. There is no error and
+> nothing to notice.
+>
+> **So when switching, diff the hooks, not just the memory:**
+> ```bash
+> diff <(jq -S .hooks ~/.claude/settings.json) <(jq -S .hooks ~/.claude-kbl/settings.json)
+> diff <(jq -S .permissions ~/.claude/settings.json) <(jq -S .permissions ~/.claude-kbl/settings.json)
+> ```
+> Any `PreToolUse` entry present on one side and absent on the other is a control
+> that is off for half of Doug's work. **Whoever owns the hook owns the fix** —
+> tell them rather than copying the line, or the two files drift again.
 
 **Neither** — account-level OAuth grants, held by the account and not on disk:
 **connectors** (Gmail, Calendar, Drive, memory bridges). Re-authorise them in
