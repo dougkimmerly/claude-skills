@@ -12,12 +12,13 @@ location: global
 
 # Handover — can the next session actually take over?
 
-**This is not "is the repo tidy". That is [`housekeeping`](../housekeeping/SKILL.md),
-and it is a different, shallower question.** Run housekeeping first; this is the
-layer underneath it.
+**Stands alone. It does not depend on anything else having been run**, and it
+does not assume the repo has been tidied — Doug runs this and
+[`housekeeping`](../housekeeping/SKILL.md) separately and in either order.
 
-The question here is narrower and harder: **could someone with none of today's
-context resume this work, and would anything they read mislead them?**
+The question is: **could someone with none of today's context resume this work,
+and would anything they read mislead them?** That is not the same question as
+*is the repo tidy*, and a repo can pass one and fail the other.
 
 ---
 
@@ -150,10 +151,15 @@ End with what the next session needs, in this shape. **Specific beats complete.*
 
 ## Notes
 
-- **Run [`housekeeping`](../housekeeping/SKILL.md) first.** It covers standards,
-  the README, the open-questions register and landing knowledge into skills,
-  ADRs and memory. This skill assumes that is done and asks a different
-  question. Do not duplicate it here.
+- **Separate from [`housekeeping`](../housekeeping/SKILL.md), and run
+  separately** (Doug, 2026-09-25). Neither is a prerequisite for the other and
+  there is no required order. They answer different questions: housekeeping
+  asks *is this repo in good order* — standards, README, the open-questions
+  register, knowledge landed in skills and ADRs. This asks *can someone else
+  pick it up*. **Do not fold one into the other, and do not tell the reader to
+  go and run the other one first.** If a step here overlaps, do it here
+  regardless; a handover that depends on a separate skill having been run is
+  exactly the fragile assumption this skill exists to catch.
 - **"Set up properly" is a claim, so it decays like any other claim.** State it
   for the things you checked and name the things you did not. In the session
   above, each round of asking found something one layer down — the fourth
