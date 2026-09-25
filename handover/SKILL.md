@@ -147,6 +147,28 @@ End with what the next session needs, in this shape. **Specific beats complete.*
   judgement stated as a judgement is useful; a judgement that reads as a
   verification is a trap.
 
+## 6. Sign off — the required last line
+
+**The very last thing written to the terminal must be, on its own line:**
+
+```
+Handover complete now and ready to clear
+```
+
+Nothing after it — no trailing question, no offer of further work. Doug's
+instruction, 2026-09-25.
+
+**This line is a claim, and a bigger one than it looks.** It does not say *I
+tidied up*; it says **the context in your head is no longer needed** — that
+`/clear` is safe and nothing will be lost with it. So do not write it until
+steps 1–5 have actually been done, in particular step 1, which is the one that
+finds what the others miss.
+
+**If you cannot honestly make that claim, do not write the line.** Say what is
+missing instead, and what would let you write it. A handover that says "ready to
+clear" while a stale authoritative document is still out there is worse than one
+that admits the gap — Doug clears on the strength of this sentence.
+
 ---
 
 ## Notes

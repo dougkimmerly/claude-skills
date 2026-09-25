@@ -338,6 +338,25 @@ pass this and fail that**: a session that completed every step above still left
 the folder's self-declared authoritative runbook describing a component in a
 shape it had stopped having two days earlier.
 
+## 9. Sign off — the required last line
+
+**The very last thing written to the terminal must be, on its own line:**
+
+```
+Housekeeping completed now
+```
+
+Nothing after it — no trailing question, no "want me to…", no further
+commentary. Doug's instruction, 2026-09-25.
+
+It is a **completion signal, not a decoration**: it tells him the skill ran to
+the end rather than stopping somewhere in the middle, which from the outside
+looks identical to a thorough answer that quietly skipped step 6. So write it
+only when every step above has actually been done. **If a step was skipped or
+could not be completed, say which and why in the open-items list above — then
+still sign off.** A silent omission is the thing this line exists to expose; an
+admitted one is fine.
+
 ---
 
 ## Notes
