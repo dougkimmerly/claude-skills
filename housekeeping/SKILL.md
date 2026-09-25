@@ -190,6 +190,19 @@ rule that forbids it. **Take the finding, take the shape, cite the register for
 the numbers** — the rule is that a derived copy carries the classification of its
 most restricted input.
 
+**Check the SKILLS you edited, not only the repo's own documents — a shared skill
+is the loosest surface you write to all day.** `~/.claude/skills/` is read by every
+repo in the estate, so a skill inherits the tier of its *widest* audience, which is
+looser than any single repo's. Found 2026-09-25 in `kb-xtl400`, the day after the
+case above: a session took a tighter-tier repo's measured fault anatomy out of a
+handoff entry and put it in **three** places — two of its own documents and the
+estate-wide `xtl400` skill. **The skill was the worst of the three and the easiest
+to miss, because writing to a skill feels like capturing knowledge rather than
+publishing material.** The fix is the same shape every time: **keep the mechanism,
+which is what a reader actually needs, and replace the instance with a pointer to
+the repo that measured it.** So when step 5 sends you to update a skill, ask where
+the content came from before you write it.
+
 If work here touched **another repo's domain**, deliver it before finishing —
 a batchq job to that repo's queue, or an entry appended to its `HANDOFF.md`.
 Check queues with `sbmjob -wrk`. An undelivered cross-domain finding is an
