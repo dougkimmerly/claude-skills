@@ -439,6 +439,32 @@ SELECT COLUMN_NAME FROM QSYS2.SYSCOLUMNS
  ORDER BY ORDINAL_POSITION;
 ```
 
+**⚠ That query answers for VIEWS only. For a TABLE FUNCTION it returns zero rows
+and tells you nothing** — and zero rows reads as "no such column", which sends you
+looking for the wrong thing. Found 2026-09-25: `SYSCOLUMNS` knows nothing about
+`IFS_OBJECT_STATISTICS`, `OBJECT_STATISTICS` or `IFS_READ`, and four guessed names
+were rejected in a row (`IFS_OBJECT_STATISTICS` has **`PATH_NAME`**, not
+`OBJECT_NAME`; `SYSTEM_VALUE_INFO` has **`CURRENT_NUMERIC_VALUE`** /
+**`CURRENT_CHARACTER_VALUE`**, not `CURRENT_VALUE`; `PROGRAM_INFO` has
+**`CREATE_TIMESTAMP`**, not `PROGRAM_CREATED`; `OBJECT_STATISTICS` has
+**`CHANGE_TIMESTAMP`**, not `OBJECT_CHANGED`, and no `LAST_RESTORED_TIMESTAMP` —
+it is `RESTORE_TIMESTAMP`).
+
+**For a table function, `SELECT *` on one row and read the header.** `sql400`
+prints the column labels as its first stdout line, so this costs one call and
+cannot be wrong:
+
+```bash
+x400 <profile> sql400 "SELECT * FROM TABLE(QSYS2.OBJECT_STATISTICS('LIB','PGM','NAME')) X"
+```
+
+With ~90 columns that is a wall of tab-separated text, so pair the header with the
+row rather than reading it positionally:
+
+```bash
+paste -d'=' <(… | head -1 | tr '\t' '\n') <(… | sed -n 2p | tr '\t' '\n') | grep -i chang
+```
+
 Same for table functions that simply are not there. **`QSYS2.ACTIVE_JOB_INFO`
 does not exist on XTL's 7.3 at all** — verified 2026-09-19 against
 `QSYS2.SYSROUTINES`, which returns no row for it. `SQL0204 … not found` is the
@@ -1127,6 +1153,40 @@ project's objects, which is where a deploy script's accumulated
 
 ## Blind spots that make confident answers wrong
 
+- **⚠ THIS BOX HAS SIX TIMESTAMPS THAT ALL SOUND LIKE "WHEN IT CHANGED", AND FIVE
+  ARE WRONG FOR DATING A BUILD (2026-09-25).** `IMPSEID` again, and this time the
+  wrong columns produced a *published paradox*: an object apparently **predating
+  its own source member by sixteen hours**, read as evidence that the running
+  program was built from something else. It was not. Measured:
+
+  | fact | the column that says it | value |
+  |---|---|---|
+  | source last **edited** | `SYSPARTITIONSTAT.LAST_SOURCE_UPDATE_TIMESTAMP` | **2026-02-17 10:18:36** |
+  | program **compiled** | `OBJECT_STATISTICS.OBJCREATED` | **2026-02-17 10:21:28** |
+  | object saved to a savefile | `SAVE_TIMESTAMP` | 2026-06-01 16:23:21 |
+  | object restored | `RESTORE_TIMESTAMP` | 2026-06-01 16:24:04 |
+  | object "changed" — misread as created | `CHANGE_TIMESTAMP` | 2026-06-01 16:25:52 |
+  | member "last changed" — misread as edited | `LAST_CHANGE_TIMESTAMP` | 2026-06-02 08:07:03 |
+
+  **Source edited, compiled three minutes later.** The June pair is one
+  `SAVOBJ`-into-`QTEMP/OMSAVF`-then-restore — an object *move* — and **this box
+  was swapping MIMIX roles in exactly that window**, so May–June 2026 is the most
+  date-contaminated stretch on the system. `LAST_CHANGE_TIMESTAMP` also moves on
+  `CPYF`, `RGZPFM`, a restore and a MIMIX apply.
+
+  So, before trusting any date on this box:
+  - **Member edited → `LAST_SOURCE_UPDATE_TIMESTAMP`. Object built →
+    `OBJCREATED`.** Never `LAST_CHANGE_TIMESTAMP`, never `CHANGE_TIMESTAMP`.
+  - **Read `SAVE_TIMESTAMP` and `RESTORE_TIMESTAMP` first.** If either sits beside
+    the date you are about to rely on, that date describes a move, not work. Here
+    they sat two minutes either side of it.
+  - **A compile is MINUTES after its source edit.** A gap of months means you are
+    holding the wrong pair of columns, or the wrong source.
+  - **Blank `SOURCE_FILE_LIBRARY`/`FILE`/`MEMBER` in `PROGRAM_INFO` is common here
+    and is not itself suspicious** — it means the trail is name-plus-timing, so the
+    timing has to come from the right columns. Worked instance and the full
+    reasoning: `kb-xtl400` `knowledge/impseid-provenance.md`.
+
 - **An authority wall is reported as an empty result, and `CHKOBJ` is the
   instrument that separates the two.** Found 2026-09-23 the expensive way: a
   scan of every library for a source member named `IMPSEI*`
@@ -1442,10 +1502,49 @@ the compile, or bind qualified and accept that the library is recorded.
 SQL.** Bound the loop in RPG instead — which is better anyway, because "the
 first N" then means the same N on every run.
 
-**And the one that is not a compile trap:** `sql400` **splits statements on
-semicolons**, including semicolons *inside string literals*. A comment column
-containing `...; monitored by MONMSG` became two broken statements. Keep `;`
-out of literals.
+**And the one that is not a compile trap — FIXED 2026-09-25, no workaround
+needed.** `sql400` used to split statements on **every** semicolon, including
+those inside string literals and `--` / `/* */` comments, so a comment reading
+`...; monitored by MONMSG` became two broken statements and `SQL0104` named an
+English word as an invalid token. `split()` is context-aware now: literals,
+delimited identifiers and both comment forms are stepped over, while a genuine
+multi-statement `sql400 "A; B"` still runs as two. **Stop stripping comments
+before sending, and if `~/.local/lib` might be stale, re-run
+`kb-xtl400/tools/x400/build.sh`.**
+
+**Two more in that family, same date, same repo:**
+- **`cl400` used to HANG forever on a refused sign-on** — no output, no error,
+  killed at 90s — because jt400's `AS400` object defaults to GUI-available and
+  tries to raise a sign-on dialog. It now exits 1 in under a second, as do
+  `ifsput`, `ifs400`, `src400`, `put400` and `pgm400`: the fix is in
+  `X400Creds.connect()`. **This matters more than a hang normally would:**
+  `QMAXSIGN` is 4 and `QMAXSGNACN` is 3, so the fourth invalid sign-on
+  **disables the profile**, and a silent hang invites the retry that spends the
+  budget. It cost `SECAUDIT` on 2026-09-23 and needed `*SECADM` to recover.
+  **Never retry a credential blindly on this box.**
+
+  **⚠ But a refused credential is only ONE cause of a `cl400` hang, and the fix
+  bounds only that one.** The second, measured 2026-09-25, is a **server-side
+  function check in the `QZRCSRVS` job**: the called program takes an unhandled
+  escape and the job stops answering, with the identical client symptom — no
+  output, no error, never returns. **Tell them apart by whether `cl400` printed
+  its `job:` line**: if it did, the sign-on already succeeded, `setLoginTimeout`
+  does not apply (it bounds connect, not an in-flight `CommandCall.run()`), and
+  **retrying the credential is the wrong move** — read that job's log instead.
+  **How you get there:** the called program takes an **unhandled escape** and
+  function-checks inside the server job. A common route is a `MONMSG` that looks
+  global but is not — **written after an executable command it is
+  command-scoped**, so the message it was meant to catch goes unhandled (same
+  family as the `ADDLIBLE`/`MONMSG` trap below). Client-side the block is in
+  `AS400ThreadedServer.run` → `DataStream.readFromStream` → `SocketInputStream.read`.
+  Measured by `proj-security`, whose tier is tighter than this skill's audience —
+  the mechanism is here, the instance stays with them.
+- **`ifsput` used to tag every file it wrote CCSID 1200 (UTF-16)**, so correct
+  ASCII bytes read back through `QSYS2.IFS_READ` as **one empty line** —
+  indistinguishable from a file that was never written. It now defaults to 1208,
+  takes `ifsput LOCAL /path [CCSID|binary]`, and prints the tag. Note for any
+  other tool that writes the IFS: **the job CCSID is not a usable default here —
+  `QCCSID` is 65535.**
 
 ## Testing whether an IFS file exists when you have no attribute authority
 
@@ -2813,3 +2912,44 @@ application doing business work.
 — no spooled file exists yet, so `SYSTOOLS.SPOOLED_FILE_DATA` would return
 nothing. It needs `*JOBCTL` or ownership; `CCSEC` does not have it and gets no
 error, just no rows.
+
+## Reading RPG/DDS source: the spec type is COLUMN 6, not the first non-blank
+
+**This cost two failed attempts to run a program on 2026-09-25 and it will cost
+the next session the same if it is not read here first.**
+
+RPG and DDS source members carry a **5-character change-tag area** in columns
+1–5. The spec type (`F`, `D`, `C`, `A`) is in **column 6**. So the same file
+specification appears two ways in one member:
+
+```
+     FBRSumwrkd cf   e             workstn      <- no change tag
+a067 FRacomd    if   e           k disk         <- tagged 'a067'
+```
+
+**A regex like `^ *F[A-Z]` matches the first and misses the second.** On
+`LOGSRC/QCSTMSRC(BRSUMWRK)` that reported **7 files when there are 27** — and the
+missing ones included `RACOMD`, `MSTCONTL` and `MSTCONT2`, which is why a library
+list derived from the short list could not work.
+
+**Extract on the column, never on leading whitespace:**
+
+```bash
+awk 'substr($0,6,1)=="F" || substr($0,6,1)=="f"'   # file specs
+awk 'substr($0,6,1)=="A"'                          # DDS
+```
+
+The change tags are also *useful* — they are the maintenance history
+(`a067`, `A084`, `aos03`), and on an old member they tell you which lines are
+original and which were bolted on later.
+
+### And two companions to it
+
+- **A `*PGM` may carry NO source attribution.** `LOGOBJ/BRSUMWRK` has blank
+  `SOURCE_FILE`/`SOURCE_LIBRARY`/`SOURCE_MEMBER`, while its display file and
+  module carry theirs. **When it is blank you do not know what built the object**
+  — say so rather than treating the same-named member as authoritative.
+- **Take source from the object, never by name.** `BRSUMWRKD` exists in six
+  places (`LOGSRC/QCSTMSRC` live at 611 lines, `DEBBIE/QDDSSRC` at 491,
+  `DSNLOGSRC/QCHGSRC` as `D2`–`D7`). `OBJECT_STATISTICS`'s `SOURCE_*` columns say
+  which one built the object; a name search picks whichever you happen to hit.
