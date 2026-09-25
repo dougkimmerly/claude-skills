@@ -642,6 +642,50 @@ which is part of why it was missed — a repo auditing itself against
 - **The user profile the work runs as.** A replicated program owned by a
   profile that did not come across authenticates as nobody.
 
+### ⚠ A PROGRAM THAT RIDES ANOTHER JOB CREATES OBJECTS OWNED BY THAT JOB (2026-09-24)
+
+**And it can do it inside YOUR library, with nobody granting anything.**
+
+`proj-imaging` runs two programs as command lines inside XTL's own scheduled
+`IMPDOCS` job. After a library migration moved their tables, one of them found
+its watermark data area missing, and its perfectly correct *"create it if it is
+not there"* branch **created a fresh one under the identity of the job it was
+riding** — `QPGMR`-owned, `*PUBLIC *CHANGE`, sitting in a library that is
+otherwise entirely the project's and is `*PUBLIC *EXCLUDE`.
+
+Nobody made a mistake and nobody widened anything. **The library simply stopped
+being uniformly yours.** Consequences:
+
+- **You cannot delete it.** `*CHANGE` through `*PUBLIC` lets you *write* the
+  object; deleting needs `*OBJEXIST`, which you do not have on an object you do
+  not own. It becomes a human act.
+- **The "my library is a sandbox because I own everything in it" precondition
+  is not established once — it is re-checked.** Cheap:
+  ```sql
+  SELECT OBJNAME, OBJTYPE, OBJOWNER FROM TABLE(QSYS2.OBJECT_STATISTICS('<lib>','*ALL'))
+   WHERE OBJOWNER <> '<your profile>';
+  ```
+- Same family as the `OWNER(*GRPPRF)` trap above, but the cause is different:
+  there the *creating profile's* group owns it; here the *job you are inside*
+  does.
+
+### ⚠ INSIDE SOMEBODY ELSE'S JOB, QUALIFIED IS THE SAFE FORM
+
+The inverse of the usual advice, and it bit the same project the same day.
+
+A program that runs as a step inside another application's job is on **that
+job's library list**, which you do not control and must not reorder — the rest
+of the job runs after you. `proj-imaging` adds its libraries `*LAST` precisely
+so production's names still resolve to production for the importer that
+follows.
+
+**So an unqualified name there resolves to PRODUCTION.** Its test tables carry
+production's own names (`EKD0312`, `EKD0310`, …), so unqualifying them would
+have made a test program read — and write — the live files, from inside the
+live job. **The rule "never name the library, let the list decide" is a rule
+about jobs you own.** At the edge of one you do not, name the library, and say
+in the source why.
+
 **Verify, do not assume.** Ask what the replication actually carries
 (`proj-as400-codemap` has measured parts of this) and what the backup control
 groups actually include — on this estate a library holding a year of security
@@ -902,6 +946,128 @@ where you copy rather than abstract:
 
 Worked implementation: `proj-security/secaudit/src/qsqlsrc/EV*.sql` plus
 `SECEVTS.clle`.
+
+### ⚠ THE `SYSTOOLS.AUDIT_JOURNAL_*` WRAPPERS LEAK JOB TEMPORARY STORAGE (2026-09-25)
+
+**~1.25 GB per hour of journal read, never released inside the job.** A
+long-lived job that reads the journal repeatedly degrades and then dies with
+`SQL0901` internal error type 3871 (`QSQGTSPC` / `CREATEMEMORYOBJ`, *"could not
+create memory object"*). A fresh job resets, which is why the failure looks
+intermittent and data-dependent. **It is neither.**
+
+Measured under control — one job, the same six 1-hour slices, same entry type,
+identical row counts, only the table function varying:
+
+| | job temp storage | elapsed |
+|---|---|---|
+| `SYSTOOLS.AUDIT_JOURNAL_GR` | **2,425 MB → 9,983 MB** | 145 s |
+| `QSYS2.DISPLAY_JOURNAL` | 9,949 MB → 9,965 MB | **8 s** |
+
+**Volume is not the driver, and assuming it is will cost you a day.** On the
+same estate `ZC` moves 4.5M events in 171 s through `DISPLAY_JOURNAL` while
+`GR` took 919 s for 237k through the wrapper — a 50–100× difference per row.
+Three separate hypotheses (volume, profile authority, window size) were tested
+and killed before the API was suspected.
+
+**The instrument is `QSYS2.SYSTMPSTG`** — a bucket per job, and a job can read
+its own:
+
+```sql
+SELECT BUCKET_CURRENT_SIZE, BUCKET_PEAK_SIZE FROM QSYS2.SYSTMPSTG
+ WHERE JOB_NUMBER = SUBSTR(QSYS2.JOB_NAME, 1, 6);
+```
+
+**`SQL0901` will not tell you any of this.** It is documented only as *"an SQL
+system error … see the previous messages"*, and internal error type 3871 and
+the `QSQGTSPC` module appear nowhere in IBM's published material. This was
+settled by measurement, not by reading.
+
+### `ENDING_TIMESTAMP` really does bound the walk — so slicing is FASTER, not a trade
+
+Both `QSYS2.DISPLAY_JOURNAL` and the `SYSTOOLS.AUDIT_JOURNAL_*` functions accept
+`ENDING_TIMESTAMP` and `ENDING_SEQUENCE`, and the end bound **stops the receiver
+walk early rather than filtering after it**. Measured: one bounded 1-hour slice
+**52 s**, the same read unbounded over 22 hours **>78 minutes and then dead**.
+
+That matters because it makes a harvest **resumable at no cost**. A single
+unbounded statement that dies saves nothing, the high-water never moves, and the
+next run faces a larger window — read cost rises with the window, so each
+failure makes the next likelier. That is a ratchet, and the self-healing derived
+lookback is what powers it. Slice it, commit each slice, and a failure costs one
+slice. Re-verify the bound after any upgrade; if it ever becomes a post-filter,
+slicing inverts from a win to an N× loss.
+
+### `CPYAUDJRNE` — the third route, and usually the right one
+
+Copies audit entries into IBM's own **fully decoded `QASYxxJ5` outfile**, so you
+write **no byte offsets at all** — which is the risk that makes hand-decoding
+`DISPLAY_JOURNAL`'s raw `ENTRY_DATA` dangerous.
+
+- **No leak.** Four full copies in one job: 26.4 → 30.6 → 30.74 → 30.74 MB.
+- **Fast.** 17,391 `CA` entries in 3 s; 59,977 in 14 s.
+- **`*AUDIT` only — NOT `*ALLOBJ`** (unlike `DSPAUDJRNE`, which needs both). So
+  a least-privilege collector profile can run it.
+
+**Five traps, each of which cost a round:**
+
+- **`OUTFILE` is a PREFIX.** `OUTFILE(LIB/CB)` creates `CBCA` — prefix + entry
+  type. The file is created **`*PUBLIC *EXCLUDE`**, so an ordinary profile then
+  gets `SQL0551` reading it.
+- **Omitting `JRNRCV` reads ONLY the attached receiver** and returns
+  `CPF7062 No entries converted` in two seconds — a clean, confident zero for a
+  window holding tens of thousands. Same family as the `DISPLAY_JOURNAL`
+  `*CURCHAIN` trap above. Use `JRNRCV(*CURCHAIN)`; **max 256 receivers**.
+- **`JRNRCV(*CURCHAIN)` with no time bound reads the whole chain** — 2.9M rows
+  and still climbing before it was stopped. Always pass `FROMTIME`/`TOTIME`.
+- **`FROMTIME`/`TOTIME` are INCLUSIVE AT BOTH ENDS**, so an entry on a slice
+  boundary is copied by two adjacent slices. A sequence high-water only catches
+  that if sequence rises strictly with timestamp, and it does not reliably —
+  this produced `SQL0803` against a primary key on two consecutive runs. Test
+  `NOT EXISTS` against the key instead; it does not care about ordering.
+- **They take the JOB's date format**, `MDY` with `/` on this estate. Build with
+  `SUBSTR(CHAR(DATE(ts),USA),1,6) CONCAT SUBSTR(CHAR(DATE(ts),USA),9,2)` and
+  `CHAR(TIME(ts),JIS)`.
+
+**⚠ AND VERIFY THE COLUMN MAPPING AGAINST THE WRAPPER BEFORE TRUSTING IT.**
+The outfile column names look obvious and three of the first eight chosen for
+`CA` were wrong — **none of which errored**. The serious one: the wrapper's
+`USER_NAME` is **`CAUSPF`** (the effective profile), not `CAUSER` (the job
+user); they differ on **22% of rows**, and a real row reads `QSECOFR` /
+`MIMIXOWN` / `QSECOFR`. Taking the obvious column silently attributes
+`QSECOFR`'s authority changes to `MIMIXOWN`. Also: the outfile writes `'*N'`
+and blanks where the wrapper returns NULL, `JOB_NUMBER` needs `DIGITS()`,
+`REMOTE_PORT` writes `0` for NULL, and **`CAPNM` is unreadable without an
+explicit CCSID** (`SQL0332`) — `CAPCCI` carries the real one. Worked method and
+the full verified mapping:
+`proj-security/secaudit/analysis/ca-outfile-mapping.md`.
+
+### ⚠ `*ALLOBJ` DOES NOT CONFER SPOOL ACCESS (2026-09-24)
+
+A profile holding `*ALLOBJ *SECADM *AUDIT` still gets **`CPF3492 Not authorized
+to spooled file`** copying another user's job log. Spooled files are not
+authorised as objects — the **output queue's** parameters decide.
+
+On this estate `QUSRSYS/QEZJOBLOG` and `QEZDEBUG` are `DSPDTA(*NO)`,
+`OPRCTL(*YES)`, `AUTCHK(*OWNER)`. Under `DSPDTA(*NO)` the 7.3 Security
+Reference (ch. 6, *Display Data (DSPDTA) parameter of output queue*) lists
+**`*JOBCTL` with `OPRCTL(*YES)` as sufficient** to display, copy or send another
+user's spooled file — so `*JOBCTL` is the narrow grant and `*SPLCTL` (every
+spooled file on the box, including delete) is not needed.
+
+**Read the queue's actual values first — the answer inverts.** Had they been
+`DSPDTA(*OWNER)`, the same manual says `*JOBCTL` on an `OPRCTL(*YES)` queue
+**cannot** display, copy, move or send, and `*SPLCTL` would have been the only
+route.
+
+```sql
+SELECT OUTPUT_QUEUE_NAME, DISPLAY_ANY_FILE, OPERATOR_CONTROLLED, AUTHORITY_TO_CHECK
+  FROM QSYS2.OUTPUT_QUEUE_INFO WHERE OUTPUT_QUEUE_NAME IN ('QEZJOBLOG','QEZDEBUG');
+```
+
+**Consequence for any scheduled collector:** its job log is where the real
+cause of an `SQL0901` lives, and without one of these routes it is unreadable —
+which is how a diagnosis stalls for a day. Give the job an output queue you own
+with `DSPDTA(*YES)`, or arrange the `*JOBCTL` grant deliberately.
 
 ## Costs, measured
 
@@ -2505,6 +2671,40 @@ then read the outfile — **get the column names from `SYSCOLUMNS` first**;
 `BOUND_SRVPGM_INFO` on the built object → and only then the library list. A
 session spent two builds on the library list because the list was the visible
 thing and the binding directory was not.
+
+### ⚠ AND THE CURRENT LIBRARY BEATS `ADDLIBLE POSITION(*FIRST)` — ALWAYS
+
+**This is why the binding directory kept being the old library's even after
+the list was fixed.** The current library is searched **before** the user
+portion, so no `ADDLIBLE ... POSITION(*FIRST)` can get in front of it.
+`CCIMG`'s `CURRENT_LIBRARY_NAME` is `DOUGIMG`, so an unqualified
+`BndDir('XTLIMGBND')` in an H spec resolved to `DOUGIMG`'s copy — whose
+entries are qualified `DOUGIMG` — on every build, and stamped the old library
+into **fifteen** programs.
+
+Proved 2026-09-24 by elimination, and the control is what makes it a
+measurement: with `DOUGIMG/XTLIMGBND` **renamed away** and nothing else
+changed, the identical `CRTBNDRPG` bound `DOUGIMGP`.
+
+```sql
+SELECT AUTHORIZATION_NAME, CURRENT_LIBRARY_NAME FROM QSYS2.USER_INFO
+ WHERE AUTHORIZATION_NAME = '<the build profile>';
+SELECT TYPE, ORDINAL_POSITION, SYSTEM_SCHEMA_NAME   -- inside the job itself
+  FROM QSYS2.LIBRARY_LIST_INFO ORDER BY TYPE, ORDINAL_POSITION;
+```
+
+- **Any script that reorders the list must also set the current library** —
+  `CHGCURLIB CURLIB(<target>)`, or `CURLIB(*CRTDFT)` for none, which is the
+  honest choice when the list is meant to be the only switch.
+- **A job description has no `CURLIB` parameter.** `INLLIBL` on the JOBD says
+  nothing about the current library; it comes from the **user profile**, so a
+  scheduled job inherits it however carefully the JOBD was built.
+- **⚠ A library-list trace filtered to `TYPE = 'USER'` cannot see this, and
+  that is how it survived.** XTL's filer logged
+  `libl: DOUGIMGP DOUGIMGF ROBOTLIB` on every pass and it was read as proof
+  the list was right — while `DOUGIMG` sat in front of all three. **Log
+  `CURRENT` and `USER`, or the trace is evidence for a claim it cannot
+  support.**
 
 ## ⚠ `ADDLIBLE` ON A LIBRARY ALREADY IN THE LIST FAILS, AND YOUR `MONMSG` HIDES IT (2026-09-24)
 

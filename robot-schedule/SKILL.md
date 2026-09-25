@@ -583,6 +583,37 @@ missing procedure, an authority wall — and those break every command in the se
 equally.** It is one more reason not to read Robot's completion status as
 evidence the work happened.
 
+**⚠ AND WHERE `Ignore` IS THE RIGHT CHOICE, "Job completed normally" MEANS
+NOTHING ABOUT THAT LINE (2026-09-24).** `proj-imaging` rides two command lines
+inside XTL's own `IMPDOCS` job, keyed `1` (Ignore) on purpose — a failure of
+theirs must never delay XTL's import. So when a library migration broke both,
+the job reported **`C — Job completed normally`** on every cycle while the
+harvest wrote nothing at all. The decision is correct and should stay; the
+consequence is that **an `Ignore` line has no signal in `RBTMSG` and must carry
+its own record.** For any line keyed `1`, the check is the program's own log
+table, never the job's completion message — and something has to read it. A
+whole afternoon of silent no-ops looked identical to a healthy schedule.
+
+Find them before you trust a job's status:
+
+```sql
+SELECT CMD_SET_OID, CMD_LINE_NUMBER, CAST(CMD_STRING AS VARCHAR(90))
+  FROM ROBOTLIB.RBTCMD WHERE CMD_ERROR_HANDLING = 1 ORDER BY 1, 2;
+```
+
+**⚠ AND `RBTMSG` THINS UNDER YOU, SO MISSING ROWS ARE NOT MISSING RUNS
+(2026-09-25).** `HIST_RETENTION` is per job, so yesterday's rows age off while
+today's are complete. Measured: a query over two days returned **1** row for
+`XTLFILJOB` on day one and **39** on day two — and the day-one figure had been
+dozens when read the previous evening. The same query made `IMPDOCS` look like
+it had not run between 23:45 and 08:16, an 8.5-hour overnight outage.
+
+**It had run every fifteen minutes all night.** The project's own per-pass log
+showed 4 harvests and 4 filer passes in every single hour. **Never diagnose an
+outage from an absence in `RBTMSG`** — it is a message table with a rolling
+window, not a run history. Read the application's own record, and if there
+isn't one, that is the finding.
+
 **`RBTCMD.LAST_UPDATE_TIME` and `LAST_UPDATE_USER` are RELIABLE** — they carry
 real dates and real names (`BARRY`, 2015). This is the opposite of
 `RBTROB.LAST_UPDATE_TIME`, which is stuck at `0001-01-01` even on a job created
