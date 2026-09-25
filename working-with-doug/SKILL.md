@@ -570,3 +570,10 @@ the system by using it and correcting it.
 - **Each of his rulings is an example to generalise**, not a one-off
   instruction. When he decides something, ask what class of decision it
   belongs to.
+
+**Auth must work for LAN callers, not only tailnet identities.** Offered
+"trust Tailscale's identity for Doug; LAN callers stay untrusted" (dk-w5,
+2026-09-25), he answered: *"that works for tailscale but lan callers should be
+able to auth as well."* Any identity design needs a channel a LAN caller can
+use (a per-caller token from the secrets store), resolving to the same named
+asker, with the verifier disclosed. Same family as "Connect where you are".

@@ -227,6 +227,30 @@ Then confirm in-session: skills listed, `CLAUDE.md` loaded, this repo's memory
 present or knowingly absent. Connectors will be missing until re-authorised —
 expected, not a fault.
 
+### And check the hooks, because a missing one is silent
+
+**Hooks are per-config-dir, and an identity without one fails with no error and
+no log — it simply behaves as though the hook does not exist.** Found 2026-09-25:
+`proj-ai-adoption`'s `PreToolUse` permission hook was registered in
+`~/.claude/settings.json` and nowhere else, while `~/.claude-kbl` and
+`~/.claude-xtl` had no `PreToolUse` entry at all. It had **never fired** for
+sessions under either, for weeks, and nothing said so.
+
+The trap is the inference, not the omission: **a hook that removes prompts, when
+absent, produces *more* prompts — and "no prompt" gets read as "the hook approved
+it" when it means "nothing was asked".** Nobody investigates extra prompting.
+
+```bash
+# every identity, one line — what PreToolUse/SessionStart does each one have?
+for d in ~/.claude ~/.claude-*; do [ -f "$d/settings.json" ] && \
+  printf '%s: ' "$d" && python3 -c "import json,sys;h=json.load(open('$d/settings.json')).get('hooks',{});print(list(h) or 'NO HOOKS')"
+done
+```
+
+Then `/hooks` **in a session of the identity you are actually running as** — the
+only check that reflects what is live. Comparing against `~/.claude` from memory
+is how this was missed.
+
 ## Setting up a new identity from scratch
 
 ```bash
@@ -252,3 +276,11 @@ cp ~/.claude/plugins/installed_plugins.json ~/.claude-NEW/plugins/
 
 **Symlink, never copy**, for skills and `CLAUDE.md`. A second copy of the
 operating principles drifts, and a stale one is worse than none.
+
+**Step 3's `cp` of `settings.json` is what carries the hooks — and a `cp` is a
+snapshot.** Every hook added to `~/.claude/settings.json` after an identity was
+created is missing from that identity, silently. When you add or change a hook
+anywhere, run the loop under "Verify after switching" across all identities and
+decide, per identity, whether it belongs there. **"Only `~/.claude`" is often a
+legitimate answer** — for a hook that only ever *removes* a prompt, an identity
+without it is more cautious, not less. What is not acceptable is not knowing.
