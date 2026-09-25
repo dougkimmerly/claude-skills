@@ -1069,9 +1069,42 @@ cause of an `SQL0901` lives, and without one of these routes it is unreadable �
 which is how a diagnosis stalls for a day. Give the job an output queue you own
 with `DSPDTA(*YES)`, or arrange the `*JOBCTL` grant deliberately.
 
+### ⚠ TO ASK "WHAT DOES THIS PROFILE HOLD", USE `DSPUSRPRF TYPE(*OBJAUT)` — NOT `OBJECT_PRIVILEGES` (2026-09-25)
+
+`QSYS2.OBJECT_PRIVILEGES` filtered by `AUTHORIZATION_NAME` scans every object
+on the box: one `COUNT(*)` took **29 minutes** on the primary. The profile's
+own authorities come out of an outfile in seconds:
+
+```
+CL: DSPUSRPRF USRPRF(CCSEC) TYPE(*OBJAUT) OUTPUT(*OUTFILE) OUTFILE(YOURLIB/PRFOBJ);
+```
+
+Columns are `OA*`, and the write bits are the ones to test — `OAUPD` `OAADD`
+`OADLT` `OAEXS` `OAOMGT`, each `X` or blank (not `YES`/`NO`):
+
+```sql
+SELECT OALIB, OAOBJ, OATYPE, OAOWN, OAOPR, OAREAD, OAADD, OAUPD, OADLT, OAEXS, OAOMGT
+  FROM YOURLIB.PRFOBJ ORDER BY OALIB, OAOBJ;
+```
+
+**Use `OBJECT_PRIVILEGES` for the other direction** — *who can write this
+object* — and for the estate-wide `*PUBLIC` surface, which is a real question
+with a real cost (**200,824 objects writable by `*PUBLIC` on XTLTOR**,
+2026-09-25, 29 min; background it).
+
+**Two things this outfile is uniquely good at, both found the day it was
+written.** It lists authorities on `*USRPRF` objects, where a profile owned by
+a group hands every member `*ALL` — and `*USE` on a profile is what
+`SBMJOB USER(...)` needs, so *ownership of a profile object is a
+run-as-that-identity grant*. And it shows a profile's grants on **its own**
+project's objects, which is where a deploy script's accumulated
+`GRTOBJAUT`s show up as a list somebody can actually read.
+
 ## Costs, measured
 
 - Estate-wide `*PGM` scan: ~25 s (target), ~90 s (primary).
+- **`OBJECT_PRIVILEGES` `COUNT(*)` for `*PUBLIC` write, all object types: 29
+  minutes** (primary, 2026-09-25). Background it or scope it to a library.
 - Estate-wide all-object-type scan: **~11 minutes** — put it on the target.
 - Estate-wide member scan (`SYSPARTITIONSTAT`): ~2 minutes. Drive it library at
   a time.
