@@ -2775,3 +2775,41 @@ not the same prototype.** An unqualified `/copy` takes whichever the list
 reaches first, so a build that works from a short library list fails from a
 normal one with `RNF5406 ... fewer parameters than the prototype`. A build whose
 correctness depends on the caller's library list is **reproducible by accident**.
+
+## Identifying a client by IP — the file server names the host, the others do not
+
+**`CPIAD12` in a `QPWFSERVSO` job log carries the client HOSTNAME. Every other
+host server logs `CPIAD02`, which gives only the IP.** Measured 2026-09-25:
+
+```sql
+SELECT ORDINAL_POSITION, MESSAGE_ID, CAST(MESSAGE_TEXT AS VARCHAR(100))
+  FROM TABLE(QSYS2.JOBLOG_INFO('<job>/QUSER/QPWFSERVSO'))
+ ORDER BY ORDINAL_POSITION;
+```
+
+```
+CPIAD02  User QSECOFR from client 192.168.40.89 connected to server.      <- as-rmtcmd, IP only
+CPIAD12  Servicing user profile QSECOFR from client xtlformprt.xtlgroup.local.  <- as-file, NAMED
+```
+
+That is what turned *"an unidentified address holds four `QSECOFR` sessions"*
+into *"it is the forms print host"* in one query (`proj-security` `#64`).
+
+**So when an address needs identifying, find its file-server connection first:**
+
+```sql
+SELECT LOCAL_PORT, REMOTE_ADDRESS, JOB_NAME, AUTHORIZATION_NAME
+  FROM QSYS2.NETSTAT_JOB_INFO WHERE REMOTE_ADDRESS = '<addr>' ORDER BY LOCAL_PORT;
+```
+
+A Toolbox/IBM i Access client typically opens 8471–8475 together, so if the
+address is on 8475 at all it is probably on 8473 too — and that is the one that
+answers the question. **The job logs of the other legs are still worth reading**
+for *what* it does: repeated `CPF5C61 Client request - run program QSYS/QUSROBJD`
+is object enumeration, which is an inventory or monitoring tool rather than an
+application doing business work.
+
+**`QSYS2.JOBLOG_INFO` reads an ACTIVE job's log**, which is how this works at all
+— no spooled file exists yet, so `SYSTOOLS.SPOOLED_FILE_DATA` would return
+nothing. It needs `*JOBCTL` or ownership; `CCSEC` does not have it and gets no
+error, just no rows.
