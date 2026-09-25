@@ -504,6 +504,25 @@ asked for.** Not to check his typing — to catch the fields a later panel
 defaults that neither of you named. That is how `OS_JOB_USER = *RBTDFT` was
 found on `MAPDERIVE` (2026-09-22), which would have failed the job completely.
 
+**⚠ AN `(EVERY)` JOB IS LIVE THE MOMENT THE SCHEDULE IS KEYED, AND CAN FIRE
+BEFORE THE CONTROL OPTIONS ARE FINISHED (2026-09-25).** `SECNETD` was keyed as
+`(EVERY)` 15 minutes on option `2`, and fired at 13:32:29 — while option `5` was
+still being typed. That run carried `OS_JOB_USER = SCHEDULE`, because
+`User Profile` was still `*RBTDFT` at the instant it fired and `*RBTDFT`
+resolves to `QPGMR`/`SCHEDULE`. The next scheduled run, 13:47:00, came back
+`SECSCAN` — correct.
+
+**So a first run that disagrees with `RBTROB` is not evidence of a defect; it is
+evidence of the order the panels were keyed in.** Read the SECOND run before
+concluding anything. The same shape is visible estate-wide and is worth not
+misreading: `WMS_944OUT` and `WMS_945OUT` each show a handful of `QPGMR` runs
+against forty as `LOGIMAXXTL`.
+
+**The general point is sharper than the incident: `RBTROB.OS_JOB_USER` is the
+DEFINITION and `RBTMSG.OS_JOB_USER` is what actually ran, and they can differ.**
+Verifying the definition is not verifying the job. For anything that matters,
+check the run.
+
 **⚠ AND READ IT BACK AGAIN BEFORE YOU QUOTE THE SLOT — A SPEC IS NOT THE
 SCHEDULE.** 2026-09-23: `MAPDERIVE`'s spec argued 04:15 and the job was keyed at
 **04:30**, with its two commands in the other order as well. `RBTROB` and
